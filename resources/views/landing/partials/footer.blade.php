@@ -7,8 +7,8 @@
         @if($adminContactEmail)
             <a href="mailto:{{ $adminContactEmail }}" class="text-xs text-text-secondary hover:text-text-primary">Hubungi admin</a>
         @endif
-        <div data-footer-meta class="flex items-center justify-center gap-3 text-xs leading-5 text-text-secondary">
-            <p class="whitespace-nowrap">© {{ now()->year }} <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:text-text-primary hover:underline">ReLoop Lab</a>.</p>
+        <div data-footer-meta class="flex flex-wrap items-center justify-center gap-3 text-xs leading-5 text-text-secondary">
+            <p>© {{ now()->year }} Made with <span aria-hidden="true">❤️</span> by <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:text-text-primary hover:underline">ReLoop Lab</a>.</p>
             <nav aria-label="Media sosial" class="flex items-center gap-1">
                 <a href="https://github.com/relooplab/logbook" target="_blank" rel="noopener noreferrer" class="landing-social-link" aria-label="GitHub Logbook (tab baru)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.16 1.73 1.16 1 1.72 2.64 1.22 3.28.93.1-.72.39-1.22.71-1.5-2.5-.28-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.77 10.77 0 0 1 5.62 0c2.15-1.45 3.09-1.15 3.09-1.15.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.28-5.14 5.56.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg>

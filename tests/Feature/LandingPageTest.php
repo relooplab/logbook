@@ -198,6 +198,8 @@ class LandingPageTest extends TestCase
     {
         $this->get(route('landing'))->assertOk()
             ->assertSee('© '.now()->year)
+            ->assertSee('Made with', false)
+            ->assertSee('aria-hidden="true">❤️</span> by', false)
             ->assertSee('href="https://reloop.id"', false)
             ->assertSee('ReLoop Lab')
             ->assertSee('href="https://github.com/relooplab/logbook"', false)
