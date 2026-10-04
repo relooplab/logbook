@@ -12,7 +12,12 @@ class Conversation extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['mahasiswa_ta_id', 'user_one_id', 'user_two_id'];
+    protected $fillable = ['mahasiswa_ta_id', 'user_one_id', 'user_two_id', 'chat_digest_sent_at', 'chat_escalation_sent_at'];
+
+    protected $casts = [
+        'chat_digest_sent_at' => 'datetime',
+        'chat_escalation_sent_at' => 'datetime',
+    ];
 
     public function mahasiswaTa(): BelongsTo
     {

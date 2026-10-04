@@ -30,6 +30,18 @@ class Message extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        // Pesan baru membuka episode digest baru: digest/eskalasi
+        // berikutnya dihitung ulang dari pesan ini (semua jalur kirim).
+        static::created(function (Message $message) {
+            $message->conversation()->update([
+                'chat_digest_sent_at' => null,
+                'chat_escalation_sent_at' => null,
+            ]);
+        });
+    }
+
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);

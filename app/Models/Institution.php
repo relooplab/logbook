@@ -31,6 +31,7 @@ class Institution extends Model
         'email_verification_override',
         'weekly_digest_enabled',
         'daily_reminder_enabled',
+        'chat_digest_enabled',
         'storage_limit_mb',
         'mail_mailer',
         'mail_host',
@@ -251,6 +252,15 @@ class Institution extends Model
     public function isDailyReminderEnabled(): bool
     {
         return $this->daily_reminder_enabled ?? true;
+    }
+
+    /**
+     * Apakah digest chat tertunda (pesan belum dibaca H+2 + eskalasi H+7)
+     * aktif untuk institusi ini (default ON = perilaku baru).
+     */
+    public function isChatDigestEnabled(): bool
+    {
+        return $this->chat_digest_enabled ?? true;
     }
 
     /**

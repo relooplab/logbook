@@ -68,3 +68,8 @@ Schedule::command('sidang:remind-grading')
     ->dailyAt('10:00')
     ->timezone('Asia/Jakarta')
     ->withoutOverlapping();
+
+// Digest pesan chat belum dibaca (H+2) + eskalasi (H+7), per jam.
+Schedule::command('chat:send-pending-digests')
+    ->hourly()
+    ->withoutOverlapping();

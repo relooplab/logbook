@@ -133,6 +133,13 @@
                     <span class="block text-xs text-text-secondary mt-0.5">Pengingat mahasiswa tidak aktif &amp; antrean review dosen (<code>logbook:send-reminders</code>), termasuk pengingat inaktivitas &gt; 3 minggu + CC pembimbing (<code>ta:notify-inactive</code>).</span>
                 </span>
             </label>
+            <label class="flex items-start gap-3 rounded-xl border border-border p-3 cursor-pointer">
+                <input type="checkbox" name="chat_digest_enabled" value="1" @checked(old('chat_digest_enabled', $institution->isChatDigestEnabled())) class="mt-1 rounded bg-bg-surface border-border">
+                <span>
+                    <span class="block text-sm font-medium">Digest Chat Tertunda (per jam)</span>
+                    <span class="block text-xs text-text-secondary mt-0.5">Ringkasan pesan belum dibaca &gt; 2 hari + eskalasi hari ke-7 (<code>chat:send-pending-digests</code>).</span>
+                </span>
+            </label>
 
             <div class="flex items-center gap-3 pt-1">
                 <button class="px-4 py-2 rounded-xl bg-brand hover:bg-brand-hover text-[#0b1420] text-sm font-semibold">Simpan</button>

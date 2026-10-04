@@ -127,6 +127,7 @@ class SystemSettingsTest extends AuditSmokeTest
         $response->assertSee('Notifikasi Berkala');
         $response->assertSee('Digest Mingguan (Senin 07:00 WIB)');
         $response->assertSee('Reminder Harian (08:00 WIB)');
+        $response->assertSee('Digest Chat Tertunda (per jam)');
     }
 
     public function test_mematikan_toggle_melalui_form_menyimpan_off(): void
@@ -135,6 +136,7 @@ class SystemSettingsTest extends AuditSmokeTest
         $institution = Institution::current();
         $this->assertTrue($institution->isWeeklyDigestEnabled());
         $this->assertTrue($institution->isDailyReminderEnabled());
+        $this->assertTrue($institution->isChatDigestEnabled());
 
         // Submit form notifikasi dengan kedua checkbox unchecked (absent).
         $this->actingAs($sys)->post(route('admin.system.settings.update'), [
@@ -146,6 +148,7 @@ class SystemSettingsTest extends AuditSmokeTest
         $institution->refresh();
         $this->assertFalse($institution->isWeeklyDigestEnabled());
         $this->assertFalse($institution->isDailyReminderEnabled());
+        $this->assertFalse($institution->isChatDigestEnabled());
     }
 
     public function test_menyalakan_toggle_melalui_form_menyimpan_on(): void
@@ -154,6 +157,7 @@ class SystemSettingsTest extends AuditSmokeTest
         Institution::current()->update([
             'weekly_digest_enabled' => false,
             'daily_reminder_enabled' => false,
+            'chat_digest_enabled' => false,
         ]);
 
         $this->actingAs($sys)->post(route('admin.system.settings.update'), [
@@ -162,11 +166,13 @@ class SystemSettingsTest extends AuditSmokeTest
             'mail_mailer_keep' => 'smtp',
             'weekly_digest_enabled' => '1',
             'daily_reminder_enabled' => '1',
+            'chat_digest_enabled' => '1',
         ])->assertRedirect()->assertSessionHas('success');
 
         $institution = Institution::current()->fresh();
         $this->assertTrue($institution->isWeeklyDigestEnabled());
         $this->assertTrue($institution->isDailyReminderEnabled());
+        $this->assertTrue($institution->isChatDigestEnabled());
     }
 
     public function test_form_autentikasi_tidak_mengubah_toggle(): void
@@ -175,6 +181,7 @@ class SystemSettingsTest extends AuditSmokeTest
         Institution::current()->update([
             'weekly_digest_enabled' => false,
             'daily_reminder_enabled' => false,
+            'chat_digest_enabled' => false,
         ]);
 
         // Submit form autentikasi/SMTP (tanpa _notification_form) — toggle tetap OFF.
@@ -185,6 +192,7 @@ class SystemSettingsTest extends AuditSmokeTest
         $institution = Institution::current()->fresh();
         $this->assertFalse($institution->isWeeklyDigestEnabled());
         $this->assertFalse($institution->isDailyReminderEnabled());
+        $this->assertFalse($institution->isChatDigestEnabled());
         $this->assertFalse((bool) $institution->email_verification_override);
     }
 }

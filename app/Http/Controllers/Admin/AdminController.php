@@ -1991,6 +1991,7 @@ class AdminController extends Controller
             // parsial (section notifikasi) tidak menimpa kolom lain dengan null.
             'weekly_digest_enabled' => ['nullable', 'in:1'],
             'daily_reminder_enabled' => ['nullable', 'in:1'],
+            'chat_digest_enabled' => ['nullable', 'in:1'],
             // Hidden field dari form parsial notifikasi — diabaikan saat fill
             // (nilai asli dipertahankan dari DB).
             'email_verification_override_keep' => ['nullable'],
@@ -2033,6 +2034,7 @@ class AdminController extends Controller
         if ($notificationForm) {
             $institution->weekly_digest_enabled = $request->boolean('weekly_digest_enabled');
             $institution->daily_reminder_enabled = $request->boolean('daily_reminder_enabled');
+            $institution->chat_digest_enabled = $request->boolean('chat_digest_enabled');
         }
         if ($request->filled('mail_password')) {
             // Disimpan terenkripsi via mutator di model Institution.
@@ -2049,6 +2051,7 @@ class AdminController extends Controller
             'email_verification_override' => $institution->email_verification_override,
             'weekly_digest_enabled' => $institution->weekly_digest_enabled,
             'daily_reminder_enabled' => $institution->daily_reminder_enabled,
+            'chat_digest_enabled' => $institution->chat_digest_enabled,
             'field_berubah' => array_values(array_diff(array_keys($validated), ['mail_password'])),
         ]);
 
