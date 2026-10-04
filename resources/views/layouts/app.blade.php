@@ -367,7 +367,7 @@
                 $headerFirst = implode(' ', $headerWords);
             @endphp
             <a href="{{ route('dashboard') }}" class="hidden md:flex items-center gap-2 px-2 min-w-0 justify-center" title="{{ $headerAppName }}">
-                <span class="w-8 h-8 md:w-9 md:h-9 rounded-[14px] bg-brand-light text-brand flex items-center justify-center shrink-0 p-1.5">
+                <span class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center shrink-0">
                     @include('partials.logo-mark')
                 </span>
                 <span class="hidden sm:flex flex-col min-w-0 leading-tight">

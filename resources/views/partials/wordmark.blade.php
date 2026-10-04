@@ -1,9 +1,11 @@
-{{-- Wordmark (brand guideline §01): mark kotak radius 14px berisi ikon checklist,
+{{-- Wordmark (brand guideline §01): mark two-tone A2 tanpa background
+     (atap + L kecil biru accent-blue, stroke-J besar emas status-pending),
      diikuti wordmark dinamis. Nama "Logbook" dirender dua warna
      (Log biru + book emas sesuai token); nama kustom lain memakai
      pola lama (kata terakhir berwarna accent).
      Baca nama dari $name (param) atau fallback Institution::active()->app_name.
-     Opsional: $accent (default brand), $markSize (default w-14 h-14), $textAlign. --}}
+     Opsional: $accent (kini hanya dipakai nama kustom),
+     $markSize (default w-14 h-14), $textAlign. --}}
 @php
     $accent = $accent ?? 'text-brand';
     $markSize = $markSize ?? 'w-14 h-14';
@@ -14,7 +16,7 @@
     $firstWords = implode(' ', $words);
 @endphp
 <div class="inline-flex flex-col items-center {{ $textAlign }}">
-    <div class="inline-flex {{ $markSize }} rounded-[14px] bg-brand-light {{ $accent }} items-center justify-center mb-3 p-3">
+    <div class="inline-flex {{ $markSize }} items-center justify-center mb-3">
         @include('partials.logo-mark')
     </div>
     @if ($appName === 'Logbook')

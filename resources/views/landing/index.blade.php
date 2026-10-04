@@ -37,7 +37,7 @@
 <header class="landing-header">
     <div class="landing-container flex items-center justify-between gap-4 py-3">
         <a href="{{ route('landing') }}" class="flex items-center gap-2.5 min-w-0 font-heading font-extrabold tracking-tight text-text-primary" aria-label="{{ $appName }} — Beranda">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand p-2">@include('partials.logo-mark')</span>
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center">@include('partials.logo-mark')</span>
             <span data-header-app-name class="hidden sm:inline truncate text-sm sm:text-base">{{ $appName }}</span>
         </a>
         <nav aria-label="Navigasi utama" class="hidden lg:flex items-center gap-7 text-sm font-medium text-text-secondary">

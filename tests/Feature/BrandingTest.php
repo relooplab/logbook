@@ -75,7 +75,9 @@ class BrandingTest extends TestCase
 
         $custom = view('partials.wordmark', ['name' => 'Portal Akademik Kita'])->render();
         $this->assertStringContainsString('Portal Akademik', $custom);
-        $this->assertStringNotContainsString('text-status-pending', $custom);
+        // Teks wordmark kustom tetap satu warna (tanpa two-tone Log/book);
+        // mark logo produk selalu two-tone.
+        $this->assertStringNotContainsString('<span class="text-accent-blue">Log</span>', $custom);
     }
 
     public function test_landing_hero_uses_two_tone_logbook(): void
@@ -84,5 +86,27 @@ class BrandingTest extends TestCase
             ->assertOk()
             ->assertSee('<h1 id="hero-title" class="landing-display"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></h1>', false)
             ->assertDontSee('Campus Logbook Management');
+    }
+
+    public function test_logo_mark_renders_two_tone_a2_without_background(): void
+    {
+        $mark = view('partials.logo-mark')->render();
+
+        // A2: atap + L kecil biru, stroke-J besar emas; viewBox di-crop.
+        $this->assertStringContainsString('viewBox="263 149 741 883"', $mark);
+        $this->assertStringContainsString('text-accent-blue', $mark);
+        $this->assertStringContainsString('text-status-pending', $mark);
+        $this->assertStringNotContainsString('bg-brand-light', $mark);
+
+        $wordmark = view('partials.wordmark', ['name' => 'Logbook'])->render();
+        $this->assertStringNotContainsString('bg-brand-light', $wordmark);
+
+        // Favicon SVG: tanpa <rect> background, two-tone via class bertema.
+        $favicon = file_get_contents(public_path('favicon.svg'));
+        $this->assertStringNotContainsString('<rect', $favicon);
+        $this->assertStringContainsString('mark-blue', $favicon);
+        $this->assertStringContainsString('mark-gold', $favicon);
+        $this->assertStringContainsString('#4a6fc0', $favicon);
+        $this->assertStringContainsString('#b8903f', $favicon);
     }
 }
