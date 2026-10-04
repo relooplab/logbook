@@ -18,11 +18,6 @@
         </div>
     </div>
     <div class="landing-slider-bottom" data-slider-controls hidden>
-        <div class="landing-slider-navigation">
-            <button type="button" class="landing-slider-btn" data-slide-prev aria-label="Dashboard sebelumnya">←</button>
-            <span data-slide-status>01 / 02</span>
-            <button type="button" class="landing-slider-btn" data-slide-next aria-label="Dashboard berikutnya">→</button>
-        </div>
         <button type="button" class="landing-slider-btn landing-slider-play" data-slide-play aria-pressed="false" aria-label="Jeda otomatis"><span class="material-symbols-outlined icon-sm" aria-hidden="true">pause</span></button>
     </div>
 </div>

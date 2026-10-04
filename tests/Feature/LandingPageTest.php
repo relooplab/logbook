@@ -95,8 +95,9 @@ class LandingPageTest extends TestCase
             ->assertSee('aria-roledescription="carousel"', false)
             ->assertSee('aria-controls="dashboard-slide-mahasiswa"', false)
             ->assertSee('aria-controls="dashboard-slide-dosen"', false)
-            ->assertSee('data-slide-prev', false)
-            ->assertSee('data-slide-next', false)
+            // Markup tombol panah dihapus (JS masih mereferensikan selektornya secara defensif).
+            ->assertDontSee('data-slide-prev aria-label', false)
+            ->assertDontSee('data-slide-next aria-label', false)
             ->assertSee('data-slide-play', false);
     }
 
@@ -116,8 +117,12 @@ class LandingPageTest extends TestCase
         $this->assertStringNotContainsString('01 / 02 — Dashboard', $html);
         $this->assertStringNotContainsString('Tampilan dashboard mahasiswa dan dosen dalam aplikasi.', $html);
 
-        // Status ringkas + tombol play ikon dengan aria-label.
-        $this->assertStringContainsString('<span data-slide-status>01 / 02</span>', $html);
+        // Navigasi panah + status dihapus dari markup; tombol play ikon tetap ada.
+        // (JS masih mereferensikan selektornya secara defensif bila markup ada.)
+        $this->assertStringNotContainsString('data-slide-prev aria-label', $html);
+        $this->assertStringNotContainsString('data-slide-next aria-label', $html);
+        $this->assertStringNotContainsString('<span data-slide-status', $html);
+        $this->assertStringNotContainsString('landing-slider-navigation', $html);
         $this->assertStringContainsString('aria-label="Jeda otomatis"', $html);
 
         // CSS overlay: absolute + scrim gradient + pill blur.

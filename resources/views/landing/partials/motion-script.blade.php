@@ -61,8 +61,10 @@
                 slide.inert = i !== index;
             });
             choices.forEach(function (choice, i) { choice.setAttribute('aria-pressed', String(i === index)); });
-            status.setAttribute('aria-live', manual ? 'polite' : 'off');
-            status.textContent = '0' + (index + 1) + ' / 02';
+            if (status) {
+                status.setAttribute('aria-live', manual ? 'polite' : 'off');
+                status.textContent = '0' + (index + 1) + ' / 02';
+            }
             syncSlider();
         }
         function syncSlider() {
@@ -78,8 +80,11 @@
             }
         }
         choices.forEach(function (choice, i) { choice.addEventListener('click', function () { selectSlide(i, true); }); });
-        slider.querySelector('[data-slide-prev]').addEventListener('click', function () { selectSlide(index - 1, true); });
-        slider.querySelector('[data-slide-next]').addEventListener('click', function () { selectSlide(index + 1, true); });
+        // Tombol prev/next opsional: hanya dipasang bila markup-nya ada.
+        var prev = slider.querySelector('[data-slide-prev]');
+        var next = slider.querySelector('[data-slide-next]');
+        if (prev) prev.addEventListener('click', function () { selectSlide(index - 1, true); });
+        if (next) next.addEventListener('click', function () { selectSlide(index + 1, true); });
         play.addEventListener('click', function () { playing = !playing; syncSlider(); });
         slider.addEventListener('keydown', function (event) {
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
