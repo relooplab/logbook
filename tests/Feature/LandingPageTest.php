@@ -217,11 +217,11 @@ class LandingPageTest extends TestCase
     public function test_footer_has_current_year_copyright_and_social_links(): void
     {
         $this->get(route('landing'))->assertOk()
-            ->assertSee('© '.now()->year)
-            ->assertSee('Made with', false)
+            ->assertSee('©', false)
+            ->assertSee('text-accent-teal font-semibold">'.now()->year, false)
+            ->assertSee('Made', false)
+            ->assertSee('text-accent-blue font-semibold">with', false)
             ->assertSee('aria-hidden="true">❤️</span>', false)
-            ->assertSee('text-accent-blue font-semibold">Made with', false)
-            ->assertSee('landing-accent-gold font-semibold">by', false)
             ->assertSee('href="https://reloop.id"', false)
             ->assertSee('ReLoop Lab')
             ->assertSee('href="https://github.com/relooplab/logbook"', false)
@@ -242,7 +242,9 @@ class LandingPageTest extends TestCase
         $this->assertStringNotContainsString('Institution Must Not Appear', $html);
         $this->assertStringContainsString('items-center gap-3 text-center', $html);
         $this->assertStringContainsString('v1.2.3', $html);
-        $this->assertStringContainsString('© '.now()->year, $html);
+        $this->assertStringContainsString('text-accent-teal font-semibold">'.now()->year, $html);
+        $this->assertStringContainsString('text-accent-blue font-semibold">with', $html);
+        $this->assertStringNotContainsString('landing-accent-gold', $html);
         $this->assertStringContainsString('href="https://reloop.id"', $html);
         $this->assertStringContainsString('>ReLoop Lab</a>', $html);
         $this->assertStringNotContainsString('>Beranda</a>', $html);

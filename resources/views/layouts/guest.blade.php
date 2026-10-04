@@ -55,7 +55,7 @@
             <span class="text-xs text-text-secondary">v{{ $version }}</span>
         </div>
         <div class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs leading-5 text-text-secondary">
-            <p>© {{ now()->year }} <span class="text-accent-blue font-semibold">Made with</span> <span aria-hidden="true">❤️</span> <span class="landing-accent-gold font-semibold">by <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:underline">ReLoop Lab</a>.</span></p>
+            <p>© <span class="text-accent-teal font-semibold">{{ now()->year }}</span> Made <span class="text-accent-blue font-semibold">with</span> <span aria-hidden="true">❤️</span> by <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:underline">ReLoop Lab</a>.</p>
             @if ($adminContactEmail)
                 <a href="mailto:{{ $adminContactEmail }}" class="hover:text-text-primary hover:underline">Hubungi admin</a>
             @endif
