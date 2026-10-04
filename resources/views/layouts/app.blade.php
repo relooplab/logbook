@@ -371,8 +371,12 @@
                     @include('partials.logo-mark')
                 </span>
                 <span class="hidden sm:flex flex-col min-w-0 leading-tight">
-                    <span class="font-heading font-extrabold text-sm md:text-base text-text-primary truncate">{{ $headerFirst }}</span>
-                    <span class="text-[9px] md:text-[10px] font-semibold text-brand truncate">{{ $headerLast }}</span>
+                    @if ($headerFirst !== '')
+                        <span class="font-heading font-extrabold text-sm md:text-base text-text-primary truncate">{{ $headerFirst }}</span>
+                        <span class="text-[9px] md:text-[10px] font-semibold text-brand truncate">{{ $headerLast }}</span>
+                    @else
+                        <span class="font-heading font-extrabold text-sm md:text-base text-text-primary truncate">{{ $headerLast }}</span>
+                    @endif
                 </span>
             </a>
             <div class="flex items-center justify-end gap-3">
