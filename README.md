@@ -4,7 +4,7 @@
   <p><strong>Bimbingan yang tertata, kemajuan yang terlihat.</strong></p>
   <p>Aplikasi pencatatan &amp; monitoring bimbingan <strong>Tugas Akhir (TA)</strong> dan <strong>Kerja Praktik (KP)</strong> — dari entri logbook pertama sampai sidang terakhir, mahasiswa dan dosen mencatat progres, memberi umpan balik, serta menuntaskan revisi dalam satu tempat.</p>
   <p>
-    <a href="https://logbook.reloop.id">🌐 Live Demo</a> &nbsp;·&nbsp;
+    <a href="https://logbook.reloop.id">🚀 Production</a> &nbsp;·&nbsp;
     <a href="docs/USER-GUIDE.md">📖 Panduan Pengguna</a> &nbsp;·&nbsp;
     <a href="docs/API.md">🔌 API</a> &nbsp;·&nbsp;
     <a href="CHANGELOG.md">🧾 Changelog</a>
@@ -32,13 +32,11 @@
 
 ## 🖥️ Pratinjau
 
-![Tampilan aplikasi Logbook](public/images/og-image.png)
-
 | Dashboard mahasiswa | Dashboard dosen |
 | :---: | :---: |
-| ![Dashboard mahasiswa: ringkasan progres dan aktivitas bimbingan](public/images/readme-dashboard-mahasiswa.jpeg) | ![Dashboard dosen: mahasiswa bimbingan dan antrean review](public/images/readme-dashboard-dosen.jpeg) |
+| ![Dashboard mahasiswa: ringkasan progres dan aktivitas bimbingan](public/images/dashboard-mahasiswa.jpg) | ![Dashboard dosen: mahasiswa bimbingan dan antrean review](public/images/dashboard-dosen.jpg) |
 
-> **Coba langsung:** [logbook.reloop.id](https://logbook.reloop.id) · belum punya akun? [Daftar gratis](https://logbook.reloop.id/register) atau baca [Panduan Pengguna](docs/USER-GUIDE.md).
+> **Production:** [logbook.reloop.id](https://logbook.reloop.id) · belum punya akun? [Daftar gratis](https://logbook.reloop.id/register) atau baca [Panduan Pengguna](docs/USER-GUIDE.md).
 
 ## ✨ Fitur utama
 

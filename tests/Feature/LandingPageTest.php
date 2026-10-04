@@ -113,12 +113,12 @@ class LandingPageTest extends TestCase
         $this->assertMatchesRegularExpression('/\.landing-slider \.landing-screenshot::?after\s*\{[^}]*linear-gradient/s', $css);
     }
 
-    public function test_readme_keeps_flat_dashboard_screenshots(): void
+    public function test_readme_shows_dashboard_previews(): void
     {
         $readme = file_get_contents(base_path('README.md'));
 
         foreach (['mahasiswa', 'dosen'] as $role) {
-            $image = 'images/readme-dashboard-'.$role.'.jpeg';
+            $image = 'images/dashboard-'.$role.'.jpg';
 
             $this->assertFileExists(public_path($image));
             $this->assertStringContainsString('(public/'.$image.')', $readme);
