@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Setup & jalankan Thesis Logbook Management LOKAL (tanpa Docker)
+# Setup & jalankan Logbook LOKAL (tanpa Docker)
 # Dipakai untuk verifikasi cepat. Menjalankan: composer install,
 # npm build, storage:link, menulis .env lokal, migrate --seed, lalu serve.
 # ============================================================================
@@ -101,7 +101,7 @@ echo ""
 echo ">>> [6/6] server: http://$HOST:$PORT"
 echo ""
 echo "============================================================"
-echo "  Thesis Logbook Management siap!"
+echo "  Logbook siap!"
 echo "  URL      : http://$HOST:$PORT"
 echo "  Admin    : admin@example.com / password"
 echo "  Dosen 2  : dosen2@example.com / password"

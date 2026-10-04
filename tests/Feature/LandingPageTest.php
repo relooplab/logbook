@@ -22,7 +22,7 @@ class LandingPageTest extends TestCase
         $this->get(route('landing'))
             ->assertOk()
             ->assertSee('<div class="landing-eyebrow mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>', false)
-            ->assertSee('<h1 id="hero-title" class="landing-display">Campus <span class="text-accent-blue">Logbook</span> <span class="text-accent-orange">Management</span></h1>', false)
+            ->assertSee('<h1 id="hero-title" class="landing-display"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></h1>', false)
             ->assertDontSee('Ruang kerja Tugas Akhir &amp; Kerja Praktik', false);
     }
 
@@ -119,16 +119,16 @@ class LandingPageTest extends TestCase
             ->assertSee('© '.now()->year)
             ->assertSee('href="https://reloop.id"', false)
             ->assertSee('ReLoop Lab')
-            ->assertSee('href="https://github.com/relooplab/campus-logbook-management"', false)
+            ->assertSee('href="https://github.com/relooplab/logbook"', false)
             ->assertSee('href="https://www.linkedin.com/company/relooplab"', false)
             ->assertSee('aria-label="LinkedIn Reloop Lab (tab baru)"', false)
-            ->assertSee('aria-label="GitHub Campus Logbook Management (tab baru)"', false);
+            ->assertSee('aria-label="GitHub Logbook (tab baru)"', false);
     }
 
     public function test_footer_omits_institution_name_and_keeps_centered_identity(): void
     {
         $html = view('landing.partials.footer', [
-            'appName' => 'Campus Logbook Management',
+            'appName' => 'Logbook',
             'institutionName' => 'Institution Must Not Appear',
             'version' => '1.2.3',
             'adminContactEmail' => null,
@@ -165,8 +165,42 @@ class LandingPageTest extends TestCase
     {
         $this->get(route('landing'))
             ->assertOk()
-            ->assertSee('<link rel="canonical" href="'.route('landing').'">', false)
+            ->assertSee('<link rel="canonical" href="'.url('/').'">', false)
             ->assertSee('<meta name="description"', false)
             ->assertSee('property="og:title"', false);
+    }
+
+    public function test_landing_page_has_full_seo_metadata(): void
+    {
+        $this->get(route('landing'))
+            ->assertOk()
+            ->assertSee('<meta name="robots" content="index, follow, max-image-preview:large">', false)
+            ->assertSee('property="og:site_name"', false)
+            ->assertSee('property="og:image" content="'.url('/images/og-image.png').'"', false)
+            ->assertSee('property="og:image:width" content="1200"', false)
+            ->assertSee('property="og:image:height" content="630"', false)
+            ->assertSee('<meta name="twitter:card" content="summary_large_image">', false)
+            ->assertSee('"@type": "WebSite"', false)
+            ->assertSee('"@type": "SoftwareApplication"', false)
+            ->assertSee('applicationCategory', false);
+    }
+
+    public function test_landing_page_has_faq_structured_data(): void
+    {
+        $html = $this->get(route('landing'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('"@type": "FAQPage"', $html);
+        $this->assertSame(4, preg_match_all('/"@type": "Question"/', $html));
+    }
+
+    public function test_robots_and_sitemap_are_served_for_search_engines(): void
+    {
+        $this->get('/robots.txt')
+            ->assertOk()
+            ->assertSee('Sitemap: https://logbook.reloop.id/sitemap.xml');
+        $this->get('/sitemap.xml')
+            ->assertOk()
+            ->assertSee('https://logbook.reloop.id/');
+        $this->assertFileExists(public_path('images/og-image.png'));
     }
 }

@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "hafizhul/thesis-logbook-management",
+    "name": "relooplab/logbook",
     "version": "0.55.0",
     "type": "project",
     "description": "A web application for recording and monitoring undergraduate thesis mentoring sessions.",

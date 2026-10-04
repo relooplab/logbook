@@ -15,7 +15,7 @@ class ActivityNotification extends Notification implements ShouldQueue
     public function __construct(
         public string $message,
         public ?string $url = null,
-        public string $subject = 'Pemberitahuan Campus Logbook Management',
+        public string $subject = 'Pemberitahuan Logbook',
     ) {
     }
 

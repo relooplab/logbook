@@ -90,7 +90,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">From Name</label>
-                        <input type="text" name="mail_from_name" value="{{ old("mail_from_name", $institution->mail_from_name) }}" placeholder="Campus Logbook Management"
+                        <input type="text" name="mail_from_name" value="{{ old("mail_from_name", $institution->mail_from_name) }}" placeholder="Logbook"
                             class="w-full rounded-xl border border-border bg-bg-surface px-3 py-2 text-sm">
                         @error('mail_from_name')<p class="text-xs text-status-danger mt-1">{{ $message }}</p>@enderror
                     </div>

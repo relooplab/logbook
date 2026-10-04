@@ -29,7 +29,7 @@ class ReminderNotification extends Notification implements ShouldQueue
         Institution::forUser($notifiable)->applyToConfig();
 
         return (new MailMessage)
-            ->subject('Reminder Campus Logbook Management')
+            ->subject('Reminder Logbook')
             ->greeting('Halo '.$notifiable->name)
             ->line($this->message)
             ->when($this->url, fn ($m) => $m->action('Buka Aplikasi', $this->url));

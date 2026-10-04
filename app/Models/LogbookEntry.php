@@ -261,7 +261,7 @@ class LogbookEntry extends Model
     /**
      * Notify pemilik TA + pembimbing (DB + email) dengan pesan tertentu.
      */
-    public function notifyParties(string $message, ?string $url = null, string $subject = 'Pemberitahuan Campus Logbook Management'): void
+    public function notifyParties(string $message, ?string $url = null, string $subject = 'Pemberitahuan Logbook'): void
     {
         $recipients = [];
         if ($ownerId = $this->mahasiswaTa?->user_id) {

@@ -13,7 +13,7 @@ module.exports = {
         mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
-        // Campus Logbook Management brand tokens (light + dark via .dark)
+        // Logbook brand tokens (light + dark via .dark)
         bg: {
           base: 'rgb(var(--bg-base) / <alpha-value>)',
           surface: 'rgb(var(--bg-surface) / <alpha-value>)',

@@ -1,6 +1,6 @@
-# Campus Logbook Management
+# Logbook
 
-Campus Logbook Management membantu mahasiswa, dosen, dan pengelola akademik mengelola bimbingan Tugas Akhir (TA) dan Kerja Praktik (KP). Catatan, dokumen, keputusan review, dan perkembangan mahasiswa terdokumentasi dalam satu aplikasi.
+Logbook membantu mahasiswa, dosen, dan pengelola akademik mengelola bimbingan Tugas Akhir (TA) dan Kerja Praktik (KP). Catatan, dokumen, keputusan review, dan perkembangan mahasiswa terdokumentasi dalam satu aplikasi.
 
 **Aplikasi:** [logbook.reloop.id](https://logbook.reloop.id) · **Panduan:** [Panduan Pengguna](docs/USER-GUIDE.md)
 
@@ -35,8 +35,8 @@ Campus Logbook Management membantu mahasiswa, dosen, dan pengelola akademik meng
 **Prasyarat:** PHP 8.4, Composer, Node.js 20+, npm, dan SQLite. Di direktori pilihan Anda, pasang dependensi dan salin contoh konfigurasi:
 
 ```bash
-git clone https://github.com/relooplab/campus-logbook-management.git
-cd campus-logbook-management
+git clone https://github.com/relooplab/logbook.git
+cd logbook
 composer install
 npm ci
 cp .env.example .env

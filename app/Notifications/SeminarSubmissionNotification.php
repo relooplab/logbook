@@ -145,7 +145,7 @@ class SeminarSubmissionNotification extends Notification implements ShouldQueue
         $lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//Campus Logbook Management//Bahan Seminar Sidang//ID',
+            'PRODID:-//Logbook//Bahan Seminar Sidang//ID',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             'BEGIN:VEVENT',

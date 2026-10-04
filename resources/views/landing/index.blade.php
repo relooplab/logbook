@@ -1,6 +1,35 @@
 @extends('layouts.public')
 
-@section('title', 'Beranda')
+@section('head-extra')
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "Siapa yang bisa menggunakan aplikasi ini?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Mahasiswa, dosen pembimbing atau penguji, serta pengelola akademik. Tampilan dan akses disesuaikan dengan peran masing-masing." }
+        },
+        {
+            "@type": "Question",
+            "name": "Apakah bisa digunakan untuk Tugas Akhir dan Kerja Praktik?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Ya. Aplikasi mendukung alur bimbingan Tugas Akhir maupun Kerja Praktik, termasuk pencatatan progres dan peninjauan dokumen." }
+        },
+        {
+            "@type": "Question",
+            "name": "Apakah harus bergabung ke institusi dulu?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Tidak selalu. Dosen dapat menggunakan ruang kerja personal; pengguna institusi dapat bekerja bersama sesuai pengaturan akses institusinya." }
+        },
+        {
+            "@type": "Question",
+            "name": "Bagaimana memulai?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Buat akun, lengkapi data yang diminta, lalu ikuti alur sesuai peran Anda. Jika sudah memiliki akun, langsung masuk ke Dashboard." }
+        }
+    ]
+}
+</script>
+@endsection
 
 @section('content')
 <a href="#konten" class="landing-skip">Lewati navigasi</a>
@@ -49,7 +78,7 @@
     <section class="landing-hero landing-container grid lg:grid-cols-[1fr_0.94fr] gap-12 lg:gap-16 items-center" aria-labelledby="hero-title">
         <div class="max-w-2xl">
             <div class="landing-eyebrow mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>
-            <h1 id="hero-title" class="landing-display">Campus <span class="text-accent-blue">Logbook</span> <span class="text-accent-orange">Management</span></h1>
+            <h1 id="hero-title" class="landing-display"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></h1>
             <p class="mt-6 text-base sm:text-lg leading-relaxed text-text-secondary max-w-xl">Dari entri logbook pertama sampai sidang terakhir, mahasiswa dan dosen bisa mencatat progres, memberi umpan balik, serta menuntaskan revisi dalam satu tempat.</p>
             <div class="mt-8 flex flex-wrap items-center gap-3">
                 @auth

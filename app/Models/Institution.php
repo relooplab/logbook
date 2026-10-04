@@ -116,7 +116,7 @@ class Institution extends Model
     {
         return Cache::remember('institution.active', now()->addDay(), function () {
             return static::first() ?? static::create([
-                'app_name' => 'Campus Logbook Management',
+                'app_name' => 'Logbook',
                 'institution_name' => 'Perguruan Tinggi',
                 'email' => 'no-reply@example.com',
                 // Default: user TIDAK wajib verifikasi email saat mendaftar.
@@ -184,11 +184,11 @@ class Institution extends Model
      */
     public function applyToConfig(): void
     {
-        config(['app.name' => $this->app_name ?: 'Campus Logbook Management']);
+        config(['app.name' => $this->app_name ?: 'Logbook']);
 
         // From address: prioritas mail_from_address, fallback email institusi.
         $fromAddress = $this->mail_from_address ?: $this->email;
-        $fromName = $this->mail_from_name ?: ($this->app_name ?: 'Campus Logbook Management');
+        $fromName = $this->mail_from_name ?: ($this->app_name ?: 'Logbook');
 
         if ($fromAddress) {
             config(['mail.from.address' => $fromAddress]);

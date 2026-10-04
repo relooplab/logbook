@@ -30,10 +30,10 @@ class SubscriptionExpiringNotification extends Notification implements ShouldQue
         $endsAt = $this->subscription->ends_at?->format('d M Y') ?? '—';
 
         if ($this->status === 'expired') {
-            $subject = '[Campus Logbook Management] Langganan '.$scopeLabel.' "'.$nodeName.'" Telah Berakhir';
+            $subject = '[Logbook] Langganan '.$scopeLabel.' "'.$nodeName.'" Telah Berakhir';
             $message = "Langganan {$scopeLabel} \"{$nodeName}\" telah berakhir pada {$endsAt}. Dosen yang terafiliasi ke node ini akan kembali ke kuota plan individual.";
         } else {
-            $subject = '[Campus Logbook Management] Langganan '.$scopeLabel.' "'.$nodeName.'" Akan Berakhir';
+            $subject = '[Logbook] Langganan '.$scopeLabel.' "'.$nodeName.'" Akan Berakhir';
             $message = "Langganan {$scopeLabel} \"{$nodeName}\" akan berakhir pada {$endsAt}. Perpanjang sebelum berakhir agar kuota storage institusi tetap aktif.";
         }
 

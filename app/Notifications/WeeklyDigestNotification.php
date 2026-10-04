@@ -15,7 +15,7 @@ class WeeklyDigestNotification extends Notification implements ShouldQueue
     public function __construct(
         public string $message,
         public ?string $url = null,
-        public string $subject = 'Digest Mingguan Campus Logbook Management',
+        public string $subject = 'Digest Mingguan Logbook',
     ) {
     }
 

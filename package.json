@@ -1,4 +1,5 @@
 {
+    "name": "logbook",
     "private": true,
     "type": "module",
     "license": "BUSL-1.1",

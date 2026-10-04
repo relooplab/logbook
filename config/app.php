@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Campus Logbook Management'),
+    'name' => env('APP_NAME', 'Logbook'),
 
     /*
     |--------------------------------------------------------------------------

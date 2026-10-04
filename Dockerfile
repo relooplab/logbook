@@ -1,5 +1,5 @@
 # ============================================================================
-# Thesis Logbook Management — PHP-FPM image (source DI-BAKE ke image, bukan bind mount)
+# Logbook — PHP-FPM image (source DI-BAKE ke image, bukan bind mount)
 # ============================================================================
 # Stage 1: build aset frontend (React viewer) dengan Node
 FROM node:20-alpine AS assets
@@ -99,7 +99,7 @@ RUN { \
     echo 'max_execution_time=1800'; \
     echo 'memory_limit=256M'; \
     echo 'date.timezone=Asia/Jakarta'; \
-  } > "$PHP_INI_DIR/conf.d/lbta.ini"
+  } > "$PHP_INI_DIR/conf.d/logbook.ini"
 
 # Fix #6: entrypoint menyalin public/ ke named volume bersama (nginx).
 # Jika volume kosong, isi dari file yang di-bake agar aset & symlink tersedia.

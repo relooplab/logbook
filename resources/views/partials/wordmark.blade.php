@@ -1,12 +1,14 @@
 {{-- Wordmark (brand guideline §01): mark kotak radius 14px berisi ikon checklist,
-     diikuti wordmark dinamis (kata terakhir nama aplikasi berwarna accent).
+     diikuti wordmark dinamis. Nama "Logbook" dirender dua warna
+     (Log biru + book emas sesuai token); nama kustom lain memakai
+     pola lama (kata terakhir berwarna accent).
      Baca nama dari $name (param) atau fallback Institution::active()->app_name.
      Opsional: $accent (default brand), $markSize (default w-14 h-14), $textAlign. --}}
 @php
     $accent = $accent ?? 'text-brand';
     $markSize = $markSize ?? 'w-14 h-14';
     $textAlign = $textAlign ?? 'text-center';
-    $appName = $name ?? optional(\App\Models\Institution::active())->app_name ?: 'Campus Logbook Management';
+    $appName = $name ?? optional(\App\Models\Institution::active())->app_name ?: 'Logbook';
     $words = preg_split('/\s+/', trim($appName));
     $lastWord = (string) array_pop($words);
     $firstWords = implode(' ', $words);
@@ -15,5 +17,9 @@
     <div class="inline-flex {{ $markSize }} rounded-[14px] bg-brand-light {{ $accent }} items-center justify-center mb-3 p-3">
         @include('partials.logo-mark')
     </div>
-    <span class="font-heading font-extrabold text-2xl text-text-primary">@if ($firstWords !== '')<span>{{ $firstWords }}</span> <span class="{{ $accent }}">{{ $lastWord }}</span>@else<span class="{{ $accent }}">{{ $lastWord }}</span>@endif</span>
+    @if ($appName === 'Logbook')
+        <span class="font-heading font-extrabold text-2xl"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></span>
+    @else
+        <span class="font-heading font-extrabold text-2xl text-text-primary">@if ($firstWords !== '')<span>{{ $firstWords }}</span> <span class="{{ $accent }}">{{ $lastWord }}</span>@else<span class="{{ $accent }}">{{ $lastWord }}</span>@endif</span>
+    @endif
 </div>

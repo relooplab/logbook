@@ -45,6 +45,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', LandingController::class)->name('landing');
 
+// SEO: robots.txt & sitemap.xml (juga dilayani web server; route ini menjamin
+// ketersediaan saat static file tidak di-serve oleh server).
+Route::get('/robots.txt', fn () => response(file_get_contents(public_path('robots.txt')), 200, ['Content-Type' => 'text/plain; charset=utf-8']));
+Route::get('/sitemap.xml', fn () => response(file_get_contents(public_path('sitemap.xml')), 200, ['Content-Type' => 'application/xml; charset=utf-8']));
+
 // ------------------------------------------------------------------ auth
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');

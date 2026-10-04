@@ -32,7 +32,7 @@ class DatabaseSeeder extends Seeder
         Institution::firstOrCreate(
             ['id' => 1],
             [
-                'app_name' => 'Campus Logbook Management',
+                'app_name' => 'Logbook',
                 'institution_name' => 'Perguruan Tinggi',
                 'faculty' => null,
                 'study_program' => null,
@@ -41,7 +41,7 @@ class DatabaseSeeder extends Seeder
                 'phone' => null,
                 'email' => 'no-reply@example.com',
                 'website' => '',
-                'footer_note' => 'Dokumen ini dihasilkan oleh Campus Logbook Management.',
+                'footer_note' => 'Dokumen ini dihasilkan oleh Logbook.',
                 'seminar_hardcopy_note' => 'Jika diadakan secara offline, Anda juga diminta menyerahkan hardcopy laporan paling lambat 48 jam sebelum jadwal Seminar/Sidang. Anda bisa menyerahkannya ke TU atau langsung ke ruangan saya.',
             ]
         );

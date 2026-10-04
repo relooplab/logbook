@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================================
-# Thesis Logbook Management — entrypoint
+# Logbook — entrypoint
 # 1. Pastikan named volume /var/www/public (dibagi ke nginx) berisi aset
 #    frontend + pdfjs + css yang di-bake di image (dari /public-dist).
 # 2. Buat symlink storage -> public/storage agar foto profil dapat diakses.

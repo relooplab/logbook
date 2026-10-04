@@ -1,6 +1,6 @@
 @php
     $inst = \App\Models\Institution::active();
-    $appName = optional($inst)->app_name ?: 'Campus Logbook Management';
+    $appName = optional($inst)->app_name ?: 'Logbook';
 @endphp
 <!DOCTYPE html>
 <html lang="id" class="dark">
