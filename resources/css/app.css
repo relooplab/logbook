@@ -170,7 +170,10 @@
 .landing-slider.is-enhanced .landing-slider-track { display: flex; gap: 0; transition: transform .6s cubic-bezier(.22,.68,.28,1); }
 .landing-slider .landing-screenshot { min-width: 0; border: 0; border-radius: 0; }
 .landing-slider.is-enhanced .landing-screenshot { flex: 0 0 100%; }
-.landing-slider.is-enhanced .landing-screenshot img { aspect-ratio: 1794 / 1323; object-fit: contain; object-position: top; background: rgb(var(--bg-panel)); }
+.landing-slider.is-enhanced .landing-screenshot img { aspect-ratio: 1705 / 922; object-fit: cover; object-position: top; background: rgb(var(--bg-panel)); }
+/* Gambar presentasi (foto miring + bayangan bawaan): tampil full-bleed
+   tanpa bingkai kartu agar tidak bayangan ganda. Caption tetap di bawah. */
+.landing-screenshot-present img { border-radius: 1rem 1rem 0 0; }
 .landing-slider-footer { border-top: 1px solid rgb(var(--border)); }
 .landing-slider-navigation { display: flex; align-items: center; gap: .5rem; }
 .landing-slider-navigation [data-slide-status] { font-size: .75rem; color: rgb(var(--text-secondary)); }

@@ -34,20 +34,22 @@ class LandingPageTest extends TestCase
             ->assertSee('data-theme-toggle', false);
     }
 
-    public function test_dashboard_previews_share_existing_assets_with_readme(): void
+    public function test_dashboard_previews_use_presentation_assets(): void
     {
         $response = $this->get(route('landing'))->assertOk();
-        $readme = file_get_contents(base_path('README.md'));
 
         foreach (['mahasiswa', 'dosen'] as $role) {
-            $image = 'images/readme-dashboard-'.$role.'.jpeg';
+            $image = 'images/dashboard-'.$role.'.jpg';
 
             $version = hash_file('sha256', public_path($image));
             $response->assertSee('src="'.asset($image).'?v='.$version.'"', false)
                 ->assertSee('Dashboard '.$role);
             $this->assertFileExists(public_path($image));
-            $this->assertStringContainsString('(public/'.$image.')', $readme);
         }
+
+        // Dimensi gambar presentasi (1705x922) + varian full-bleed.
+        $response->assertSee('width="1705" height="922"', false)
+            ->assertSee('landing-screenshot-present', false);
 
         $response->assertSee('data-dashboard-slider', false)
             ->assertSee('aria-roledescription="carousel"', false)
@@ -56,6 +58,18 @@ class LandingPageTest extends TestCase
             ->assertSee('data-slide-prev', false)
             ->assertSee('data-slide-next', false)
             ->assertSee('data-slide-play', false);
+    }
+
+    public function test_readme_keeps_flat_dashboard_screenshots(): void
+    {
+        $readme = file_get_contents(base_path('README.md'));
+
+        foreach (['mahasiswa', 'dosen'] as $role) {
+            $image = 'images/readme-dashboard-'.$role.'.jpeg';
+
+            $this->assertFileExists(public_path($image));
+            $this->assertStringContainsString('(public/'.$image.')', $readme);
+        }
     }
 
     public function test_ta_journey_uses_application_phases_and_accessible_controls(): void

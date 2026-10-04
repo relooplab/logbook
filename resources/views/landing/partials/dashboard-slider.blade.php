@@ -8,12 +8,12 @@
     </div>
     <div class="landing-slider-viewport" data-slider-viewport>
         <div class="landing-slider-track" data-slider-track>
-            <figure id="dashboard-slide-mahasiswa" class="landing-screenshot" data-dashboard-slide role="group" aria-roledescription="slide" aria-label="1 dari 2: Dashboard mahasiswa">
-                <img src="{{ $dashboardImages['mahasiswa'] }}" alt="Tampilan dashboard mahasiswa dengan ringkasan progres bimbingan" width="1794" height="1323" loading="lazy">
+            <figure id="dashboard-slide-mahasiswa" class="landing-screenshot landing-screenshot-present" data-dashboard-slide role="group" aria-roledescription="slide" aria-label="1 dari 2: Dashboard mahasiswa">
+                <img src="{{ $dashboardImages['mahasiswa'] }}" alt="Tampilan dashboard mahasiswa dengan ringkasan progres bimbingan" width="1705" height="922" loading="lazy">
                 <figcaption><span class="material-symbols-outlined icon-sm text-accent-blue" aria-hidden="true">school</span> Dashboard mahasiswa</figcaption>
             </figure>
-            <figure id="dashboard-slide-dosen" class="landing-screenshot" data-dashboard-slide role="group" aria-roledescription="slide" aria-label="2 dari 2: Dashboard dosen">
-                <img src="{{ $dashboardImages['dosen'] }}" alt="Tampilan dashboard dosen dengan ringkasan mahasiswa dan aktivitas bimbingan" width="1794" height="1032" loading="lazy">
+            <figure id="dashboard-slide-dosen" class="landing-screenshot landing-screenshot-present" data-dashboard-slide role="group" aria-roledescription="slide" aria-label="2 dari 2: Dashboard dosen">
+                <img src="{{ $dashboardImages['dosen'] }}" alt="Tampilan dashboard dosen dengan ringkasan mahasiswa dan aktivitas bimbingan" width="1705" height="922" loading="lazy">
                 <figcaption><span class="material-symbols-outlined icon-sm text-accent-orange" aria-hidden="true">co_present</span> Dashboard dosen</figcaption>
             </figure>
         </div>

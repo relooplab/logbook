@@ -25,7 +25,7 @@ class LandingController extends Controller
             'version' => ReleaseVersion::get(),
             'taPhases' => MahasiswaTa::FASES,
             'dashboardImages' => collect(['mahasiswa', 'dosen'])->mapWithKeys(function (string $role) {
-                $path = 'images/readme-dashboard-'.$role.'.jpeg';
+                $path = 'images/dashboard-'.$role.'.jpg';
 
                 // Replacing a screenshot must invalidate browser/CDN image caches.
                 return [$role => asset($path).'?v='.hash_file('sha256', public_path($path))];
