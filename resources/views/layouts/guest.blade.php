@@ -44,7 +44,6 @@
                 'accent' => 'text-brand',
             ])
             <p class="text-sm text-text-secondary mt-1">Aplikasi pencatatan &amp; monitoring bimbingan Tugas Akhir mahasiswa</p>
-            <p class="mt-1 text-xs text-text-secondary/70">by <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:text-text-primary hover:underline">ReLoop Lab</a></p>
         </div>
         <div class="bg-bg-surface rounded-card shadow-lg border border-border p-6">
             @yield('guest-content')
@@ -59,7 +58,6 @@
             @if ($adminContactEmail)
                 <a href="mailto:{{ $adminContactEmail }}" class="hover:text-text-primary hover:underline">Hubungi admin</a>
             @endif
-            <a href="https://reloop.notion.site/3b1155a221e880829514df5d0a8dcfd6" target="_blank" rel="noopener" class="font-semibold text-status-pending hover:text-status-pending/80 underline decoration-status-pending/40 underline-offset-2" title="Laporkan masalah atau kirim ide untuk pengembangan aplikasi">Kirim Masukan</a>
         </div>
         <div class="mt-2 flex items-center justify-center gap-1">
             <a href="https://github.com/relooplab/logbook" target="_blank" rel="noopener noreferrer" class="landing-social-link" aria-label="GitHub Logbook (tab baru)">

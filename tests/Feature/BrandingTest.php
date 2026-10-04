@@ -23,13 +23,15 @@ class BrandingTest extends TestCase
         \Illuminate\Support\Facades\Cache::forget('institution.active');
     }
 
-    public function test_login_header_shows_two_tone_logbook_tagline_and_byline(): void
+    public function test_login_header_shows_two_tone_logbook_tagline_without_byline(): void
     {
         $response = $this->get(route('login'));
 
         $response->assertOk()
             ->assertSee('<span class="text-accent-blue">Log</span><span class="text-status-pending">book</span>', false)
             ->assertSee('Aplikasi pencatatan &amp; monitoring bimbingan Tugas Akhir mahasiswa', false)
+            ->assertDontSee('text-text-secondary/70">by', false)
+            // Nama ReLoop Lab tetap ada satu kali di footer copyright.
             ->assertSee('>ReLoop Lab</a>', false)
             ->assertDontSee('Campus Logbook Management');
     }
@@ -41,6 +43,7 @@ class BrandingTest extends TestCase
         $response->assertOk()
             ->assertSee('<span class="text-accent-blue">Log</span><span class="text-status-pending">book</span>', false)
             ->assertSee('Aplikasi pencatatan &amp; monitoring bimbingan Tugas Akhir mahasiswa', false)
+            ->assertDontSee('text-text-secondary/70">by', false)
             ->assertSee('>ReLoop Lab</a>', false)
             ->assertDontSee('Campus Logbook Management');
     }
@@ -50,7 +53,7 @@ class BrandingTest extends TestCase
         foreach ([route('login'), route('register')] as $url) {
             $this->get($url)
                 ->assertOk()
-                ->assertSee('Kirim Masukan')
+                ->assertDontSee('Kirim Masukan')
                 ->assertSee('Hubungi admin')
                 ->assertSee('aria-label="GitHub Logbook (tab baru)"', false)
                 ->assertSee('aria-label="LinkedIn Reloop Lab (tab baru)"', false);
