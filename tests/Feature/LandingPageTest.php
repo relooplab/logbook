@@ -85,6 +85,34 @@ class LandingPageTest extends TestCase
             ->assertSee('data-slide-play', false);
     }
 
+    public function test_dashboard_slider_uses_minimal_overlay_controls(): void
+    {
+        $html = $this->get(route('landing'))->assertOk()->getContent();
+
+        // Lapisan overlay baru ada di kedua slide.
+        $this->assertStringContainsString('landing-slider-top', $html);
+        $this->assertStringContainsString('landing-slider-bottom', $html);
+        $this->assertStringContainsString('landing-slider-caption', $html);
+
+        // Copy lama yang bertele-tele tidak muncul lagi.
+        $this->assertStringNotContainsString('PREVIEW APLIKASI', $html);
+        $this->assertStringNotContainsString('Putar slider', $html);
+        $this->assertStringNotContainsString('Jeda slider', $html);
+        $this->assertStringNotContainsString('01 / 02 — Dashboard', $html);
+        $this->assertStringNotContainsString('Tampilan dashboard mahasiswa dan dosen dalam aplikasi.', $html);
+
+        // Status ringkas + tombol play ikon dengan aria-label.
+        $this->assertStringContainsString('<span data-slide-status>01 / 02</span>', $html);
+        $this->assertStringContainsString('aria-label="Jeda otomatis"', $html);
+
+        // CSS overlay: absolute + scrim gradient + pill blur.
+        $css = file_get_contents(public_path('build/assets/'.basename(glob(public_path('build/assets/app-*.css'))[0])));
+        $this->assertMatchesRegularExpression('/\.landing-slider-top\s*\{[^}]*position:\s*absolute/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-slider-bottom\s*\{[^}]*position:\s*absolute/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-slider-caption\s*\{[^}]*position:\s*absolute/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-slider \.landing-screenshot::?after\s*\{[^}]*linear-gradient/s', $css);
+    }
+
     public function test_readme_keeps_flat_dashboard_screenshots(): void
     {
         $readme = file_get_contents(base_path('README.md'));

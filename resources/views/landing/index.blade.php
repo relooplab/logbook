@@ -156,7 +156,7 @@
     </section>
 
     <section class="landing-section landing-container" aria-labelledby="tampilan-title">
-        <div class="flex flex-wrap justify-between items-end gap-4 mb-9"><div><span class="landing-section-label">LIHAT RUANG KERJANYA</span><h2 id="tampilan-title" class="landing-heading mt-4">Dibuat untuk <span class="landing-accent-gold">pekerjaan nyata.</span></h2></div><p class="text-sm text-text-secondary max-w-sm">Tampilan dashboard mahasiswa dan dosen dalam aplikasi.</p></div>
+        <div class="flex flex-wrap justify-between items-end gap-4 mb-9"><div><span class="landing-section-label">LIHAT RUANG KERJANYA</span><h2 id="tampilan-title" class="landing-heading mt-4">Dibuat untuk <span class="landing-accent-gold">pekerjaan nyata.</span></h2></div></div>
         @include('landing.partials.dashboard-slider')
     </section>
 

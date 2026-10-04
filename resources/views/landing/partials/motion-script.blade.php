@@ -41,6 +41,7 @@
         var slides = Array.from(slider.querySelectorAll('[data-dashboard-slide]'));
         var choices = Array.from(slider.querySelectorAll('[data-slide-select]'));
         var play = slider.querySelector('[data-slide-play]');
+        var playIcon = play.querySelector('.material-symbols-outlined');
         var status = slider.querySelector('[data-slide-status]');
         var index = 0;
         var playing = !motion.matches;
@@ -61,14 +62,16 @@
             });
             choices.forEach(function (choice, i) { choice.setAttribute('aria-pressed', String(i === index)); });
             status.setAttribute('aria-live', manual ? 'polite' : 'off');
-            status.textContent = '0' + (index + 1) + ' / 02 — Dashboard ' + (index === 0 ? 'mahasiswa' : 'dosen');
+            status.textContent = '0' + (index + 1) + ' / 02';
             syncSlider();
         }
         function syncSlider() {
             window.clearInterval(timer);
             timer = null;
-            play.textContent = playing && !motion.matches ? 'Jeda slider' : 'Putar slider';
-            play.setAttribute('aria-pressed', String(playing && !motion.matches));
+            var isPlaying = playing && !motion.matches;
+            if (playIcon) playIcon.textContent = isPlaying ? 'pause' : 'play_arrow';
+            play.setAttribute('aria-label', isPlaying ? 'Jeda otomatis' : 'Putar otomatis');
+            play.setAttribute('aria-pressed', String(isPlaying));
             play.disabled = motion.matches;
             if (playing && visible && !hovering && !document.hidden && !motion.matches && !slider.contains(document.activeElement)) {
                 timer = window.setInterval(function () { selectSlide(index + 1, false); }, 7000);
