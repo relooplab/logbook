@@ -8,6 +8,7 @@ use App\Models\MahasiswaTa;
 use App\Models\User;
 use App\Models\WorkspaceFile;
 use App\Services\StorageUsageService;
+use App\Services\WorkspaceUploadNotifier;
 use App\Support\Feature;
 use App\Support\ProgramContext;
 use Illuminate\Http\RedirectResponse;
@@ -169,6 +170,10 @@ class WorkspaceController extends Controller
 
         $bab = $request->input('bab');
 
+        $fileNames = collect($request->file('files'))
+            ->map(fn ($f) => $f->getClientOriginalName())
+            ->values()->all();
+
         // Cek kuota sesuai target pembebanan: dosen pembimbing (P1, fallback P2)
         // setelah program disetujui, atau mahasiswa sendiri dengan kuota 100 MB
         // selama program masih menunggu persetujuan dosen.
@@ -196,8 +201,9 @@ class WorkspaceController extends Controller
             $storeFiles();
         }
 
-        // Notifikasi ke dosen pembimbing.
-        $this->notifyCounterpart($request, $mahasiswaTa);
+        // Notifikasi: in-app instan + email rekap (throttle 24 jam).
+        $this->bestEffort(fn () => app(WorkspaceUploadNotifier::class)
+            ->notify($mahasiswaTa, $request->user(), $fileNames));
 
         return back()->with('success', 'File berhasil diunggah ke workspace.');
     }
@@ -357,24 +363,5 @@ class WorkspaceController extends Controller
         }
 
         return $file->mahasiswaTa?->isMember($user) ?? false;
-    }
-
-    /**
-     * Notifikasi ke pihak lawan (dosen upload -> mahasiswa, mahasiswa upload -> dosen).
-     */
-    private function notifyCounterpart(Request $request, MahasiswaTa $mahasiswaTa): void
-    {
-        $uploader = $request->user();
-
-        // Mahasiswa upload -> beri tahu dosen pembimbing.
-        foreach ([$mahasiswaTa->pembimbing1, $mahasiswaTa->pembimbing2] as $dosen) {
-            if ($dosen && $dosen->id !== $uploader->id) {
-                $this->bestEffort(fn () => $dosen->notify(new \App\Notifications\ActivityNotification(
-                    'Mahasiswa mengunggah file baru ke workspace.',
-                    route('workspace.index', $mahasiswaTa),
-                    'File Baru di Workspace',
-                )));
-            }
-        }
     }
 }
