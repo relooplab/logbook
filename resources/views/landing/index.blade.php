@@ -54,7 +54,7 @@
             @auth
                 <a href="{{ route('dashboard') }}" class="landing-button landing-button-primary hidden sm:inline-flex">Ke Dashboard <span aria-hidden="true">↗</span></a>
             @else
-                <a href="{{ route('login') }}" class="hidden sm:inline-flex landing-button landing-button-quiet">Masuk</a>
+                <a href="{{ route('login') }}" class="hidden sm:inline-flex landing-button landing-button-secondary">Masuk</a>
                 <a href="{{ route('register') }}" class="landing-button landing-button-primary hidden sm:inline-flex">Daftar <span aria-hidden="true">↗</span></a>
             @endauth
             <button type="button" id="landing-menu-toggle" class="landing-icon-button lg:hidden" aria-label="Buka navigasi" aria-controls="landing-mobile-nav" aria-expanded="false">
@@ -85,7 +85,7 @@
                     <a href="{{ route('dashboard') }}" class="landing-button landing-button-primary landing-button-large">Ke Dashboard <span aria-hidden="true">↗</span></a>
                 @else
                     <a href="{{ route('register') }}" class="landing-button landing-button-primary landing-button-large">Buat akun gratis <span aria-hidden="true">↗</span></a>
-                    <a href="{{ route('login') }}" class="landing-button landing-button-outline landing-button-large">Sudah punya akun? Masuk</a>
+                    <a href="{{ route('login') }}" class="landing-button landing-button-secondary landing-button-large">Sudah punya akun? Masuk</a>
                 @endauth
             </div>
             <p class="mt-7 text-xs leading-relaxed text-text-secondary">Untuk mahasiswa, dosen pembimbing, penguji, dan pengelola program.</p>

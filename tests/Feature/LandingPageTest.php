@@ -51,6 +51,21 @@ class LandingPageTest extends TestCase
         $this->assertMatchesRegularExpression('/html:not\(\.dark\) \.landing-accent-gold\s*\{\s*color:\s*#7d5f16/s', $css);
     }
 
+    public function test_login_buttons_use_blue_token_with_glow(): void
+    {
+        $html = $this->get(route('landing'))->assertOk()->getContent();
+        $css = file_get_contents(public_path('build/assets/'.basename(glob(public_path('build/assets/app-*.css'))[0])));
+
+        // Tombol Masuk header + hero memakai biru solid sejajar Daftar emas.
+        $this->assertStringContainsString('landing-button landing-button-secondary">Masuk</a>', $html);
+        $this->assertStringContainsString('landing-button landing-button-secondary landing-button-large">Sudah punya akun? Masuk</a>', $html);
+
+        $this->assertMatchesRegularExpression('/\.landing-button-secondary\s*\{[^}]*accent-blue/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-button-secondary[^{]*\{[^}]*box-shadow/s', $css);
+        // Teks gelap gagal AA di light mode (3.81:1) — pastikan override putih #fff (4.85:1) ada.
+        $this->assertMatchesRegularExpression('/html:not\(\.dark\) \.landing-button-secondary\s*\{\s*color:\s*#fff/s', $css);
+    }
+
     public function test_header_application_name_is_hidden_on_mobile(): void
     {
         $this->get(route('landing'))->assertOk()
