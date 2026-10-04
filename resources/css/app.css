@@ -13,20 +13,29 @@
 .landing :is(a, button, summary):focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 3px; }
 .landing-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 2.55rem; height: 2.55rem; border-radius: .75rem; color: rgb(var(--text-secondary)); transition: background .2s, color .2s; }
 .landing-icon-button:hover { background: rgb(var(--bg-hover)); color: rgb(var(--text-primary)); }
-.landing-button { display: inline-flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .75rem; padding: .67rem 1rem; font-size: .875rem; font-weight: 700; line-height: 1.4; text-align: center; transition: transform .2s, background .2s, border-color .2s; }
+.landing-button { display: inline-flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .75rem; padding: .67rem 1rem; font-size: .875rem; font-weight: 700; line-height: 1.4; text-align: center; transition: transform .2s, background .2s, border-color .2s, box-shadow .2s, filter .2s; }
 .landing-button:hover { transform: translateY(-2px); }
-.landing-button-primary { background: rgb(var(--brand)); color: #0b1420; }
-.landing-button-primary:hover { background: rgb(var(--brand-hover)); }
+.landing-button-primary { background: rgb(var(--status-pending)); color: #0b1420; box-shadow: 0 8px 24px rgb(var(--status-pending) / .35); }
+.landing-button-primary:hover { filter: brightness(1.07); box-shadow: 0 10px 28px rgb(var(--status-pending) / .45); }
 .landing-button-quiet { color: rgb(var(--text-primary)); }
 .landing-button-quiet:hover { background: rgb(var(--bg-hover)); }
-.landing-button-outline { color: rgb(var(--text-primary)); border: 1px solid rgb(var(--border)); background: rgb(var(--bg-surface)); }
-.landing-button-outline:hover { border-color: rgb(var(--brand) / .55); }
+.landing-button-outline { color: rgb(var(--text-primary)); border: 2px solid rgb(var(--border)); background: rgb(var(--bg-panel)); }
+.landing-button-outline:hover { border-color: rgb(var(--status-pending) / .75); }
 .landing-button-large { min-height: 3.2rem; padding: .8rem 1.35rem; }
 .landing-mobile-nav { border-top: 1px solid rgb(var(--border)); }
 .landing-mobile-nav a { display: block; padding: .75rem .5rem; border-radius: .5rem; }
 .landing-mobile-nav a:hover { background: rgb(var(--bg-hover)); }
 .landing-hero { padding-block: clamp(4rem, 9vw, 8.5rem); }
 .landing-eyebrow { display: inline-flex; align-items: center; gap: .6rem; font-size: .68rem; font-weight: 700; letter-spacing: .11em; color: rgb(var(--brand)); }
+/* Eyebrow hero memakai emas agar selaras dengan "book" pada wordmark. */
+.landing-eyebrow-gold { color: rgb(var(--status-pending)); }
+.landing-eyebrow-gold .landing-eyebrow-dot { box-shadow: 0 0 0 .3rem rgb(var(--status-pending) / .13); }
+/* Aksen emas pada heading: token terang (#b8903f) gagal AA di light mode
+   (2.7:1), jadi light memakai emas gelap #7d5f16 (5.5:1, lolos AA). */
+.landing-accent-gold { color: rgb(var(--status-pending)); }
+html:not(.dark) .landing-eyebrow-gold { color: #7d5f16; }
+html:not(.dark) .landing-eyebrow-gold .landing-eyebrow-dot { box-shadow: 0 0 0 .3rem rgb(125 95 22 / .15); }
+html:not(.dark) .landing-accent-gold { color: #7d5f16; }
 .landing-eyebrow-dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 .3rem rgb(var(--brand) / .13); }
 .landing-display { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; font-size: clamp(2.7rem, 5vw, 5.1rem); font-weight: 800; letter-spacing: -.055em; line-height: 1.11; text-wrap: balance; }
 .landing-heading { font-size: clamp(1.85rem, 3.2vw, 3rem); line-height: 1.2; font-weight: 800; letter-spacing: -.045em; text-wrap: balance; }
@@ -86,6 +95,11 @@
 .landing-preview-progress { display: flex; gap: 6px; margin: 1.8rem 0 1.4rem; }
 .landing-preview-progress span { flex: 1; height: 5px; border-radius: 4px; background: rgb(var(--border)); transition: background .4s; }
 .landing-preview-progress span.is-current, .landing-preview-progress span.is-complete { background: rgb(var(--accent-blue)); }
+/* Sentuhan emas pada kartu hero: tautan dan segmen aktif mengikuti wordmark. */
+.landing-hero-preview .landing-preview-progress span.is-current { background: rgb(var(--status-pending)); }
+.landing-hero-preview .landing-text-link { color: rgb(var(--status-pending)); }
+html:not(.dark) .landing-hero-preview .landing-preview-progress span.is-current { background: #7d5f16; }
+html:not(.dark) .landing-hero-preview .landing-text-link { color: #7d5f16; }
 /* Continuous marquee with static no-JavaScript and reduced-motion fallbacks. */
 .landing-capabilities { display: flex; align-items: center; gap: 1rem; min-width: 0; padding-block: 1.5rem; border-block: 1px solid rgb(var(--border)); color: rgb(var(--text-secondary)); font-size: .8rem; font-weight: 600; }
 .landing-marquee-viewport { flex: 1; min-width: 0; overflow: hidden; }

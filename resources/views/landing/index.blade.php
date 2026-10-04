@@ -77,7 +77,7 @@
 <main id="konten">
     <section class="landing-hero landing-container grid lg:grid-cols-[1fr_0.94fr] gap-12 lg:gap-16 items-center" aria-labelledby="hero-title">
         <div class="max-w-2xl">
-            <div class="landing-eyebrow mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>
+            <div class="landing-eyebrow landing-eyebrow-gold mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>
             <h1 id="hero-title" class="landing-display"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></h1>
             <p class="mt-6 text-base sm:text-lg leading-relaxed text-text-secondary max-w-xl">Dari entri logbook pertama sampai sidang terakhir, mahasiswa dan dosen bisa mencatat progres, memberi umpan balik, serta menuntaskan revisi dalam satu tempat.</p>
             <div class="mt-8 flex flex-wrap items-center gap-3">
@@ -114,7 +114,7 @@
 
     <section class="landing-section landing-container" aria-labelledby="masalah-title">
         <div class="grid md:grid-cols-[0.78fr_1fr] gap-8 md:gap-16 items-start">
-            <div><span class="landing-section-label">KENAPA PERLU SATU TEMPAT?</span><h2 id="masalah-title" class="landing-heading mt-4">Bimbingan tidak harus tercecer di banyak tempat.</h2></div>
+            <div><span class="landing-section-label">KENAPA PERLU SATU TEMPAT?</span><h2 id="masalah-title" class="landing-heading mt-4">Bimbingan tidak harus <span class="landing-accent-gold">tercecer</span> di banyak tempat.</h2></div>
             <div class="space-y-5 text-text-secondary leading-relaxed"><p>Catatan pertemuan ada di buku. Revisi ada di percakapan. Berkas terbaru ada di folder yang berbeda. Ketika waktunya meninjau progres, semua orang harus menyusunnya lagi dari awal.</p><p class="text-text-primary font-semibold">Di sini, entri, dokumen, umpan balik, dan tahapan berikutnya hadir dalam satu alur yang bisa diikuti bersama.</p></div>
         </div>
     </section>
@@ -122,7 +122,7 @@
     <section id="fitur" class="landing-section landing-section-muted" aria-labelledby="fitur-title">
         <div class="landing-container">
             <span class="landing-section-label">ALAT UNTUK SETIAP LANGKAH</span>
-            <div class="flex flex-wrap justify-between items-end gap-4 mt-4 mb-9"><h2 id="fitur-title" class="landing-heading max-w-2xl">Semua yang dibutuhkan, tanpa memutus alur.</h2><a href="#alur" class="landing-text-link">Lihat alur bimbingan <span aria-hidden="true">→</span></a></div>
+            <div class="flex flex-wrap justify-between items-end gap-4 mt-4 mb-9"><h2 id="fitur-title" class="landing-heading max-w-2xl">Semua yang dibutuhkan, <span class="text-accent-blue">tanpa memutus alur.</span></h2><a href="#alur" class="landing-text-link">Lihat alur bimbingan <span aria-hidden="true">→</span></a></div>
             <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 @foreach ([
                     ['edit_document', 'Logbook & revisi', 'Catat setiap sesi, ajukan perbaikan, dan ikuti status review sampai disetujui.', 'blue'],
@@ -146,7 +146,7 @@
 
     <section id="untuk-siapa" class="landing-section landing-section-muted" aria-labelledby="peran-title">
         <div class="landing-container">
-            <span class="landing-section-label">DIBUAT UNTUK BEKERJA BERSAMA</span><h2 id="peran-title" class="landing-heading mt-4 mb-9">Satu ruang kerja. Sudut pandang yang tepat.</h2>
+            <span class="landing-section-label">DIBUAT UNTUK BEKERJA BERSAMA</span><h2 id="peran-title" class="landing-heading mt-4 mb-9">Satu ruang kerja. <span class="text-accent-teal">Sudut pandang yang tepat.</span></h2>
             <div class="grid md:grid-cols-3 gap-4">
                 <article class="landing-role"><span class="material-symbols-outlined text-accent-blue text-3xl" aria-hidden="true">school</span><h3>Mahasiswa</h3><p>Catat bimbingan, kirim revisi, lihat umpan balik, dan ketahui apa yang perlu dikerjakan berikutnya.</p></article>
                 <article class="landing-role"><span class="material-symbols-outlined text-accent-orange text-3xl" aria-hidden="true">co_present</span><h3>Dosen</h3><p>Tinjau progres mahasiswa, beri komentar pada dokumen, dan kelola antrean review tanpa berpindah-pindah.</p></article>
@@ -156,16 +156,16 @@
     </section>
 
     <section class="landing-section landing-container" aria-labelledby="tampilan-title">
-        <div class="flex flex-wrap justify-between items-end gap-4 mb-9"><div><span class="landing-section-label">LIHAT RUANG KERJANYA</span><h2 id="tampilan-title" class="landing-heading mt-4">Dibuat untuk pekerjaan nyata.</h2></div><p class="text-sm text-text-secondary max-w-sm">Tampilan dashboard mahasiswa dan dosen dalam aplikasi.</p></div>
+        <div class="flex flex-wrap justify-between items-end gap-4 mb-9"><div><span class="landing-section-label">LIHAT RUANG KERJANYA</span><h2 id="tampilan-title" class="landing-heading mt-4">Dibuat untuk <span class="landing-accent-gold">pekerjaan nyata.</span></h2></div><p class="text-sm text-text-secondary max-w-sm">Tampilan dashboard mahasiswa dan dosen dalam aplikasi.</p></div>
         @include('landing.partials.dashboard-slider')
     </section>
 
     <section class="landing-section landing-section-muted" aria-labelledby="mode-title">
-        <div class="landing-container grid md:grid-cols-[0.8fr_1fr] gap-10 md:gap-20 items-start"><div><span class="landing-section-label">FLEKSIBEL UNTUK KAMPUS</span><h2 id="mode-title" class="landing-heading mt-4">Mulai sendiri.<br>Kelola bersama.</h2><p class="mt-4 text-text-secondary leading-relaxed">Gunakan untuk bimbingan pribadi atau sebagai ruang kerja bersama di institusi. Alurnya tetap mengikuti kebutuhan tiap pengguna.</p></div><div class="space-y-4"><div class="landing-mode"><span class="landing-mode-icon text-accent-blue"><span class="material-symbols-outlined" aria-hidden="true">person</span></span><div><h3>Personal</h3><p>Dosen mengelola mahasiswa dan data bimbingannya sendiri.</p></div></div><div class="landing-mode"><span class="landing-mode-icon text-accent-teal"><span class="material-symbols-outlined" aria-hidden="true">domain</span></span><div><h3>Institusi</h3><p>Tim akademik bekerja bersama dengan pengaturan akses dan ruang penyimpanan institusi.</p></div></div></div></div>
+        <div class="landing-container grid md:grid-cols-[0.8fr_1fr] gap-10 md:gap-20 items-start"><div><span class="landing-section-label">FLEKSIBEL UNTUK KAMPUS</span><h2 id="mode-title" class="landing-heading mt-4">Mulai sendiri.<br><span class="text-accent-purple">Kelola bersama.</span></h2><p class="mt-4 text-text-secondary leading-relaxed">Gunakan untuk bimbingan pribadi atau sebagai ruang kerja bersama di institusi. Alurnya tetap mengikuti kebutuhan tiap pengguna.</p></div><div class="space-y-4"><div class="landing-mode"><span class="landing-mode-icon text-accent-blue"><span class="material-symbols-outlined" aria-hidden="true">person</span></span><div><h3>Personal</h3><p>Dosen mengelola mahasiswa dan data bimbingannya sendiri.</p></div></div><div class="landing-mode"><span class="landing-mode-icon text-accent-teal"><span class="material-symbols-outlined" aria-hidden="true">domain</span></span><div><h3>Institusi</h3><p>Tim akademik bekerja bersama dengan pengaturan akses dan ruang penyimpanan institusi.</p></div></div></div></div>
     </section>
 
     <section id="faq" class="landing-section landing-container" aria-labelledby="faq-title">
-        <div class="grid md:grid-cols-[0.7fr_1fr] gap-8 md:gap-20"><div><span class="landing-section-label">PERTANYAAN UMUM</span><h2 id="faq-title" class="landing-heading mt-4">Sebelum mulai.</h2></div><div class="landing-faq">
+        <div class="grid md:grid-cols-[0.7fr_1fr] gap-8 md:gap-20"><div><span class="landing-section-label">PERTANYAAN UMUM</span><h2 id="faq-title" class="landing-heading mt-4"><span class="text-accent-blue">Sebelum mulai.</span></h2></div><div class="landing-faq">
             <details><summary>Siapa yang bisa menggunakan aplikasi ini?<span class="material-symbols-outlined icon-md" aria-hidden="true">add</span></summary><p>Mahasiswa, dosen pembimbing atau penguji, serta pengelola akademik. Tampilan dan akses disesuaikan dengan peran masing-masing.</p></details>
             <details><summary>Apakah bisa digunakan untuk Tugas Akhir dan Kerja Praktik?<span class="material-symbols-outlined icon-md" aria-hidden="true">add</span></summary><p>Ya. Aplikasi mendukung alur bimbingan Tugas Akhir maupun Kerja Praktik, termasuk pencatatan progres dan peninjauan dokumen.</p></details>
             <details><summary>Apakah harus bergabung ke institusi dulu?<span class="material-symbols-outlined icon-md" aria-hidden="true">add</span></summary><p>Tidak selalu. Dosen dapat menggunakan ruang kerja personal; pengguna institusi dapat bekerja bersama sesuai pengaturan akses institusinya.</p></details>
@@ -173,7 +173,7 @@
         </div></div>
     </section>
 
-    <section class="landing-container pb-20 sm:pb-28" aria-labelledby="cta-title"><div class="landing-final-cta"><div class="relative z-10"><span class="landing-section-label">MULAI DARI SATU ENTRI</span><h2 id="cta-title" class="landing-heading mt-4 max-w-2xl">Beri setiap langkah bimbingan tempat yang semestinya.</h2><p class="mt-4 text-text-secondary max-w-xl">Catat yang sudah dikerjakan, lihat yang perlu diperbaiki, dan lanjutkan bersama.</p><div class="mt-7 flex flex-wrap gap-3">@auth<a href="{{ route('dashboard') }}" class="landing-button landing-button-primary landing-button-large">Ke Dashboard <span aria-hidden="true">↗</span></a>@else<a href="{{ route('register') }}" class="landing-button landing-button-primary landing-button-large">Buat akun gratis <span aria-hidden="true">↗</span></a><a href="{{ route('login') }}" class="landing-button landing-button-outline landing-button-large">Masuk</a>@endauth</div></div></div></section>
+    <section class="landing-container pb-20 sm:pb-28" aria-labelledby="cta-title"><div class="landing-final-cta"><div class="relative z-10"><span class="landing-section-label">MULAI DARI SATU ENTRI</span><h2 id="cta-title" class="landing-heading mt-4 max-w-2xl">Beri setiap langkah bimbingan <span class="landing-accent-gold">tempat yang semestinya.</span></h2><p class="mt-4 text-text-secondary max-w-xl">Catat yang sudah dikerjakan, lihat yang perlu diperbaiki, dan lanjutkan bersama.</p><div class="mt-7 flex flex-wrap gap-3">@auth<a href="{{ route('dashboard') }}" class="landing-button landing-button-primary landing-button-large">Ke Dashboard <span aria-hidden="true">↗</span></a>@else<a href="{{ route('register') }}" class="landing-button landing-button-primary landing-button-large">Buat akun gratis <span aria-hidden="true">↗</span></a><a href="{{ route('login') }}" class="landing-button landing-button-outline landing-button-large">Masuk</a>@endauth</div></div></div></section>
 </main>
 
 @include('landing.partials.footer')

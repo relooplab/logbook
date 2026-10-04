@@ -21,9 +21,34 @@ class LandingPageTest extends TestCase
     {
         $this->get(route('landing'))
             ->assertOk()
-            ->assertSee('<div class="landing-eyebrow mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>', false)
+            ->assertSee('<div class="landing-eyebrow landing-eyebrow-gold mb-6"><span class="landing-eyebrow-dot"></span><span>Bimbingan yang tertata, kemajuan yang terlihat.</span></div>', false)
             ->assertSee('<h1 id="hero-title" class="landing-display"><span class="text-accent-blue">Log</span><span class="text-status-pending">book</span></h1>', false)
             ->assertDontSee('Ruang kerja Tugas Akhir &amp; Kerja Praktik', false);
+    }
+
+    public function test_section_headings_use_rotating_token_accents(): void
+    {
+        $html = $this->get(route('landing'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('tidak harus <span class="landing-accent-gold">tercecer</span>', $html);
+        $this->assertStringContainsString('<span class="text-accent-blue">tanpa memutus alur.</span>', $html);
+        $this->assertStringContainsString('<span class="text-accent-teal">Sudut pandang yang tepat.</span>', $html);
+        $this->assertStringContainsString('Dibuat untuk <span class="landing-accent-gold">pekerjaan nyata.</span>', $html);
+        $this->assertStringContainsString('<span class="text-accent-purple">Kelola bersama.</span>', $html);
+        $this->assertStringContainsString('<span class="text-accent-blue">Sebelum mulai.</span>', $html);
+        $this->assertStringContainsString('<span class="landing-accent-gold">tempat yang semestinya.</span>', $html);
+    }
+
+    public function test_primary_buttons_use_gold_token_with_glow(): void
+    {
+        $css = file_get_contents(public_path('build/assets/'.basename(glob(public_path('build/assets/app-*.css'))[0])));
+
+        $this->assertMatchesRegularExpression('/\.landing-button-primary\s*\{[^}]*status-pending/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-button-primary[^{]*\{[^}]*box-shadow/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-eyebrow-gold\s*\{[^}]*status-pending/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-accent-gold\s*\{[^}]*status-pending/s', $css);
+        // Emas terang gagal AA di light mode (2.7:1) — pastikan override gelap #7d5f16 (5.5:1) ada.
+        $this->assertMatchesRegularExpression('/html:not\(\.dark\) \.landing-accent-gold\s*\{\s*color:\s*#7d5f16/s', $css);
     }
 
     public function test_header_application_name_is_hidden_on_mobile(): void
