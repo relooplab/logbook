@@ -110,7 +110,7 @@ class LandingPageTest extends TestCase
         $response->assertSee('data-ta-play', false)
             ->assertSee('prefers-reduced-motion: reduce', false)
             ->assertSee('ini ilustrasi alur, bukan progres akun Anda.')
-            ->assertSee('Fase mahasiswa ditetapkan oleh dosen pembimbing.')
+            ->assertDontSee('Fase mahasiswa ditetapkan oleh dosen pembimbing.')
             ->assertSeeInOrder(['id="hero-title"', 'id="alur"', 'id="fitur"'], false);
     }
 

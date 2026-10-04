@@ -34,6 +34,5 @@
                 </article>
             @endforeach
         </div>
-        <div class="landing-ta-footnote"><span class="material-symbols-outlined icon-sm" aria-hidden="true">info</span> Fase mahasiswa ditetapkan oleh dosen pembimbing. Kerja Praktik memiliki alur tersendiri.</div>
     </div>
 </section>

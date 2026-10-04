@@ -136,7 +136,6 @@ html:not(.dark) .landing-hero-preview .landing-text-link { color: #7d5f16; }
 .landing-ta-detail-icon { display: grid; place-items: center; flex: none; width: 58px; height: 58px; border-radius: .9rem; background: rgb(var(--brand-light)); color: rgb(var(--accent-blue)); font-size: 30px; }
 .landing-ta-detail h3 { margin-top: .6rem; font-size: 1.3rem; font-weight: 700; letter-spacing: -.025em; }
 .landing-ta-detail p { margin-top: .5rem; color: rgb(var(--text-secondary)); font-size: .875rem; line-height: 1.8; max-width: 650px; }
-.landing-ta-footnote { display: flex; align-items: start; gap: .6rem; padding: 0 1.5rem 1.5rem; font-size: .75rem; line-height: 1.8; color: rgb(var(--text-secondary)); }
 @keyframes landing-orbit { to { transform: rotate(360deg); } }
 @keyframes landing-phase-enter { from { opacity: .4; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1023px) {
