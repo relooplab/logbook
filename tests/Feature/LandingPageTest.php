@@ -180,6 +180,20 @@ class LandingPageTest extends TestCase
             ->assertSee("motion.addEventListener('change', sync)", false);
     }
 
+    public function test_capabilities_marquee_alternates_blue_and_gold(): void
+    {
+        $css = file_get_contents(public_path('build/assets/'.basename(glob(public_path('build/assets/app-*.css'))[0])));
+
+        // Ganjil biru, genap emas — mulai dari biru selaras brand default.
+        // Catatan: minifier build mengubah `even` menjadi `2n`, jadi terima keduanya.
+        $this->assertMatchesRegularExpression('/\.landing-marquee-group span:nth-child\(odd\)\s*\{[^}]*accent-blue/s', $css);
+        $this->assertMatchesRegularExpression('/\.landing-marquee-group span:nth-child\((even|2n)\)\s*\{[^}]*status-pending/s', $css);
+        // Biru token gagal AA di light mode (4.45:1) — pastikan override gelap #3b5aa0 (5.6:1) ada.
+        $this->assertMatchesRegularExpression('/html:not\(\.dark\) \.landing-marquee-group span:nth-child\(odd\)\s*\{\s*color:\s*#3b5aa0/s', $css);
+        // Emas terang gagal AA di light mode — pastikan override gelap #7d5f16 ada.
+        $this->assertMatchesRegularExpression('/html:not\(\.dark\) \.landing-marquee-group span:nth-child\((even|2n)\)\s*\{\s*color:\s*#7d5f16/s', $css);
+    }
+
     public function test_footer_has_current_year_copyright_and_social_links(): void
     {
         $this->get(route('landing'))->assertOk()

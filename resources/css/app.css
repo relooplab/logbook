@@ -102,6 +102,14 @@ html:not(.dark) .landing-hero-preview .landing-preview-progress span.is-current 
 html:not(.dark) .landing-hero-preview .landing-text-link { color: #7d5f16; }
 /* Continuous marquee with static no-JavaScript and reduced-motion fallbacks. */
 .landing-capabilities { display: flex; align-items: center; gap: 1rem; min-width: 0; padding-block: 1.5rem; border-block: 1px solid rgb(var(--border)); color: rgb(var(--text-secondary)); font-size: .8rem; font-weight: 600; }
+/* Running text biru-emas selang-seling: ganjil biru, genap emas.
+   Biru token (#4a6fc0, 4.45:1) dan emas terang (#b8903f, 2.7:1) gagal AA
+   di light mode, jadi light memakai biru gelap #3b5aa0 (5.6:1)
+   dan emas gelap #7d5f16 (5.5:1). */
+.landing-marquee-group span:nth-child(odd) { color: rgb(var(--accent-blue)); }
+.landing-marquee-group span:nth-child(even) { color: rgb(var(--status-pending)); }
+html:not(.dark) .landing-marquee-group span:nth-child(odd) { color: #3b5aa0; }
+html:not(.dark) .landing-marquee-group span:nth-child(even) { color: #7d5f16; }
 .landing-marquee-viewport { flex: 1; min-width: 0; overflow: hidden; }
 .landing-marquee-group { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem 2.5rem; }
 .landing-marquee-group[aria-hidden="true"] { display: none; }
