@@ -1,3 +1,50 @@
+# [1.0.0](https://github.com/relooplab/logbook/compare/v0.55.0...v1.0.0) (2026-10-04)
+
+
+### Features
+
+* **auth:** show Ada kendala Hubungi kami on login and register forms ([1fd440e](https://github.com/relooplab/logbook/commit/1fd440e27f168b388a5214f6fadcbe3b7986c95b))
+* **auth:** remove auth header byline and Kirim Masukan footer link ([38015e8](https://github.com/relooplab/logbook/commit/38015e8e571bb05cea6b1da317ae9ec571078c03e))
+* **brand:** two-tone A2 logo mark, enlarged artwork, no background ([e1316d1](https://github.com/relooplab/logbook/commit/e1316d1f804f2b351c7eef9986edee4273ddf5ae))
+* **brand:** rebrand to Logbook and point repo to relooplab/logbook ([aa407c3](https://github.com/relooplab/logbook/commit/aa407c35d0b65438217eb7b069536e4daa581cb0))
+* **dashboard:** streamline lecturer and student workspaces ([255ffd5](https://github.com/relooplab/logbook/commit/255ffd5e2c5af542511f2186e86c05475731196e))
+* **dosen:** clickable student names in my-students page; setengah-jalan badge based on TA phase ([#35](https://github.com/relooplab/logbook/issues/35)) ([d5ccff2](https://github.com/relooplab/logbook/commit/d5ccff27752b677daa85c645ed0383cccea3fac4))
+* **footer:** match footer credit colors to reference image ([30c712a](https://github.com/relooplab/logbook/commit/30c712a8dbd0d5962466bd6603d117a14aca2b))
+* **footer:** color footer credit blue and gold like example ([9324403](https://github.com/relooplab/logbook/commit/9324403ffe2199ed87df2f57d088cf88e05caa))
+* **footer:** add Made with love credit to page footers ([1194daf](https://github.com/relooplab/logbook/commit/1194daf0b0df2680a881ed721aae69a16854480))
+* **landing:** remove slider arrow navigation and status readout ([d0661fb](https://github.com/relooplab/logbook/commit/d0661fb6f76ff6dcfe1c4b43ec01374234f979a7))
+* **landing:** gold primary buttons and rotating heading accents ([87650fc](https://github.com/relooplab/logbook/commit/87650fc7d5c19da6a0ab6ae7159eb29a22c252ba))
+* **landing:** use presentation screenshots in dashboard slider ([5a5ca2c](https://github.com/relooplab/logbook/commit/5a5ca2ce099a1973c7791b68db2d48f2269efd6f))
+* **landing:** unify final CTA Masuk button to solid blue ([b70c329](https://github.com/relooplab/logbook/commit/b70c32957fc322e86aea0897a04b5575a7d7001))
+* **landing:** give Masuk buttons a solid blue background matching Daftar gold ([999aaf0](https://github.com/relooplab/logbook/commit/999aaf0ba31a41ea7f0e8ad6b482e27859ac5dfb))
+* **landing:** redesign dashboard slider to minimal overlay controls ([67eab11](https://github.com/relooplab/logbook/commit/67eab1147a9e1a5dff739cfa09f38be1b538dfe5))
+* **landing:** add public homepage and chat file uploads ([531e873](https://github.com/relooplab/logbook/commit/531e873b2dd620fef51560f6e7d72cb85b4cbfb0))
+* **landing:** alternate capabilities marquee in blue and gold ([7363d98](https://github.com/relooplab/logbook/commit/7363d98dd27c53bc48a236ba6c355dcb06c7a3c5))
+* **logbook:** allow selecting lecturer reviewer for entries ([b16173b](https://github.com/relooplab/logbook/commit/b16173b8596a3a29bba9b59aa8b72dc5402a08ae))
+* **mail:** brand notification emails with token colors and two-tone wordmark ([f459768](https://github.com/relooplab/logbook/commit/f4597687641a58093d07a0756e7d9a78d4f3f1bb))
+* **pdf:** add annotation conversations and improve workspace navigation ([a245d57](https://github.com/relooplab/logbook/commit/a245d57f5e832408debce36882e0327914a71465))
+* **readme:** use production link and live dashboard previews in README ([dc94e62](https://github.com/relooplab/logbook/commit/dc94e62cc841a328df2b741a07975dfc90e899f))
+* **readme:** rewrite README for a professional GitHub landing page ([3d07659](https://github.com/relooplab/logbook/commit/3d07659be41e69667d2fb9b9bb53d0bcfa0940a))
+* **review:** link student names on review materials page ([#33](https://github.com/relooplab/logbook/issues/33)) ([99b914a](https://github.com/relooplab/logbook/commit/99b914a7656b0490ff87f9c574340a5dfce04b39))
+* **review:** add archive decision and refresh landing ([#31](https://github.com/relooplab/logbook/issues/31)) ([5224cc8](https://github.com/relooplab/logbook/commit/5224cc880197a50328cf6d5c16044c3e8e058d0a))
+* **review:** streamline quick review workspace and navigation ([09b8ee8](https://github.com/relooplab/logbook/commit/09b8ee8c457fe2819ee3bd9e395dc01aefbf48f5))
+* **ui:** refresh landing page and logbook history ([f60b365](https://github.com/relooplab/logbook/commit/f60b365b47be40dfc56ec85a9b1fe4547ede5362))
+* **workspace:** refresh chat and lecturer student views ([2f9c524](https://github.com/relooplab/logbook/commit/2f9c524a219e6b0bbb6261c4cc9f6233d50f4aa6))
+
+
+### Bug Fixes
+
+* **achievement:** lower early targets and fix rule logic ([#34](https://github.com/relooplab/logbook/issues/34)) ([d09b30e](https://github.com/relooplab/logbook/commit/d09b30ecba58a3d286216551084b08b8942c76f1))
+* **brand:** single-word header layout and stale institution cache note ([070c37e](https://github.com/relooplab/logbook/commit/070c37ea7ca3abf3ca17b72c8b69bbd8877))
+* **landing:** remove TA phase footnote hint from journey section ([25ac6c3](https://github.com/relooplab/logbook/commit/25ac6c3a624ad7cd16fff215b0e977fca48465a))
+* **landing:** refine mobile header and centered footer ([2da0690](https://github.com/relooplab/logbook/commit/2da069058f56a3fb69f86638751bf508df1e2f29)
+* **ui:** simplify landing footer and remove nested history scrolling ([f7b22a2](https://github.com/relooplab/logbook/commit/f7b22a284390b62f106fabd8846e5343e91cfdc4))
+
+
+### Documentation
+
+* rewrite README for GitHub presentation ([#32](https://github.com/relooplab/logbook/issues/32)) ([6e8e885](https://github.com/relooplab/logbook/commit/6e8e8855aee60aba1caf2882935de8bbeaa9069d))
+
 # [0.55.0](https://github.com/relooplab/campus-logbook-management/compare/v0.54.0...v0.55.0) (2026-09-29)
 
 
