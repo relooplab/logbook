@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\Institution;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -26,9 +27,13 @@ class VerifyEmail extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        // Samakan brand/nama pengirim dengan institusi penerima.
+        Institution::forUser($notifiable)->applyToConfig();
+
         $verificationUrl = $this->verificationUrl($notifiable);
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject(Lang::get('Verifikasi Alamat Email Anda'))
             ->greeting('Halo '.$notifiable->name)
             ->line(Lang::get('Silakan klik tombol di bawah ini untuk memverifikasi alamat email Anda.'))

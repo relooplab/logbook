@@ -21,7 +21,12 @@
 {{-- Footer --}}
 <x-slot:footer>
 <x-mail::footer>
-© {{ date('Y') }} {{ config('app.name') }}. {{ __('All rights reserved.') }}
+@php $footerBrand = trim((string) config('app.name', 'Logbook')); @endphp
+@if ($footerBrand === 'Logbook')
+© {{ date('Y') }} <span style="font-weight: 700;"><span style="color: #4a6fc0;">Log</span><span style="color: #b8903f;">book</span></span>. {{ __('All rights reserved.') }}
+@else
+© {{ date('Y') }} {{ $footerBrand }}. {{ __('All rights reserved.') }}
+@endif
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

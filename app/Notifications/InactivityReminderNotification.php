@@ -31,6 +31,7 @@ class InactivityReminderNotification extends Notification implements ShouldQueue
         Institution::forUser($notifiable)->applyToConfig();
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject('[Logbook] Pengingat: Tidak Ada Bimbingan Selama '.$this->inactiveDays.' Hari')
             ->greeting('Halo '.$notifiable->name)
             ->line("Tercatat tidak ada aktivitas bimbingan sejak {$this->lastActivityDate} ({$this->inactiveDays} hari).")

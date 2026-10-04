@@ -5,7 +5,7 @@
 body,
 body *:not(html):not(style):not(br):not(tr):not(code) {
     box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
     position: relative;
 }
@@ -13,7 +13,7 @@ body *:not(html):not(style):not(br):not(tr):not(code) {
 body {
     -webkit-text-size-adjust: none;
     background-color: #f8fafc;
-    color: #475569;
+    color: #6b7280;
     height: 100%;
     line-height: 1.5;
     margin: 0;
@@ -30,7 +30,7 @@ blockquote {
 }
 
 a {
-    color: #2563eb;
+    color: #4a6fc0;
 }
 
 a img {
@@ -40,7 +40,7 @@ a img {
 /* Typography */
 
 h1 {
-    color: #0f172a;
+    color: #1e2024;
     font-size: 20px;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -50,7 +50,7 @@ h1 {
 }
 
 h2 {
-    color: #0f172a;
+    color: #1e2024;
     font-size: 17px;
     font-weight: 600;
     margin-top: 0;
@@ -58,7 +58,7 @@ h2 {
 }
 
 h3 {
-    color: #0f172a;
+    color: #1e2024;
     font-size: 15px;
     font-weight: 600;
     margin-top: 0;
@@ -79,7 +79,7 @@ p.sub {
 }
 
 strong {
-    color: #0f172a;
+    color: #1e2024;
     font-weight: 600;
 }
 
@@ -116,11 +116,21 @@ img {
 }
 
 .header a {
-    color: #0f172a;
+    color: #1e2024;
     font-size: 16px;
     font-weight: 700;
     letter-spacing: 0.02em;
     text-decoration: none;
+}
+
+/* Wordmark email — duplikat inline style di header/footer sebagai
+   fallback bila klien email menghapus atribut style. */
+.brand-log {
+    color: #4a6fc0;
+}
+
+.brand-book {
+    color: #b8903f;
 }
 
 /* Logo */
@@ -263,11 +273,11 @@ img {
 
 .button-blue,
 .button-primary {
-    background-color: #2563eb;
-    border-bottom: 12px solid #2563eb;
-    border-left: 24px solid #2563eb;
-    border-right: 24px solid #2563eb;
-    border-top: 12px solid #2563eb;
+    background-color: #4a6fc0;
+    border-bottom: 12px solid #4a6fc0;
+    border-left: 24px solid #4a6fc0;
+    border-right: 24px solid #4a6fc0;
+    border-top: 12px solid #4a6fc0;
 }
 
 .button-green,
@@ -292,7 +302,7 @@ img {
 
 .panel {
     border: 1px solid #e2e8f0;
-    border-left: 3px solid #2563eb;
+    border-left: 3px solid #4a6fc0;
     border-radius: 8px;
     margin: 24px 0;
 }

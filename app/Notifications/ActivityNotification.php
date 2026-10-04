@@ -30,6 +30,7 @@ class ActivityNotification extends Notification implements ShouldQueue
         Institution::forUser($notifiable)->applyToConfig();
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject($this->subject)
             ->greeting('Halo '.$notifiable->name)
             ->line($this->message)

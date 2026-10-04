@@ -31,6 +31,7 @@ class StorageQuotaWarningNotification extends Notification implements ShouldQueu
         $percent = $this->limitMb > 0 ? (int) round($this->usedMb / $this->limitMb * 100) : 0;
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject('[Logbook] Kuota Penyimpanan Mendekati Limit ('.$percent.'%)')
             ->greeting('Halo '.$notifiable->name)
             ->line("Pemakaian penyimpanan Anda sudah mencapai {$percent}% dari kuota.")

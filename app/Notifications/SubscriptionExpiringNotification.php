@@ -38,6 +38,7 @@ class SubscriptionExpiringNotification extends Notification implements ShouldQue
         }
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject($subject)
             ->greeting('Halo '.$notifiable->name)
             ->line($message)

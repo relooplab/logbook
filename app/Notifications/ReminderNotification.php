@@ -29,6 +29,7 @@ class ReminderNotification extends Notification implements ShouldQueue
         Institution::forUser($notifiable)->applyToConfig();
 
         return (new MailMessage)
+            ->theme('clean-minimal')
             ->subject('Reminder Logbook')
             ->greeting('Halo '.$notifiable->name)
             ->line($this->message)
