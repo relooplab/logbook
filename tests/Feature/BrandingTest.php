@@ -54,7 +54,7 @@ class BrandingTest extends TestCase
             $this->get($url)
                 ->assertOk()
                 ->assertDontSee('Kirim Masukan')
-                ->assertSee('Hubungi admin')
+                ->assertSee('Ada kendala? Hubungi', false)
                 ->assertSee('aria-label="GitHub Logbook (tab baru)"', false)
                 ->assertSee('aria-label="LinkedIn Reloop Lab (tab baru)"', false);
         }
@@ -65,6 +65,7 @@ class BrandingTest extends TestCase
         $html = $this->get(route('login'))->assertOk()->getContent();
 
         $this->assertSame(0, substr_count($html, 'Mengalami kendala? Hubungi admin:'));
+        $this->assertSame(1, substr_count($html, 'Ada kendala? Hubungi'));
         $this->assertSame(1, preg_match_all('/v\d+\.\d+\.\d+/', $html));
     }
 

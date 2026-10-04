@@ -2,7 +2,6 @@
     $inst = \App\Models\Institution::active();
     $appName = $inst?->app_name ?: config('app.name');
     $version = \App\Support\ReleaseVersion::get();
-    $adminContactEmail = \App\Models\Institution::adminContactEmailFor(null);
 @endphp
 <!DOCTYPE html>
 <html lang="id" class="dark">
@@ -55,9 +54,6 @@
         </div>
         <div class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs leading-5 text-text-secondary">
             <p>© <span class="text-accent-teal font-semibold">{{ now()->year }}</span> Made <span class="text-accent-blue font-semibold">with</span> <span aria-hidden="true">❤️</span> by <a href="https://reloop.id" target="_blank" rel="noopener noreferrer" class="hover:underline">ReLoop Lab</a>.</p>
-            @if ($adminContactEmail)
-                <a href="mailto:{{ $adminContactEmail }}" class="hover:text-text-primary hover:underline">Hubungi admin</a>
-            @endif
         </div>
         <div class="mt-2 flex items-center justify-center gap-1">
             <a href="https://github.com/relooplab/logbook" target="_blank" rel="noopener noreferrer" class="landing-social-link" aria-label="GitHub Logbook (tab baru)">

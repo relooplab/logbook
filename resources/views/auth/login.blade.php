@@ -19,6 +19,9 @@
             class="w-full rounded-xl bg-brand hover:bg-brand-hover text-[#0b1420] py-2 text-sm font-semibold transition-colors"> Masuk
         </button> <a href="{{ route("password.request") }}"
             class="block text-center text-sm text-brand hover:underline">Lupa kata sandi?</a>
+        @if (!empty($adminContactEmail ?? null))
+        <p class="block text-center text-sm text-text-secondary">Ada kendala? Hubungi <a href="mailto:{{ $adminContactEmail }}" class="text-brand hover:underline">kami</a></p>
+        @endif
         <p class="block text-center text-sm text-text-secondary">Belum punya akun? <a href="{{ route("register") }}"
                 class="text-brand hover:underline">Daftar</a></p>
     </form>

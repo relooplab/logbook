@@ -44,6 +44,9 @@
             class="w-full rounded-xl bg-accent-blue hover:bg-accent-blue/85 text-[#0b1420] py-2 text-sm font-semibold transition-colors">Daftar</button>
         <a href="{{ route("login") }}" class="block text-center text-sm text-brand hover:underline">Sudah punya akun?
             Masuk</a>
+        @if (!empty($adminContactEmail ?? null))
+        <p class="block text-center text-sm text-text-secondary">Ada kendala? Hubungi <a href="mailto:{{ $adminContactEmail }}" class="text-brand hover:underline">kami</a></p>
+        @endif
     </form>
     @endsection
     @section("guest-scripts")
