@@ -56,9 +56,14 @@ class LandingPageTest extends TestCase
         $html = $this->get(route('landing'))->assertOk()->getContent();
         $css = file_get_contents(public_path('build/assets/'.basename(glob(public_path('build/assets/app-*.css'))[0])));
 
-        // Tombol Masuk header + hero memakai biru solid sejajar Daftar emas.
+        // Tombol Masuk header + hero + CTA final memakai biru solid sejajar Daftar emas.
         $this->assertStringContainsString('landing-button landing-button-secondary">Masuk</a>', $html);
         $this->assertStringContainsString('landing-button landing-button-secondary landing-button-large">Sudah punya akun? Masuk</a>', $html);
+        $this->assertStringContainsString('landing-button landing-button-secondary landing-button-large">Masuk</a>', $html);
+
+        // Tidak ada lagi tombol outline/quiet yang tertinggal di beranda.
+        $this->assertStringNotContainsString('landing-button-outline', $html);
+        $this->assertStringNotContainsString('landing-button-quiet', $html);
 
         $this->assertMatchesRegularExpression('/\.landing-button-secondary\s*\{[^}]*accent-blue/s', $css);
         $this->assertMatchesRegularExpression('/\.landing-button-secondary[^{]*\{[^}]*box-shadow/s', $css);
