@@ -545,15 +545,19 @@ class User extends Authenticatable implements MustVerifyEmail
      * otomatis masuk ke program ini. Termasuk program KP kelompok di mana
      * user menjadi anggota pivot.
      */
-    public function programAktif(): HasOne
+    public function programAktif(): ?MahasiswaTa
     {
         $memberProgramIds = \DB::table('mahasiswa_ta_members')
             ->where('user_id', $this->id)
             ->pluck('mahasiswa_ta_id');
 
-        return $this->hasOne(MahasiswaTa::class, 'user_id')
+        return MahasiswaTa::query()
             ->where('status_ta', MahasiswaTa::STATUS_AKTIF)
-            ->where(fn ($q) => $q->where('user_id', $this->id)->orWhereIn('id', $memberProgramIds));
+            ->where(function ($q) use ($memberProgramIds) {
+                $q->where('user_id', $this->id)->orWhereIn('id', $memberProgramIds);
+            })
+            ->latest('id')
+            ->first();
     }
 
     /**

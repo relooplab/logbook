@@ -311,7 +311,7 @@ class DashboardController extends Controller
     {
         // Program yang ditampilkan: default program aktif; bisa dipilih via ?program=kp|ta.
         $programs = $user->allPrograms()->with(['pembimbing1', 'pembimbing2', 'penguji1', 'penguji2', 'members'])->get();
-        $activeProgram = $user->programAktif;
+        $activeProgram = $user->programAktif();
 
         $requested = request()->query('program');
         $program = $requested === 'kp' || $requested === 'ta'

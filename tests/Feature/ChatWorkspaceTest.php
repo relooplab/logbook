@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\LogbookEntry;
 use App\Models\MahasiswaTa;
 use App\Models\Message;
+use App\Models\SeminarSubmission;
 use App\Models\User;
 use App\Models\WorkspaceFile;
 use App\Services\StorageUsageService;
@@ -364,6 +365,84 @@ class ChatWorkspaceTest extends TestCase
             'attachable_type' => 'logbook', 'attachable_id' => $entry->id])->assertForbidden();
         $this->assertDatabaseMissing('messages', ['conversation_id' => $thread->id, 'body' => 'Salah program']);
         $this->actingAs($outsider)->get(route('chat.show', ['conversation' => $thread, 'entry' => $entry->id]))
+            ->assertForbidden();
+    }
+
+    public function test_seminar_note_reply_prefills_quote_and_reference(): void
+    {
+        $lecturer = $this->account('dosen', 'Lecturer');
+        $student = $this->account('mahasiswa', 'Student');
+        $program = $this->program($student, $lecturer);
+        $submission = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $program->id,
+            'jenis' => SeminarSubmission::JENIS_PROPOSAL,
+            'tanggal' => now()->addWeek()->toDateString(),
+            'waktu' => '09:00',
+            'undangan_path' => 'x.pdf',
+            'undangan_original_name' => 'x.pdf',
+            'undangan_sebagai' => 'pembimbing_1',
+            'catatan_hardcopy' => '-',
+            'catatan_keterangan' => 'Mohon review materi Bab 1 dan 2.',
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+
+        // chat.start meneruskan konteks seminar ke chat.show.
+        $this->actingAs($lecturer)
+            ->get(route('chat.start', ['user' => $student->id, 'ta' => $program->id, 'seminar' => $submission->id, 'quote' => 'catatan']))
+            ->assertRedirect();
+        $thread = Conversation::where('mahasiswa_ta_id', $program->id)->firstOrFail();
+
+        // Komposer terisi kutipan catatan + referensi seminar.
+        $this->get(route('chat.show', ['conversation' => $thread, 'seminar' => $submission->id, 'quote' => 'catatan']))
+            ->assertOk()
+            ->assertSee('value="seminar"', false)
+            ->assertSee('value="'.$submission->id.'"', false)
+            ->assertSee('Referensi: Seminar · Seminar Proposal', false)
+            ->assertSee('&gt; Mohon review materi Bab 1 dan 2.', false);
+        $this->assertSame(0, $thread->messages()->count());
+
+        // Pesan terkirim dengan lampiran submission.
+        $this->post(route('chat.store', $thread), [
+            'body' => "> Mohon review materi Bab 1 dan 2.\n\nSiap, akan saya review besok.",
+            'attachable_type' => 'seminar',
+            'attachable_id' => $submission->id,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('messages', [
+            'conversation_id' => $thread->id,
+            'attachable_type' => SeminarSubmission::class,
+            'attachable_id' => $submission->id,
+        ]);
+    }
+
+    public function test_seminar_context_rejects_cross_program_and_nonparticipants(): void
+    {
+        $lecturer = $this->account('dosen', 'Lecturer');
+        $student = $this->account('mahasiswa', 'Student');
+        $outsider = $this->account('mahasiswa', 'Outsider');
+        $program = $this->program($student, $lecturer);
+        $foreign = $this->program($outsider, $lecturer);
+        $submission = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $foreign->id,
+            'jenis' => SeminarSubmission::JENIS_PROPOSAL,
+            'tanggal' => now()->addWeek()->toDateString(),
+            'waktu' => '09:00',
+            'undangan_path' => 'x.pdf',
+            'undangan_original_name' => 'x.pdf',
+            'undangan_sebagai' => 'pembimbing_1',
+            'catatan_hardcopy' => '-',
+            'catatan_keterangan' => 'Catatan asing.',
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+        $thread = Conversation::create(['user_one_id' => min($student->id, $lecturer->id),
+            'user_two_id' => max($student->id, $lecturer->id), 'mahasiswa_ta_id' => $program->id]);
+
+        $this->actingAs($student)->get(route('chat.start', ['user' => $lecturer->id, 'ta' => $program->id, 'seminar' => $submission->id, 'quote' => 'catatan']))
+            ->assertForbidden();
+        $this->get(route('chat.show', ['conversation' => $thread, 'seminar' => $submission->id, 'quote' => 'catatan']))->assertForbidden();
+        $this->actingAs($lecturer)->post(route('chat.store', $thread), ['body' => 'Salah program',
+            'attachable_type' => 'seminar', 'attachable_id' => $submission->id])->assertForbidden();
+        $this->assertDatabaseMissing('messages', ['conversation_id' => $thread->id, 'body' => 'Salah program']);
+        $this->actingAs($outsider)->get(route('chat.show', ['conversation' => $thread, 'seminar' => $submission->id]))
             ->assertForbidden();
     }
 }

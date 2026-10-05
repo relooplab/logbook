@@ -52,13 +52,13 @@ class SendWeeklyDigest extends Command
         }
 
         // ---------- Mahasiswa ----------
-        $mahasiswa = User::role('mahasiswa')->with('programAktif')->get();
+        $mahasiswa = User::role('mahasiswa')->get();
         foreach ($mahasiswa as $m) {
             if (! Institution::forUser($m)->isWeeklyDigestEnabled()) {
                 continue;
             }
 
-            $ta = $m->programAktif;
+            $ta = $m->programAktif();
             if (!$ta) continue;
 
             $lastEntry = $ta->entries()->latest('tanggal_bimbingan')->first();

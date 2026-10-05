@@ -147,6 +147,13 @@
             </a>
 
             @if ($user->isMahasiswa())
+            <a href="{{ route('scheduling.index') }}" class="{{ $navLink }} {{ $active('scheduling.*') }}">
+                <span class="material-symbols-outlined icon-md text-status-info">calendar_month</span>
+                <span class="sidebar-label">Jadwalkan Bimbingan</span>
+            </a>
+            @endif
+
+            @if ($user->isMahasiswa())
                 @php
                     $programs = \App\Support\ProgramContext::programs($user);
                     $currentProgram = \App\Support\ProgramContext::resolve($user, request());
@@ -168,56 +175,86 @@
                     <span class="sidebar-label">Profil Akademik</span>
                 </a>
                 @if ($hasProgram)
-                    <div class="{{ $groupLabel }}">Program</div>
-                    @if ($programs->count() > 1)
-                        <div class="px-3 pt-2 pb-1 sidebar-label">
-                            <div class="flex gap-1">
-                                @foreach ($programs as $p)
-                                    <a href="{{ route('dashboard', ['program' => $p->jenis]) }}"
-                                        class="flex-1 text-center px-2 py-1 rounded-lg text-[10px] font-medium border transition-colors
-                                        {{ $currentProgram && $currentProgram->id === $p->id ? 'bg-brand text-[#0b1420] border-brand' : 'bg-bg-surface text-text-secondary border-border hover:bg-bg-hover' }}">
-                                        {{ $p->jenisLabel() }}
-                                    </a>
-                                @endforeach
-                            </div>
+                    @php $multiplePrograms = $programs->count() > 1; @endphp
+                    @foreach ($programs as $p)
+                        @if ($multiplePrograms)
+                        <button type="button" data-program-group-toggle="{{ $p->jenis }}" data-default-open="{{ $currentProgram && $currentProgram->jenis === $p->jenis ? '1' : '0' }}" aria-expanded="true" aria-controls="program-group-{{ $p->jenis }}"
+                            class="{{ $groupLabel }} w-full flex items-center justify-between text-left hover:text-text-primary transition-colors">
+                            <span class="inline-flex items-center gap-2">
+                                {{ $p->isKp() ? 'Kerja Praktik' : 'Tugas Akhir' }}
+                                @if ($p->status_ta === \App\Models\MahasiswaTa::STATUS_AKTIF)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-brand/10 text-brand normal-case tracking-normal">aktif</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_PENDING_APPROVAL)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-pending/10 text-status-pending normal-case tracking-normal">menunggu</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_DITOLAK)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-danger/10 text-status-danger normal-case tracking-normal">ditolak</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_NONAKTIF)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-danger/10 text-status-danger normal-case tracking-normal">nonaktif</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_TAMAT)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-text-secondary/10 text-text-secondary normal-case tracking-normal">tamat</span>
+                                @endif
+                            </span>
+                            <span class="material-symbols-outlined icon-sm sidebar-label transition-transform" data-program-chevron="{{ $p->jenis }}">expand_more</span>
+                        </button>
+                        @else
+                        <div class="{{ $groupLabel }}">
+                            <span class="inline-flex items-center gap-2">
+                                {{ $p->isKp() ? 'Kerja Praktik' : 'Tugas Akhir' }}
+                                @if ($p->status_ta === \App\Models\MahasiswaTa::STATUS_AKTIF)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-brand/10 text-brand normal-case tracking-normal">aktif</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_PENDING_APPROVAL)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-pending/10 text-status-pending normal-case tracking-normal">menunggu</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_DITOLAK)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-danger/10 text-status-danger normal-case tracking-normal">ditolak</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_NONAKTIF)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-status-danger/10 text-status-danger normal-case tracking-normal">nonaktif</span>
+                                @elseif ($p->status_ta === \App\Models\MahasiswaTa::STATUS_TAMAT)
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-text-secondary/10 text-text-secondary normal-case tracking-normal">tamat</span>
+                                @endif
+                            </span>
                         </div>
-                    @endif
-                    <a href="{{ route('logbook.index') }}" class="{{ $navLink }} {{ $active('logbook.index') }}">
-                        <span class="material-symbols-outlined icon-md">menu_book</span>
-                        <span class="sidebar-label">Logbook</span>
-                    </a>
-                    <a href="{{ route('logbook.create') }}" class="{{ $navLink }} {{ $active('logbook.create') }}">
-                        <span class="material-symbols-outlined icon-md">add</span>
-                        <span class="sidebar-label">Tambah Logbook</span>
-                    </a>
-                    <a href="{{ route('logbook.create-revisi') }}" class="{{ $navLink }} {{ $active('logbook.create-revisi') }}">
-                        <span class="material-symbols-outlined icon-md">edit_note</span>
-                        <span class="sidebar-label">Entri Revisi</span>
-                    </a>
-                    <a href="{{ route('logbook.feedback') }}" class="{{ $navLink }} {{ $active('logbook.feedback') }}">
-                        <span class="material-symbols-outlined icon-md">forum</span>
-                        <span class="sidebar-label">Riwayat Umpan Balik</span>
-                    </a>
-                    @if ($hasKp)
-                        <a href="{{ route('logbook-harian.index', $kp) }}" class="{{ $navLink }} {{ $active('logbook-harian.*') }}">
-                            <span class="material-symbols-outlined icon-md">event_note</span>
-                            <span class="sidebar-label">Logbook Harian KP</span>
+                        @endif
+                        <div id="program-group-{{ $p->jenis }}" data-program-group="{{ $p->jenis }}" data-default-open="{{ $currentProgram && $currentProgram->jenis === $p->jenis ? '1' : '0' }}">
+                        @php
+                            $__routeProgram = request('program');
+                            $__routeMt = request()->route('mahasiswaTa');
+                            $__routeMtId = is_object($__routeMt) ? $__routeMt->id : $__routeMt;
+                            $__onProgram = $__routeProgram ? $__routeProgram === $p->jenis : ($__routeMtId ? (int) $__routeMtId === $p->id : ($currentProgram && $currentProgram->id === $p->id));
+                            $pActive = fn ($name) => (request()->routeIs($name) && $__onProgram) ? 'bg-brand/10 text-brand font-semibold before:content-[""] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-full before:bg-brand' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary';
+                        @endphp
+                        <a href="{{ route('logbook.index', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.index') }}">
+                            <span class="material-symbols-outlined icon-md">menu_book</span>
+                            <span class="sidebar-label">Logbook</span>
                         </a>
-                        <a href="{{ route('profil-perusahaan.index', $kp) }}" class="{{ $navLink }} {{ $active('profil-perusahaan.*') }}">
-                            <span class="material-symbols-outlined icon-md">business</span>
-                            <span class="sidebar-label">Profil Perusahaan</span>
+                        <a href="{{ route('logbook.create', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.create') }}">
+                            <span class="material-symbols-outlined icon-md">add</span>
+                            <span class="sidebar-label">Tambah Logbook</span>
                         </a>
-                    @endif
-                    @php $workspaceTa = $user->mahasiswaTa ?: $kp; @endphp
-                    <a href="{{ route('workspace.index', $workspaceTa) }}" class="{{ $navLink }} {{ $active('workspace.*') }}">
-                        <span class="material-symbols-outlined icon-md">workspaces</span>
-                        <span class="sidebar-label">Workspace</span>
-                    </a>
+                        <a href="{{ route('logbook.create-revisi', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.create-revisi') }}">
+                            <span class="material-symbols-outlined icon-md">edit_note</span>
+                            <span class="sidebar-label">Entri Revisi</span>
+                        </a>
+                        <a href="{{ route('logbook.feedback', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.feedback') }}">
+                            <span class="material-symbols-outlined icon-md">forum</span>
+                            <span class="sidebar-label">Riwayat Umpan Balik</span>
+                        </a>
+                        @if ($p->isKp())
+                            <a href="{{ route('logbook-harian.index', $p) }}" class="{{ $navLink }} {{ $pActive('logbook-harian.*') }}">
+                                <span class="material-symbols-outlined icon-md">event_note</span>
+                                <span class="sidebar-label">Logbook Harian</span>
+                            </a>
+                            <a href="{{ route('profil-perusahaan.index', $p) }}" class="{{ $navLink }} {{ $pActive('profil-perusahaan.*') }}">
+                                <span class="material-symbols-outlined icon-md">business</span>
+                                <span class="sidebar-label">Profil Perusahaan</span>
+                            </a>
+                        @endif
+                        <a href="{{ route('workspace.index', $p) }}" class="{{ $navLink }} {{ $pActive('workspace.*') }}">
+                            <span class="material-symbols-outlined icon-md">workspaces</span>
+                            <span class="sidebar-label">Workspace</span>
+                        </a>
+                        </div>
+                    @endforeach
                 @endif
-                <a href="{{ route('scheduling.index') }}" class="{{ $navLink }} {{ $active('scheduling.*') }}">
-                    <span class="material-symbols-outlined icon-md text-status-info">calendar_month</span>
-                    <span class="sidebar-label">Jadwalkan Bimbingan</span>
-                </a>
             @elseif ($showDosenMenu)
                 <div class="{{ $groupLabel }}">Bimbingan</div>
                 <a href="{{ route('dosen.mahasiswa-saya') }}" class="{{ $navLink }} {{ $active('dosen.mahasiswa-saya') }}">
@@ -660,6 +697,27 @@
             var collapsed = root.classList.toggle('sidebar-collapsed');
             localStorage.setItem('lbta-sidebar-collapsed', collapsed ? '1' : '0');
             syncTitles();
+        });
+
+        // Grup program (TA/KP) dapat dilipat; state disimpan per program.
+        document.querySelectorAll('[data-program-group-toggle]').forEach(function (btn) {
+            var key = btn.getAttribute('data-program-group-toggle');
+            var panel = document.getElementById(btn.getAttribute('aria-controls'));
+            var chevron = document.querySelector('[data-program-chevron="' + key + '"]');
+            if (!panel) return;
+            var stored = localStorage.getItem('lbta-sidebar-group-' + key);
+            var open = stored !== null ? stored === '1' : btn.getAttribute('data-default-open') === '1';
+            var apply = function (isOpen) {
+                panel.classList.toggle('hidden', !isOpen);
+                btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(-90deg)';
+            };
+            apply(open);
+            btn.addEventListener('click', function () {
+                var isOpen = btn.getAttribute('aria-expanded') !== 'true';
+                apply(isOpen);
+                localStorage.setItem('lbta-sidebar-group-' + key, isOpen ? '1' : '0');
+            });
         });
         syncTitles();
     })();

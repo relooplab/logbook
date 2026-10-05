@@ -30,7 +30,7 @@ class ProgramContext
             return null;
         }
 
-        $requested = $request?->query('program');
+        $requested = $request?->input('program');
         if ($requested === 'kp' || $requested === 'ta') {
             $selected = $programs->firstWhere('jenis', $requested);
             if ($selected) {
@@ -40,7 +40,7 @@ class ProgramContext
 
         // Prioritas: program aktif → program pertama (bisa termasuk ditolak,
         // agar dashboard bisa menampilkan alasan penolakan).
-        return $user->programAktif ?: $programs->first();
+        return $user->programAktif() ?: $programs->first();
     }
 
     /**

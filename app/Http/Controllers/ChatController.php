@@ -47,6 +47,17 @@ class ChatController extends Controller
             $this->authorizeEntryContext($contextEntry, $conversation, $user);
         }
 
+        // Konteks submission seminar (balas catatan_keterangan via chat).
+        $contextSeminar = null;
+        $contextQuote = null;
+        if ($request->query('seminar') !== null) {
+            $contextSeminar = SeminarSubmission::findOrFail($request->query('seminar'));
+            $this->authorizeSeminarContext($contextSeminar, $conversation, $user);
+            if ($request->query('quote') === 'catatan' && filled($contextSeminar->catatan_keterangan)) {
+                $contextQuote = $contextSeminar->catatan_keterangan;
+            }
+        }
+
         // Tandai semua pesan sebagai dibaca.
         $conversation->messages()
             ->where('sender_id', '!=', $user->id)
@@ -62,10 +73,10 @@ class ChatController extends Controller
         $messages = $query->reorder('id', 'desc')->limit(100)->get()->reverse()->values();
         $hasOlder = $messages->isNotEmpty() && $conversation->messages()->where('id', '<', $messages->first()->id)->exists();
 
-        return $this->workspace($request, $conversation, $messages, $hasOlder, (bool) $before, $contextEntry);
+        return $this->workspace($request, $conversation, $messages, $hasOlder, (bool) $before, $contextEntry, $contextSeminar, $contextQuote);
     }
 
-    private function workspace(Request $request, ?Conversation $conversation = null, ?Collection $messages = null, bool $hasOlder = false, bool $viewingOlder = false, ?LogbookEntry $contextEntry = null): View
+    private function workspace(Request $request, ?Conversation $conversation = null, ?Collection $messages = null, bool $hasOlder = false, bool $viewingOlder = false, ?LogbookEntry $contextEntry = null, ?SeminarSubmission $contextSeminar = null, ?string $contextQuote = null): View
     {
         $user = $request->user();
         $search = trim((string) $request->query('search', ''));
@@ -168,7 +179,7 @@ class ChatController extends Controller
 
         $canUploadFiles = $conversation && $this->canUploadFiles($conversation, $user);
 
-        return view('chat.index', compact('user', 'rows', 'counts', 'filter', 'search', 'conversation', 'messages', 'active', 'hasOlder', 'viewingOlder', 'contextEntry', 'canUploadFiles'));
+        return view('chat.index', compact('user', 'rows', 'counts', 'filter', 'search', 'conversation', 'messages', 'active', 'hasOlder', 'viewingOlder', 'contextEntry', 'contextSeminar', 'contextQuote', 'canUploadFiles'));
     }
 
     /**
@@ -198,7 +209,25 @@ class ChatController extends Controller
                 && $this->canAccess($contextEntry->mahasiswaTa, $user)
                 && $this->canAccess($contextEntry->mahasiswaTa, $other), 403);
         }
+        // Konteks submission seminar (balas catatan_keterangan via chat).
+        $contextSeminar = null;
+        $quoteRequested = $request->query('quote') === 'catatan';
+        if ($request->query('seminar') !== null) {
+            $contextSeminar = SeminarSubmission::findOrFail($request->query('seminar'));
+            abort_unless($taId && (int) $contextSeminar->mahasiswa_ta_id === (int) $taId
+                && filled($contextSeminar->catatan_keterangan)
+                && $this->canAccess($contextSeminar->mahasiswaTa, $user)
+                && $this->canAccess($contextSeminar->mahasiswaTa, $other), 403);
+        }
         $conversation = $this->findOrCreate($user, $other, $taId ?: null);
+
+        if ($contextSeminar) {
+            return redirect()->route('chat.show', array_filter([
+                'conversation' => $conversation->id,
+                'seminar' => $contextSeminar->id,
+                'quote' => $quoteRequested ? 'catatan' : null,
+            ]));
+        }
 
         return redirect()->route('chat.show', $contextEntry
             ? ['conversation' => $conversation, 'entry' => $contextEntry->id]
@@ -524,6 +553,14 @@ class ChatController extends Controller
             && $entry->mahasiswa_ta_id === $conversation->mahasiswa_ta_id
             && $this->canAccess($entry->mahasiswaTa, $user)
             && $this->canAccess($entry->mahasiswaTa, $conversation->other($user)), 403);
+    }
+
+    private function authorizeSeminarContext(SeminarSubmission $submission, Conversation $conversation, User $user): void
+    {
+        abort_unless($conversation->mahasiswa_ta_id
+            && (int) $submission->mahasiswa_ta_id === (int) $conversation->mahasiswa_ta_id
+            && $this->canAccess($submission->mahasiswaTa, $user)
+            && $this->canAccess($submission->mahasiswaTa, $conversation->other($user)), 403);
     }
 
     private function canAccess(?MahasiswaTa $ta, User $user): bool

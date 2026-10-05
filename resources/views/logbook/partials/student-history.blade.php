@@ -2,17 +2,17 @@
     @php $actionLinks = '';
     if (auth()->user()?->isMahasiswa()) {
         $actionLinks = '
-        <a href="' . route('logbook.create') . '" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
+        <a href="' . route('logbook.create', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
             <span class="material-symbols-outlined icon-sm text-accent-orange">add</span> + Logbook
         </a>
-        <a href="' . route('logbook.create-revisi') . '" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">+ Entri Revisi</a>';
+        <a href="' . route('logbook.create-revisi', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">+ Entri Revisi</a>';
     } @endphp
 <x-page-header subtitle="Bimbingan" title="Logbook Bimbingan">
     <x-slot:actions>{!! $actionLinks !!}</x-slot:actions>
 </x-page-header>
 
     {{-- Filter kombinasi --}}
-    <form method="GET" action="{{ route('logbook.index') }}" class="card p-4 flex flex-wrap gap-3 items-end">
+    <form method="GET" action="{{ route('logbook.index', array_filter(['program' => request('program')])) }}" class="card p-4 flex flex-wrap gap-3 items-end">
         <div class="w-full sm:w-auto">
             <label class="block text-xs text-text-secondary mb-1">Status</label>
             <select name="status" class="w-full sm:w-auto rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40">
@@ -47,7 +47,7 @@
         </div>
         <div class="flex gap-2 w-full sm:w-auto">
             <button type="submit" class="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Cari</button>
-            <a href="{{ route('logbook.index') }}" class="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border text-center">Reset</a>
+            <a href="{{ route('logbook.index', array_filter(['program' => request('program')])) }}" class="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border text-center">Reset</a>
         </div>
     </form>
 

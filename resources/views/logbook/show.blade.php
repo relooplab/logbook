@@ -42,7 +42,7 @@
         $backLabel = '← Kembali ke ' . ($child->revision_round ? 'Revisi ke-' . $child->revision_round : 'Revisi');
     } else {
         // Entri berdiri sendiri → kembali ke daftar logbook.
-        $backUrl = route('logbook.index');
+        $backUrl = route('logbook.index', array_filter(['program' => $logbook->mahasiswaTa?->jenis]));
         $backLabel = '← Kembali ke Logbook';
     }
     $revisionRows = collect($logbook->riwayat_perbaikan ?? []);
@@ -60,7 +60,7 @@
             @if ($canDiscuss)
                 <a href="{{ route('chat.start', ['user' => $chatRecipient->id, 'ta' => $logbook->mahasiswa_ta_id, 'entry' => $logbook->id]) }}" class="inline-flex items-center gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-2 text-sm font-medium text-brand hover:bg-brand/20">Diskusikan entri ini</a>
             @endif
-            <a href="{{ $logbook->jenis === 'revisi' ? route('logbook.index') : $backUrl }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">{{ $logbook->jenis === 'revisi' ? '← Kembali ke Logbook' : $backLabel }}</a>
+            <a href="{{ $logbook->jenis === 'revisi' ? route('logbook.index', array_filter(['program' => $logbook->mahasiswaTa?->jenis])) : $backUrl }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">{{ $logbook->jenis === 'revisi' ? '← Kembali ke Logbook' : $backLabel }}</a>
         </div>
     </div>
 
@@ -248,7 +248,7 @@
         @endif
 
         @if ($owner && $logbook->status === 'revisi' && !$logbook->isLockedByActiveRevision())
-            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Buat Revisi dari Umpan Balik Ini</a>
+            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id, 'program' => $logbook->mahasiswaTa?->jenis]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Buat Revisi dari Umpan Balik Ini</a>
         @endif
 
         @if ($logbook->status === \App\Models\LogbookEntry::STATUS_ARCHIVED)

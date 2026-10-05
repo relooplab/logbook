@@ -46,12 +46,18 @@
 <div class="form-workspace">
     <x-page-header title="Entri Revisi" description="Kirim revisi dan dokumentasikan perbaikan Anda" class="mb-5">
         <x-slot:actions>
-            <a href="{{ route('logbook.index') }}"
+            <a href="{{ route('logbook.index', array_filter(['program' => $ta?->jenis])) }}"
                 class="btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
                 <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_back</span> Kembali
             </a>
         </x-slot:actions>
     </x-page-header>
+
+    @if ($ta)
+        <p class="mb-4 -mt-3 text-sm text-text-secondary">Program:
+            <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-brand/10 text-brand">{{ $ta->jenisLabel() }}</span>
+        </p>
+    @endif
 
     <div class="mb-5">
         <ol class="stepper" aria-label="Langkah pengisian entri revisi">
@@ -82,6 +88,8 @@
     <form method="POST" action="{{ route('logbook.store-revisi') }}" enctype="multipart/form-data" id="revisi-form"
         class="form-workspace-grid">
         @csrf
+
+        <input type="hidden" name="program" value="{{ $ta?->jenis }}">
 
         <div class="form-workspace-column">
             {{-- ===== STEP 1: Pilih Umpan Balik ===== --}}

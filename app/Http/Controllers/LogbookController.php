@@ -58,6 +58,20 @@ class LogbookController extends Controller
         $ta = ProgramContext::resolve($request->user(), $request);
         abort_unless($ta, 403, 'Anda belum memiliki program aktif (TA/KP).');
 
+        // Bila parent entry diberikan, program mengikuti parent agar tautan
+        // dari feedback/detail logbook selalu mengarah ke program yang benar
+        // meskipun query ?program= tidak dibawa.
+        $selectedParentId = $request->query('parent_entry_id');
+        if ($selectedParentId) {
+            $parent = LogbookEntry::with('mahasiswaTa')->find($selectedParentId);
+            if ($parent && $parent->mahasiswaTa && $parent->mahasiswaTa->id !== $ta->id) {
+                $ownsProgram = $request->user()->allPrograms()->where('id', $parent->mahasiswaTa_id)->exists();
+                if ($ownsProgram) {
+                    $ta = $parent->mahasiswaTa;
+                }
+            }
+        }
+
         // Mahasiswa dapat membuat entri revisi tanpa harus ada logbook dulu.
         // Daftar parent (entri berstatus revisi / revisi sedang dikerjakan)
         // tetap tersedia untuk dipilih.
@@ -68,7 +82,6 @@ class LogbookController extends Controller
             ->latest('reviewed_at')
             ->get();
 
-        $selectedParentId = $request->query('parent_entry_id');
 
         $selectedParent = $selectedParentId
             ? $parents->firstWhere('id', $selectedParentId)
@@ -380,22 +393,158 @@ class LogbookController extends Controller
         $ta = ProgramContext::resolve($user, $request);
         abort_unless($ta, 403, 'Anda belum memiliki program aktif (TA/KP).');
 
-        $feedbacks = $ta->entries()
-            ->whereNotNull('feedback_dosen')
-            ->with([
-                'dosen',
-                'actionItems',
-                'comments.user',
-                'revisionChildren' => fn ($q) => $q->with('dosen')->latest(),
-            ])
-            ->latest('reviewed_at')
-            ->get()
-            ->filter(function ($e) {
-                return filled($e->feedback_dosen);
-            })
+        // Muat seluruh entri program sekaligus (tanpa konten PDF — hanya path)
+        // agar rantai parent -> revision dapat dibangun di memori tanpa N+1.
+        $all = $ta->entries()
+            ->with(['mahasiswaTa', 'dosen', 'actionItems', 'comments.user'])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $byId = $all->keyBy('id');
+        $childrenMap = [];
+        foreach ($all as $e) {
+            if ($e->parent_entry_id) {
+                $childrenMap[$e->parent_entry_id][] = $e;
+            }
+        }
+
+        // Thread = seluruh rantai yang berakar pada ancestor teratas
+        // (relasi parent_entry_id yang sudah ada — bukan tebakan).
+        $rootOf = function (LogbookEntry $e) use ($byId): LogbookEntry {
+            $seen = [];
+            $cur = $e;
+            while ($cur->parent_entry_id && isset($byId[$cur->parent_entry_id]) && ! isset($seen[$cur->id])) {
+                $seen[$cur->id] = true;
+                $cur = $byId[$cur->parent_entry_id];
+            }
+
+            return $cur;
+        };
+
+        $groups = [];
+        foreach ($all as $e) {
+            $groups[$rootOf($e)->id][] = $e;
+        }
+
+        $activeChildStatuses = [
+            LogbookEntry::STATUS_DRAFT,
+            LogbookEntry::STATUS_SUBMITTED,
+            LogbookEntry::STATUS_REVISI,
+            LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+        ];
+
+        $threads = [];
+        foreach ($groups as $nodes) {
+            $nodes = collect($nodes)
+                ->sortBy(fn (LogbookEntry $e) => [($e->revision_round ?? 0), $e->created_at?->timestamp ?? 0, $e->id])
+                ->values();
+
+            // Halaman ini hanya menampilkan rantai yang punya umpan balik dosen.
+            if (! $nodes->contains(fn (LogbookEntry $e) => filled($e->feedback_dosen))) {
+                continue;
+            }
+
+            $isEditable = function (LogbookEntry $e) use ($childrenMap): bool {
+                if (! empty($childrenMap[$e->id])) {
+                    return false; // terkunci: sudah punya revisi anak
+                }
+
+                return $e->status === LogbookEntry::STATUS_DRAFT
+                    || ($e->status === LogbookEntry::STATUS_REVISION_IN_PROGRESS && $e->submitted_at === null);
+            };
+
+            $canCreateRevision = function (LogbookEntry $e) use ($childrenMap, $activeChildStatuses): bool {
+                if ($e->status !== LogbookEntry::STATUS_REVISI) {
+                    return false;
+                }
+                foreach ($childrenMap[$e->id] ?? [] as $child) {
+                    if (in_array($child->status, $activeChildStatuses, true)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            };
+
+            $root = $nodes->first();
+            $feedbacks = $nodes->filter(fn (LogbookEntry $e) => filled($e->feedback_dosen))->values();
+            $revisions = $nodes->where('jenis', LogbookEntry::JENIS_REVISI)->values();
+
+            // Aktivitas terakhir di seluruh rantai menentukan status & urutan thread.
+            $latestEntry = $root;
+            $latestAt = null;
+            foreach ($nodes as $e) {
+                foreach (['reviewed_at', 'submitted_at', 'created_at'] as $field) {
+                    $t = $e->{$field};
+                    // >= (bukan >): node diproses dari terlama ke terbaru,
+                    // sehingga timestamp yang seri dimenangkan node terbaru.
+                    if ($t && ($latestAt === null || ! $t->lt($latestAt))) {
+                        $latestAt = $t;
+                        $latestEntry = $e;
+                    }
+                }
+            }
+
+            // Satu aksi primer: draf yang bisa dilanjutkan > revisi baru >
+            // menunggu dosen > selesai.
+            $action = null;
+            $actionInfo = null;
+            $editable = $nodes->filter($isEditable)->last();
+            if ($editable) {
+                $action = ['label' => 'Lanjutkan Revisi', 'url' => route('logbook.edit', $editable)];
+            } else {
+                $revisionParent = $nodes->filter($canCreateRevision)->last();
+                if ($revisionParent) {
+                    $action = [
+                        'label' => 'Buat Revisi',
+                        'url' => route('logbook.create-revisi', [
+                            'parent_entry_id' => $revisionParent->id,
+                            'program' => $revisionParent->mahasiswaTa?->jenis,
+                        ]),
+                    ];
+                } elseif (in_array($latestEntry->status, [LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISION_IN_PROGRESS], true)
+                    && $latestEntry->submitted_at) {
+                    $actionInfo = 'Menunggu review dosen';
+                } elseif ($latestEntry->status === LogbookEntry::STATUS_APPROVED) {
+                    $actionInfo = 'Selesai';
+                }
+            }
+
+            $firstFeedback = $feedbacks->first();
+            $reviewer = $firstFeedback?->dosen;
+
+            $threads[] = [
+                'key' => 'thread-'.$root->id,
+                'root' => $root,
+                'nodes' => $nodes,
+                'title' => $root->topik ?: 'Rangkaian Revisi',
+                'reviewerName' => $reviewer?->name,
+                'reviewerRole' => $reviewer ? $ta->dosenRoleLabel($reviewer) : null,
+                'firstFeedbackAt' => $firstFeedback?->reviewed_at,
+                'feedbackCount' => $feedbacks->count(),
+                'revisionCount' => $revisions->count(),
+                'latestEntry' => $latestEntry,
+                'latestAt' => $latestAt,
+                'action' => $action,
+                'actionInfo' => $actionInfo,
+                'actionable' => $action !== null,
+                'childrenMap' => $childrenMap,
+            ];
+        }
+
+        $threads = collect($threads)
+            ->sortByDesc(fn (array $t) => [$t['actionable'] ? 1 : 0, $t['latestAt']?->timestamp ?? 0])
             ->values();
 
-        return view('logbook.feedback', compact('feedbacks'));
+        $summary = [
+            'total' => $threads->count(),
+            'menunggu' => $threads->where(fn (array $t) => $t['latestEntry']->status === LogbookEntry::STATUS_SUBMITTED)->count(),
+            'diminta' => $threads->where(fn (array $t) => $t['latestEntry']->status === LogbookEntry::STATUS_REVISI)->count(),
+            'selesai' => $threads->where(fn (array $t) => $t['latestEntry']->status === LogbookEntry::STATUS_APPROVED && ! $t['actionable'])->count(),
+        ];
+
+        return view('logbook.feedback', compact('threads', 'summary', 'ta'));
     }
 
     /**

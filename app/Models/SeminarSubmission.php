@@ -75,6 +75,14 @@ class SeminarSubmission extends Model
     }
 
     /**
+     * Dokumen tambahan opsional (file + tautan).
+     */
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SeminarSubmissionDocument::class, 'seminar_submission_id');
+    }
+
+    /**
      * Apakah dosen tertentu sudah membaca submission ini.
      */
     public function isReadBy(User $user): bool

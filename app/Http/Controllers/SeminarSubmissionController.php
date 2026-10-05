@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Institution;
 use App\Models\MahasiswaTa;
 use App\Models\SeminarSubmission;
+use App\Models\SeminarSubmissionDocument;
 use App\Models\Sidang;
 use App\Models\WorkspaceFile;
 use App\Notifications\SeminarSubmissionNotification;
@@ -75,7 +76,20 @@ class SeminarSubmissionController extends Controller
             'materi_upload' => ['nullable', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'materi_workspace_id' => ['nullable', 'integer', 'exists:workspace_files,id'],
             'catatan_keterangan' => ['nullable', 'string'],
+            'dokumen_tambahan' => ['nullable', 'array', 'max:3'],
+            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(10 * 1024)],
+            'tautan' => ['nullable', 'array', 'max:10'],
+            'tautan.*' => ['nullable', 'url', 'max:2048'],
         ]);
+
+        // Dokumen tambahan: total seluruh file maks 10 MB.
+        $tambahanFiles = array_values(array_filter((array) $request->file('dokumen_tambahan')));
+        $tambahanSize = array_sum(array_map(fn ($f) => $f->getSize(), $tambahanFiles));
+        if ($tambahanSize > 10 * 1024 * 1024) {
+            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal 10 MB.'])->withInput();
+        }
+        $tautanList = collect((array) $request->input('tautan', []))
+            ->map(fn ($u) => trim((string) $u))->filter()->unique()->values()->all();
 
         // Materi wajib: salah satu dari upload baru ATAU dari workspace.
         if ($request->file('materi_upload') === null && !$request->filled('materi_workspace_id')) {
@@ -88,7 +102,7 @@ class SeminarSubmissionController extends Controller
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $mahasiswaTa->storageChargeTarget();
 
-        $createSubmission = function () use ($request, $mahasiswaTa, $jenis, $data, $defaultCatatan) {
+        $createSubmission = function () use ($request, $mahasiswaTa, $jenis, $data, $defaultCatatan, $tambahanFiles, $tautanList) {
             // Materi: upload baru ATAU dari workspace (salah satu, tidak boleh keduanya kosong).
             $materiPath = null;
             $materiOriginal = null;
@@ -108,7 +122,7 @@ class SeminarSubmissionController extends Controller
 
             $undanganPath = $request->file('undangan')->store('seminar-materials/'.$mahasiswaTa->id, 'local');
 
-            return SeminarSubmission::create([
+            $submission = SeminarSubmission::create([
                 'mahasiswa_ta_id' => $mahasiswaTa->id,
                 'jenis' => $jenis,
                 'tanggal' => $data['tanggal'],
@@ -124,11 +138,16 @@ class SeminarSubmissionController extends Controller
                 'catatan_keterangan' => $data['catatan_keterangan'] ?? null,
                 'status' => SeminarSubmission::STATUS_SUBMITTED,
             ]);
+
+            $this->storeTambahanDocuments($submission, $tambahanFiles, $tautanList);
+
+            return $submission;
         };
 
         if ($dosen) {
             $incoming = $request->file('undangan')->getSize()
-                + ($request->file('materi_upload') ? $request->file('materi_upload')->getSize() : 0);
+                + ($request->file('materi_upload') ? $request->file('materi_upload')->getSize() : 0)
+                + $tambahanSize;
             $submission = app(StorageUsageService::class)->withUploadLock($dosen, $incoming, $createSubmission);
         } else {
             $submission = $createSubmission();
@@ -156,7 +175,7 @@ class SeminarSubmissionController extends Controller
             return $r;
         }
 
-        $submission->load(['mahasiswaTa.mahasiswa', 'mahasiswaTa.pembimbing1', 'mahasiswaTa.pembimbing2', 'mahasiswaTa.penguji1', 'mahasiswaTa.penguji2', 'workspaceFile', 'sidang.grades.user']);
+        $submission->load(['mahasiswaTa.mahasiswa', 'mahasiswaTa.pembimbing1', 'mahasiswaTa.pembimbing2', 'mahasiswaTa.penguji1', 'mahasiswaTa.penguji2', 'workspaceFile', 'sidang.grades.user', 'documents']);
 
         $isDosen = $request->user()->isDosen();
         $isMember = $submission->mahasiswaTa->isMember($request->user());
@@ -215,7 +234,29 @@ class SeminarSubmissionController extends Controller
             'materi_upload' => ['nullable', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'materi_workspace_id' => ['nullable', 'integer', 'exists:workspace_files,id'],
             'catatan_keterangan' => ['nullable', 'string'],
+            'dokumen_tambahan' => ['nullable', 'array', 'max:3'],
+            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(10 * 1024)],
+            'hapus_dokumen' => ['nullable', 'array'],
+            'hapus_dokumen.*' => ['integer', 'exists:seminar_submission_documents,id'],
+            'tautan' => ['nullable', 'array', 'max:10'],
+            'tautan.*' => ['nullable', 'url', 'max:2048'],
         ]);
+
+        // Dokumen tambahan: file dipertahankan + file baru maks 3, total maks 10 MB.
+        $submission->loadMissing('documents');
+        $hapusIds = collect((array) $request->input('hapus_dokumen', []))->map(fn ($v) => (int) $v)->all();
+        $keptFiles = $submission->documents->where('type', SeminarSubmissionDocument::TYPE_FILE)
+            ->reject(fn ($d) => in_array($d->id, $hapusIds, true));
+        $newFiles = array_values(array_filter((array) $request->file('dokumen_tambahan')));
+        if ($keptFiles->count() + count($newFiles) > 3) {
+            return back()->withErrors(['dokumen_tambahan' => 'Jumlah file tambahan maksimal 3 file.'])->withInput();
+        }
+        $totalTambahan = $keptFiles->sum('size') + array_sum(array_map(fn ($f) => $f->getSize(), $newFiles));
+        if ($totalTambahan > 10 * 1024 * 1024) {
+            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal 10 MB.'])->withInput();
+        }
+        $tautanList = collect((array) $request->input('tautan', []))
+            ->map(fn ($u) => trim((string) $u))->filter()->unique()->values()->all();
 
         $payload = [
             'tanggal' => $data['tanggal'],
@@ -227,11 +268,15 @@ class SeminarSubmissionController extends Controller
 
         // Ringkasan perubahan untuk notifikasi (dibandingkan sebelum update).
         $changedFields = $this->diffSubmissionChanges($submission, $data, $request);
+        $oldLinks = $submission->documents->where('type', SeminarSubmissionDocument::TYPE_LINK)->pluck('url')->sort()->values()->all();
+        if (! empty($newFiles) || ! empty($hapusIds) || array_values($tautanList) !== array_values($oldLinks)) {
+            $changedFields[] = 'Dokumen tambahan';
+        }
 
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $submission->mahasiswaTa->storageChargeTarget();
 
-        $applyUpdate = function () use ($request, $submission, $payload) {
+        $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList) {
             // Ganti undangan bila ada file baru.
             if ($request->file('undangan')) {
                 Storage::disk('local')->delete($submission->undangan_path);
@@ -256,10 +301,22 @@ class SeminarSubmissionController extends Controller
             }
 
             $submission->update($payload);
+
+            // Dokumen tambahan: hapus yang dicentang, tambah file baru,
+            // tautan diganti seluruhnya dengan daftar yang dikirim.
+            foreach ($submission->documents()->whereIn('id', $hapusIds)->get() as $doc) {
+                $this->deleteTambahanDocument($doc);
+            }
+            if (! empty($newFiles)) {
+                $this->storeTambahanDocuments($submission, $newFiles, []);
+            }
+            $submission->documents()->where('type', SeminarSubmissionDocument::TYPE_LINK)->delete();
+            $this->storeTambahanDocuments($submission, [], $tautanList);
         };
 
         $incoming = ($request->file('undangan') ? $request->file('undangan')->getSize() : 0)
-            + ($request->file('materi_upload') ? $request->file('materi_upload')->getSize() : 0);
+            + ($request->file('materi_upload') ? $request->file('materi_upload')->getSize() : 0)
+            + array_sum(array_map(fn ($f) => $f->getSize(), $newFiles));
 
         if ($dosen && $incoming > 0) {
             app(StorageUsageService::class)->withUploadLock($dosen, $incoming, $applyUpdate);
@@ -320,6 +377,19 @@ class SeminarSubmissionController extends Controller
         }
 
         return Storage::disk('local')->download($submission->materi_path, $submission->materi_original_name);
+    }
+
+    /**
+     * Download file dokumen tambahan.
+     */
+    public function downloadDokumen(Request $request, SeminarSubmission $submission, SeminarSubmissionDocument $document)
+    {
+        if ($r = $this->authorizeView($request->user(), $submission)) {
+            return $r;
+        }
+        abort_unless($document->seminar_submission_id === $submission->id && $document->isFile(), 404);
+
+        return Storage::disk('local')->download($document->path, $document->original_name);
     }
 
     /**
@@ -509,6 +579,42 @@ class SeminarSubmissionController extends Controller
         if (!$submission->materiFromWorkspace() && $submission->materi_path) {
             Storage::disk('local')->delete($submission->materi_path);
         }
+    }
+
+    /**
+     * Simpan dokumen tambahan (file + tautan) untuk submission.
+     *
+     * @param  array  $files  UploadedFile[]
+     * @param  array  $links  string URL[]
+     */
+    private function storeTambahanDocuments(SeminarSubmission $submission, array $files, array $links): void
+    {
+        foreach ($files as $file) {
+            $submission->documents()->create([
+                'type' => SeminarSubmissionDocument::TYPE_FILE,
+                'path' => $file->store('seminar-materials/'.$submission->mahasiswa_ta_id.'/tambahan', 'local'),
+                'original_name' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        foreach ($links as $url) {
+            $submission->documents()->create([
+                'type' => SeminarSubmissionDocument::TYPE_LINK,
+                'url' => $url,
+            ]);
+        }
+    }
+
+    /**
+     * Hapus satu dokumen tambahan file (record + berkas fisik).
+     */
+    private function deleteTambahanDocument(SeminarSubmissionDocument $document): void
+    {
+        if ($document->isFile() && $document->path) {
+            Storage::disk('local')->delete($document->path);
+        }
+        $document->delete();
     }
 
     /**

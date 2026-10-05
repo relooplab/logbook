@@ -17,16 +17,24 @@
     <x-page-header subtitle="Bimbingan" title="Tambah Entri Logbook"
         description="Catat hasil dan tindak lanjut sesi bimbingan" class="mb-5">
         <x-slot:actions>
-            <a href="{{ route('logbook.index') }}"
+            <a href="{{ route('logbook.index', array_filter(['program' => $ta?->jenis])) }}"
                 class="btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
                 <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_back</span> Kembali
             </a>
         </x-slot:actions>
     </x-page-header>
 
+    @if ($ta)
+        <p class="mb-4 -mt-3 text-sm text-text-secondary">Program:
+            <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-brand/10 text-brand">{{ $ta->jenisLabel() }}</span>
+        </p>
+    @endif
+
     <form method="POST" action="{{ route('logbook.store') }}" enctype="multipart/form-data" id="logbook-form"
         class="form-workspace-grid">
         @csrf
+
+        <input type="hidden" name="program" value="{{ $ta?->jenis }}">
 
         <div class="form-workspace-column">
             <section class="card form-workspace-card p-6">
@@ -190,7 +198,7 @@
                 </div>
 
                 <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                    <a href="{{ route('logbook.index') }}" class="btn-ghost px-4 py-2 text-sm font-medium">Batal</a>
+                    <a href="{{ route('logbook.index', array_filter(['program' => $ta?->jenis])) }}" class="btn-ghost px-4 py-2 text-sm font-medium">Batal</a>
                     <div class="ml-auto flex flex-wrap items-center gap-2">
                         <button type="submit" class="btn-secondary px-4 py-2 text-sm font-medium">Simpan Draft</button>
                         <button type="submit" name="submit" value="1"

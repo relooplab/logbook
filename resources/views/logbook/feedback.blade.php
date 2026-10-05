@@ -3,161 +3,75 @@
 @section('title', 'Riwayat Umpan Balik')
 
 @section('content')
-<div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h1 class="font-heading font-bold text-2xl text-text-primary">Riwayat Umpan Balik</h1>
-            <p class="text-sm text-text-secondary mt-0.5">Umpan balik dosen & alur revisi dalam satu rangkaian</p>
+<div class="space-y-5">
+    <x-page-header subtitle="Bimbingan" title="Riwayat Umpan Balik"
+        description="Umpan balik dosen dan alur revisi dalam satu rangkaian." class="mb-1">
+        <x-slot:actions>
+            <a href="{{ route('logbook.index', array_filter(['program' => $ta?->jenis])) }}"
+                class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">← Kembali ke Logbook</a>
+        </x-slot:actions>
+    </x-page-header>
+
+    {{-- Ringkasan --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="card px-4 py-3">
+            <p class="text-2xl font-bold text-text-primary">{{ $summary['total'] }}</p>
+            <p class="text-xs text-text-secondary mt-0.5">Total Rangkaian</p>
         </div>
-        <a href="{{ route('logbook.index') }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">← Kembali ke Logbook</a>
+        <div class="card px-4 py-3">
+            <p class="text-2xl font-bold text-text-primary">{{ $summary['menunggu'] }}</p>
+            <p class="text-xs text-text-secondary mt-0.5">Menunggu Review</p>
+        </div>
+        <div class="card px-4 py-3">
+            <p class="text-2xl font-bold text-text-primary">{{ $summary['diminta'] }}</p>
+            <p class="text-xs text-text-secondary mt-0.5">Revisi Diminta</p>
+        </div>
+        <div class="card px-4 py-3">
+            <p class="text-2xl font-bold text-text-primary">{{ $summary['selesai'] }}</p>
+            <p class="text-xs text-text-secondary mt-0.5">Selesai</p>
+        </div>
     </div>
 
-    @if ($feedbacks->isEmpty())
+    @if ($threads->isEmpty())
         <div class="px-4 py-10 rounded-xl bg-bg-panel border border-border text-center text-text-secondary">
             <span class="material-symbols-outlined icon-lg mb-2 text-text-secondary/50">forum</span>
-            <p>Belum ada feedback dari dosen.</p>
+            <p>Belum ada riwayat umpan balik.</p>
         </div>
     @else
-        <div class="space-y-5">
-            @foreach ($feedbacks as $entry)
-                @php
-                    $openComments = $entry->comments->where('resolution_status', '!=', \App\Models\PdfComment::STATUS_RESOLVED);
-                    $doneItems = $entry->actionItems->where('is_done', true)->count();
-                    $totalItems = $entry->actionItems->count();
-                    $latestRevision = $entry->revisionChildren->first();
-                    $canCreateRevision = $entry->status === \App\Models\LogbookEntry::STATUS_REVISI
-                        && $entry->revisionChildren->whereIn('status', ['draft', 'submitted', 'revisi', 'revision_in_progress'])->isEmpty();
-                @endphp
-                <div class="card p-6">
-                    {{-- Header kartu --}}
-                    <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
-                        <div class="flex items-start gap-3">
-                            <span class="icon-circle w-10 h-10 bg-brand-light text-brand">
-                                <span class="material-symbols-outlined icon-md text-accent-teal">forum</span>
-                            </span>
-                            <div>
-                                <p class="font-semibold text-text-primary">
-                                    <a href="{{ route('logbook.show', $entry) }}" class="hover:text-brand hover:underline">
-                                        {{ $entry->topik ?? ($entry->jenis === 'revisi' ? 'Revisi' : 'Logbook') }}
-                                    </a>
-                                </p>
-                                <p class="text-xs text-text-secondary mt-0.5">
-                                    {{ $entry->reviewed_at?->format('d M Y') ?? $entry->tanggal_tampil?->format('d M Y') ?? '—' }}
-                                    @if ($entry->dosen)
-                                        · {{ $entry->dosen->name }}
-                                    @endif
-                                </p>
-                            </div>
-                        </div>
-                        @include('partials.status-badge', ['status' => $entry->status, 'entry' => $entry])
-                    </div>
+        {{-- Cari & filter (client-side) --}}
+        <div class="card p-4 flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-52">
+                <label for="thread-search" class="block text-xs text-text-secondary mb-1">Cari topik, feedback, atau dosen</label>
+                <input id="thread-search" type="search" placeholder="Ketik kata kunci…"
+                    class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand/40">
+            </div>
+            <div class="w-full sm:w-auto">
+                <label for="thread-status" class="block text-xs text-text-secondary mb-1">Status</label>
+                <select id="thread-status"
+                    class="w-full sm:w-auto rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand/40">
+                    <option value="">Semua</option>
+                    @foreach (\App\Models\LogbookEntry::STATUS_LABELS as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="w-full sm:w-auto">
+                <label for="thread-sort" class="block text-xs text-text-secondary mb-1">Urutan</label>
+                <select id="thread-sort"
+                    class="w-full sm:w-auto rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand/40">
+                    <option value="desc">Terbaru</option>
+                    <option value="asc">Terlama</option>
+                </select>
+            </div>
+        </div>
 
-                    {{-- Alur: Feedback diterima --}}
-                    <div class="space-y-3">
-                        <div class="flex items-start gap-3">
-                            <span class="mt-0.5 w-6 h-6 rounded-full bg-status-success/15 text-status-success flex items-center justify-center flex-shrink-0">
-                                <span class="material-symbols-outlined icon-sm text-status-success">check</span>
-                            </span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-text-primary">Umpan Balik diterima</p>
-                                <p class="text-sm text-text-secondary whitespace-pre-wrap mt-0.5">{{ $entry->feedback_dosen }}</p>
-                            </div>
-                        </div>
-
-                        {{-- Komentar PDF belum diselesaikan --}}
-                        @if ($openComments->isNotEmpty())
-                            <div class="flex items-start gap-3">
-                                <span class="mt-0.5 w-6 h-6 rounded-full bg-status-pending/15 text-status-pending flex items-center justify-center flex-shrink-0">
-                                    <span class="material-symbols-outlined icon-sm text-accent-teal">comment</span>
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-text-primary">Komentar belum diselesaikan ({{ $openComments->count() }})</p>
-                                    <div class="mt-1.5 space-y-1.5">
-                                        @foreach ($openComments as $comment)
-                                            <div class="flex items-start gap-2 text-sm bg-bg-panel rounded-lg px-3 py-2">
-                                                <span class="text-xs text-text-secondary mt-0.5">Hal. {{ $comment->page_number ?: '—' }}</span>
-                                                <span class="flex-1 text-text-primary">{{ $comment->comment }}</span>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-
-                        {{-- Action items --}}
-                        @if ($totalItems > 0)
-                            <div class="flex items-start gap-3">
-                                <span class="mt-0.5 w-6 h-6 rounded-full bg-brand-light text-brand flex items-center justify-center flex-shrink-0">
-                                    <span class="material-symbols-outlined icon-sm text-accent-blue">checklist</span>
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-text-primary">Action Items ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
-                                    <div class="mt-1.5 space-y-1.5">
-                                        @foreach ($entry->actionItems as $item)
-                                            <div class="flex items-center gap-2 text-sm">
-                                                <input type="checkbox" class="action-item-toggle rounded bg-bg-surface" data-entry-id="{{ $entry->id }}" data-item-id="{{ $item->id }}" @checked($item->is_done)>
-                                                <span class="flex-1 {{ $item->is_done ? 'line-through text-text-secondary' : 'text-text-primary' }}">{{ $item->text }}</span>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-
-                        {{-- Perbaikan dilakukan (dari revisi anak) --}}
-                        @if ($latestRevision && $latestRevision->riwayat_perbaikan)
-                            <div class="flex items-start gap-3">
-                                <span class="mt-0.5 w-6 h-6 rounded-full bg-status-success/15 text-status-success flex items-center justify-center flex-shrink-0">
-                                    <span class="material-symbols-outlined icon-sm text-accent-purple">build</span>
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-text-primary">Perbaikan dilakukan</p>
-                                    <div class="mt-1.5 space-y-1.5">
-                                        @foreach ($latestRevision->riwayat_perbaikan as $row)
-                                            <div class="flex items-start gap-2 text-sm bg-bg-panel rounded-lg px-3 py-2">
-                                                <span class="text-xs text-text-secondary mt-0.5 w-16 shrink-0">{{ $row['halaman'] ?? '—' }}</span>
-                                                <span class="flex-1 text-text-primary">{{ $row['perbaikan'] ?? '' }}</span>
-                                                <span class="text-xs {{ ($row['status'] ?? '') === 'Sudah' ? 'text-status-success' : 'text-status-pending' }} shrink-0">{{ $row['status'] ?? '' }}</span>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-
-                        {{-- Revisi dikirim --}}
-                        @if ($latestRevision)
-                            <div class="flex items-start gap-3">
-                                <span class="mt-0.5 w-6 h-6 rounded-full bg-brand-light text-brand flex items-center justify-center flex-shrink-0">
-                                    <span class="material-symbols-outlined icon-sm text-accent-teal">send</span>
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-text-primary">
-                                        Revisi dikirim
-                                        <span class="text-xs text-text-secondary">· {{ $latestRevision->tanggal_pengiriman?->format('d M Y') ?? $latestRevision->submitted_at?->format('d M Y') ?? '—' }}</span>
-                                    </p>
-                                    <div class="mt-1">
-                                        @include('partials.status-badge', ['status' => $latestRevision->status, 'entry' => $latestRevision])
-                                    </div>
-                                    <a href="{{ route('logbook.show', $latestRevision) }}" class="text-xs text-brand hover:underline mt-1 inline-block">Lihat revisi →</a>
-                                </div>
-                            </div>
-                        @endif
-                    </div>
-
-                    {{-- Aksi --}}
-                    <div class="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
-                        @if ($canCreateRevision)
-                            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $entry->id]) }}"
-                                class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
-                                <span class="material-symbols-outlined icon-sm text-accent-orange">edit_note</span> Buat Revisi
-                            </a>
-                        @endif
-                        <a href="{{ route('logbook.show', $entry) }}"
-                            class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Lihat Detail</a>
-                    </div>
-                </div>
+        <div id="thread-list" class="space-y-4">
+            @foreach ($threads as $thread)
+                @include('logbook.partials.feedback-thread', ['thread' => $thread + ['expanded' => $thread['actionable'] || $loop->first]])
             @endforeach
+        </div>
+        <div id="thread-empty" class="hidden px-4 py-10 rounded-xl bg-bg-panel border border-border text-center text-text-secondary">
+            <p>Tidak ada rangkaian yang cocok dengan pencarian.</p>
         </div>
     @endif
 </div>
@@ -165,7 +79,33 @@
 
 @section('scripts')
 <script>
-    // ---- Toggle action items di halaman feedback ----
+    // ---- Expand/collapse thread ----
+    document.querySelectorAll('[data-thread-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var body = document.getElementById(btn.getAttribute('aria-controls'));
+            var chevron = btn.querySelector('[data-thread-chevron]');
+            var open = btn.getAttribute('aria-expanded') !== 'true';
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (body) body.classList.toggle('hidden', !open);
+            if (chevron) chevron.style.transform = open ? '' : 'rotate(-90deg)';
+        });
+    });
+
+    // ---- Selengkapnya (feedback panjang) ----
+    document.querySelectorAll('[data-feedback-more]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var wrap = btn.closest('div');
+            var short = wrap.querySelector('[data-feedback-text]');
+            var full = wrap.querySelector('[data-feedback-full]');
+            var expanded = btn.dataset.expanded === '1';
+            if (short) short.classList.toggle('hidden', !expanded);
+            if (full) full.classList.toggle('hidden', expanded);
+            btn.dataset.expanded = expanded ? '0' : '1';
+            btn.textContent = expanded ? 'Selengkapnya' : 'Sembunyikan';
+        });
+    });
+
+    // ---- Toggle action items ----
     document.querySelectorAll('.action-item-toggle').forEach(function (checkbox) {
         checkbox.addEventListener('change', function () {
             var entryId = checkbox.dataset.entryId;
@@ -180,6 +120,41 @@
                 textEl.classList.toggle('text-text-secondary', data.is_done);
             });
         });
+    });
+
+    // ---- Filter & urut client-side ----
+    var searchInput = document.getElementById('thread-search');
+    var statusSelect = document.getElementById('thread-status');
+    var sortSelect = document.getElementById('thread-sort');
+    var list = document.getElementById('thread-list');
+    var emptyNote = document.getElementById('thread-empty');
+
+    function applyThreadFilter() {
+        if (!list) return;
+        var q = (searchInput ? searchInput.value : '').toLowerCase().trim();
+        var status = statusSelect ? statusSelect.value : '';
+        var cards = Array.from(list.querySelectorAll('.thread-card'));
+        var visible = 0;
+        cards.forEach(function (card) {
+            var okSearch = !q || (card.dataset.search || '').indexOf(q) !== -1;
+            var okStatus = !status || card.dataset.status === status;
+            var show = okSearch && okStatus;
+            card.classList.toggle('hidden', !show);
+            if (show) visible++;
+        });
+        if (sortSelect) {
+            var asc = sortSelect.value === 'asc';
+            cards.sort(function (a, b) {
+                var diff = (parseInt(a.dataset.activity || '0', 10) - parseInt(b.dataset.activity || '0', 10));
+                return asc ? diff : -diff;
+            }).forEach(function (card) { list.appendChild(card); });
+        }
+        if (emptyNote) emptyNote.classList.toggle('hidden', visible > 0);
+    }
+
+    [searchInput, statusSelect, sortSelect].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyThreadFilter);
     });
 </script>
 @endsection

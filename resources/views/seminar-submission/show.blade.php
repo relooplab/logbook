@@ -98,9 +98,50 @@
                 @endif
             </section>
 
+            @php
+                $dokumenFiles = $submission->documents->where('type', 'file');
+                $dokumenLinks = $submission->documents->where('type', 'link');
+            @endphp
+            @if ($dokumenFiles->isNotEmpty() || $dokumenLinks->isNotEmpty())
+                <section class="card p-5 sm:p-6 space-y-4" aria-labelledby="seminar-tambahan-title">
+                    <h2 id="seminar-tambahan-title" class="font-heading font-semibold text-text-primary">Dokumen Tambahan</h2>
+                    @foreach ($dokumenFiles as $doc)
+                        <article class="rounded-xl bg-bg-panel border border-border p-4 detail-workspace-card seminar-document-row">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <span class="material-symbols-outlined text-accent-teal">description</span>
+                                <div class="min-w-0">
+                                    <p class="text-sm text-text-primary mt-1 truncate" title="{{ $doc->original_name }}">{{ $doc->original_name }}</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 shrink-0">
+                                <a href="{{ route('seminar-submission.dokumen-download', [$submission, $doc]) }}" class="px-3 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Download</a>
+                            </div>
+                        </article>
+                    @endforeach
+                    @foreach ($dokumenLinks as $doc)
+                        <article class="rounded-xl bg-bg-panel border border-border p-4 detail-workspace-card seminar-document-row">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <span class="material-symbols-outlined text-accent-blue">link</span>
+                                <div class="min-w-0">
+                                    <a href="{{ $doc->url }}" target="_blank" rel="noopener noreferrer" class="text-sm text-brand hover:underline break-all">{{ $doc->url }}</a>
+                                </div>
+                            </div>
+                        </article>
+                    @endforeach
+                </section>
+            @endif
+
             @if ($submission->catatan_keterangan)
                 <section class="card p-5 sm:p-6 detail-workspace-card">
-                    <h2 class="font-heading font-semibold text-text-primary mb-2">Catatan Keterangan</h2>
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+                        <h2 class="font-heading font-semibold text-text-primary">Catatan Keterangan</h2>
+                        @if ($isDosen && $submission->mahasiswaTa)
+                            <a href="{{ route('chat.start', ['user' => $submission->mahasiswaTa->user_id, 'ta' => $submission->mahasiswa_ta_id, 'seminar' => $submission->id, 'quote' => 'catatan']) }}"
+                                class="px-3 py-1.5 rounded-xl bg-bg-hover text-text-primary text-xs font-medium hover:bg-border inline-flex items-center gap-1.5">
+                                <span class="material-symbols-outlined icon-sm">chat</span> Balas via Chat
+                            </a>
+                        @endif
+                    </div>
                     <p class="text-sm text-text-secondary whitespace-pre-line">{{ $submission->catatan_keterangan }}</p>
                 </section>
             @endif
