@@ -59,7 +59,7 @@ class ChatController extends Controller
         if ($before) {
             $query->where('id', '<', $before);
         }
-        $messages = $query->orderByDesc('id')->limit(100)->get()->reverse()->values();
+        $messages = $query->reorder('id', 'desc')->limit(100)->get()->reverse()->values();
         $hasOlder = $messages->isNotEmpty() && $conversation->messages()->where('id', '<', $messages->first()->id)->exists();
 
         return $this->workspace($request, $conversation, $messages, $hasOlder, (bool) $before, $contextEntry);

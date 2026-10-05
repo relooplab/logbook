@@ -5,21 +5,10 @@
 --}}
 @props([
     'panel' => 'autosave',
-    'title' => 'Penyimpanan Otomatis',
-    'caption' => 'Draf disimpan berkala di perangkat ini sebelum entri dikirim.',
 ])
 
 <div class="card form-workspace-card p-5" data-autosave-panel="{{ $panel }}">
-    <div class="form-card-head">
-        <span class="icon-chip h-10 w-10" aria-hidden="true">
-            <span class="material-symbols-outlined icon-md text-brand" data-autosave-icon>save</span>
-        </span>
-        <div class="min-w-0">
-            <p class="text-h2 text-text-primary">{{ $title }}</p>
-            <p class="text-caption text-text-secondary">{{ $caption }}</p>
-        </div>
-    </div>
-    <div class="mt-4" role="status" aria-live="polite">
+    <div class="mt-0" role="status" aria-live="polite">
         <p class="text-sm font-medium text-text-secondary" data-autosave-state>Belum ada perubahan</p>
         <p class="text-caption text-text-secondary" data-autosave-time></p>
     </div>

@@ -139,17 +139,6 @@
                     </div>
                 </div>
 
-                <div class="form-actions">
-                    <a href="{{ route('logbook.index') }}" class="btn-ghost px-4 py-2 text-sm font-medium">Batal</a>
-                    <div class="form-actions-end">
-                        <button type="submit" class="btn-secondary px-4 py-2 text-sm font-medium">Simpan Draft</button>
-                        <button type="submit" name="submit" value="1"
-                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-                            Kirim ke Dosen
-                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
-                        </button>
-                    </div>
-                </div>
             </section>
         </div>
 
@@ -194,24 +183,26 @@
                         <span class="summary-value">@include('partials.status-badge', ['status' => 'draft'])</span>
                     </div>
                 </div>
+
+                <div class="mt-5 border-t border-border pt-4">
+                    <h3 class="mb-3 font-heading text-sm font-semibold text-text-primary">Lampiran</h3>
+                    <x-file-upload-mirror input="lampiran" empty-text="Belum ada lampiran" :hint="$fileHint" :actions="false" />
+                </div>
+
+                <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                    <a href="{{ route('logbook.index') }}" class="btn-ghost px-4 py-2 text-sm font-medium">Batal</a>
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                        <button type="submit" class="btn-secondary px-4 py-2 text-sm font-medium">Simpan Draft</button>
+                        <button type="submit" name="submit" value="1"
+                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+                            Kirim ke Dosen
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
             </section>
 
             <x-autosave-status panel="lb-create" />
-
-            <section class="card form-workspace-card p-5">
-                <div class="form-card-head">
-                    <span class="icon-chip h-10 w-10" aria-hidden="true">
-                        <span class="material-symbols-outlined icon-md text-brand">attach_file</span>
-                    </span>
-                    <div class="min-w-0">
-                        <h2 class="font-heading font-semibold text-text-primary">Lampiran</h2>
-                        <p class="text-caption text-text-secondary">Dokumen pendukung sesi bimbingan.</p>
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <x-file-upload-mirror input="lampiran" empty-text="Belum ada lampiran" :hint="$fileHint" />
-                </div>
-            </section>
         </aside>
     </form>
 </div>

@@ -447,19 +447,6 @@
 
             <x-autosave-status panel="lb-revisi" />
 
-            <section class="card form-workspace-card p-5">
-                <div class="flex items-start gap-3">
-                    <span class="icon-chip h-10 w-10" aria-hidden="true">
-                        <span class="material-symbols-outlined icon-md text-status-info">info</span>
-                    </span>
-                    <div class="min-w-0">
-                        <p class="text-h2 text-text-primary">Informasi</p>
-                        <p class="text-caption text-text-secondary">
-                            Setelah semua langkah selesai, revisi dikirim ke penerima yang dipilih dan penerima menerima notifikasi.
-                        </p>
-                    </div>
-                </div>
-            </section>
         </aside>
     </form>
 </div>
