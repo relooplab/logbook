@@ -18,6 +18,16 @@ use Illuminate\View\View;
 class SeminarSubmissionController extends Controller
 {
     /**
+     * Batas dokumen tambahan (satu sumber untuk validasi + tampilan):
+     * maks file dan total ukuran seluruh file tambahan.
+     */
+    private const TAMBAHAN_MAX_FILES = 3;
+
+    private const TAMBAHAN_MAX_TOTAL_MB = 10;
+
+    private const TAUTAN_MAX_LINKS = 10;
+
+    /**
      * Mapping fase aktif -> jenis seminar. (Delegasi ke model agar satu sumber.)
      */
     private function jenisFromFase(MahasiswaTa $ta): string
@@ -47,9 +57,17 @@ class SeminarSubmissionController extends Controller
         // File workspace untuk pilihan materi.
         $workspaceFiles = $mahasiswaTa->workspaceFiles()->orderByDesc('created_at')->get();
 
+        // Relasi konteks sidebar (mahasiswa, pembimbing/penguji) — satu query.
+        $mahasiswaTa->loadMissing(['mahasiswa', 'pembimbing1', 'pembimbing2', 'penguji1', 'penguji2']);
+
+        $tambahanMaxFiles = self::TAMBAHAN_MAX_FILES;
+        $tambahanMaxTotalMb = self::TAMBAHAN_MAX_TOTAL_MB;
+        $tautanMaxLinks = self::TAUTAN_MAX_LINKS;
+
         return view('seminar-submission.create', compact(
             'mahasiswaTa', 'jenis', 'jenisLabel', 'defaultCatatan',
-            'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept'
+            'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept',
+            'tambahanMaxFiles', 'tambahanMaxTotalMb', 'tautanMaxLinks'
         ));
     }
 
@@ -77,17 +95,17 @@ class SeminarSubmissionController extends Controller
             'materi_upload' => ['nullable', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'materi_workspace_id' => ['nullable', 'integer', 'exists:workspace_files,id'],
             'catatan_keterangan' => ['nullable', 'string'],
-            'dokumen_tambahan' => ['nullable', 'array', 'max:3'],
-            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(10 * 1024)],
-            'tautan' => ['nullable', 'array', 'max:10'],
+            'dokumen_tambahan' => ['nullable', 'array', 'max:'.self::TAMBAHAN_MAX_FILES],
+            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(self::TAMBAHAN_MAX_TOTAL_MB * 1024)],
+            'tautan' => ['nullable', 'array', 'max:'.self::TAUTAN_MAX_LINKS],
             'tautan.*' => ['nullable', 'url', 'max:2048'],
         ]);
 
-        // Dokumen tambahan: total seluruh file maks 10 MB.
+        // Dokumen tambahan: total seluruh file maks TAMBAHAN_MAX_TOTAL_MB.
         $tambahanFiles = array_values(array_filter((array) $request->file('dokumen_tambahan')));
         $tambahanSize = array_sum(array_map(fn ($f) => $f->getSize(), $tambahanFiles));
-        if ($tambahanSize > 10 * 1024 * 1024) {
-            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal 10 MB.'])->withInput();
+        if ($tambahanSize > self::TAMBAHAN_MAX_TOTAL_MB * 1024 * 1024) {
+            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal '.self::TAMBAHAN_MAX_TOTAL_MB.' MB.'])->withInput();
         }
         $tautanList = collect((array) $request->input('tautan', []))
             ->map(fn ($u) => trim((string) $u))->filter()->unique()->values()->all();
@@ -211,7 +229,14 @@ class SeminarSubmissionController extends Controller
         $undanganOptions = $this->undanganOptions($submission->mahasiswaTa);
         $workspaceFiles = $submission->mahasiswaTa->workspaceFiles()->orderByDesc('created_at')->get();
 
-        return view('seminar-submission.edit', compact('submission', 'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept'));
+        // Relasi konteks sidebar + dokumen existing — satu query.
+        $submission->loadMissing(['documents', 'mahasiswaTa.mahasiswa', 'mahasiswaTa.pembimbing1', 'mahasiswaTa.pembimbing2', 'mahasiswaTa.penguji1', 'mahasiswaTa.penguji2']);
+
+        $tambahanMaxFiles = self::TAMBAHAN_MAX_FILES;
+        $tambahanMaxTotalMb = self::TAMBAHAN_MAX_TOTAL_MB;
+        $tautanMaxLinks = self::TAUTAN_MAX_LINKS;
+
+        return view('seminar-submission.edit', compact('submission', 'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept', 'tambahanMaxFiles', 'tambahanMaxTotalMb', 'tautanMaxLinks'));
     }
 
     /**
@@ -240,11 +265,11 @@ class SeminarSubmissionController extends Controller
             'materi_upload' => ['nullable', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'materi_workspace_id' => ['nullable', 'integer', 'exists:workspace_files,id'],
             'catatan_keterangan' => ['nullable', 'string'],
-            'dokumen_tambahan' => ['nullable', 'array', 'max:3'],
-            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(10 * 1024)],
+            'dokumen_tambahan' => ['nullable', 'array', 'max:'.self::TAMBAHAN_MAX_FILES],
+            'dokumen_tambahan.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx', 'max:'.(self::TAMBAHAN_MAX_TOTAL_MB * 1024)],
             'hapus_dokumen' => ['nullable', 'array'],
             'hapus_dokumen.*' => ['integer', 'exists:seminar_submission_documents,id'],
-            'tautan' => ['nullable', 'array', 'max:10'],
+            'tautan' => ['nullable', 'array', 'max:'.self::TAUTAN_MAX_LINKS],
             'tautan.*' => ['nullable', 'url', 'max:2048'],
         ]);
 
@@ -254,12 +279,12 @@ class SeminarSubmissionController extends Controller
         $keptFiles = $submission->documents->where('type', SeminarSubmissionDocument::TYPE_FILE)
             ->reject(fn ($d) => in_array($d->id, $hapusIds, true));
         $newFiles = array_values(array_filter((array) $request->file('dokumen_tambahan')));
-        if ($keptFiles->count() + count($newFiles) > 3) {
-            return back()->withErrors(['dokumen_tambahan' => 'Jumlah file tambahan maksimal 3 file.'])->withInput();
+        if ($keptFiles->count() + count($newFiles) > self::TAMBAHAN_MAX_FILES) {
+            return back()->withErrors(['dokumen_tambahan' => 'Jumlah file tambahan maksimal '.self::TAMBAHAN_MAX_FILES.' file.'])->withInput();
         }
         $totalTambahan = $keptFiles->sum('size') + array_sum(array_map(fn ($f) => $f->getSize(), $newFiles));
-        if ($totalTambahan > 10 * 1024 * 1024) {
-            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal 10 MB.'])->withInput();
+        if ($totalTambahan > self::TAMBAHAN_MAX_TOTAL_MB * 1024 * 1024) {
+            return back()->withErrors(['dokumen_tambahan' => 'Total ukuran file tambahan maksimal '.self::TAMBAHAN_MAX_TOTAL_MB.' MB.'])->withInput();
         }
         $tautanList = collect((array) $request->input('tautan', []))
             ->map(fn ($u) => trim((string) $u))->filter()->unique()->values()->all();

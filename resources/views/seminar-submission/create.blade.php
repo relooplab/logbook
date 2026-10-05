@@ -1,94 +1,186 @@
 @extends('layouts.app')
 
-@section('title', 'Pemberian Bahan '.$jenisLabel)
+@section('title', 'Pengajuan '.$jenisLabel)
 
 @section('content')
-<div class="max-w-2xl space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h1 class="font-heading font-bold text-2xl text-text-primary">Pemberian Bahan {{ $jenisLabel }}</h1>
-            <p class="text-sm text-text-secondary mt-0.5">Lengkapi bahan untuk {{ $jenisLabel }} Anda</p>
-        </div>
-        <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">← Dashboard</a>
-    </div>
+@php
+    $typesLabel = strtoupper(implode(', ', $allowedTypes));
+    $fileHint = $typesLabel.' • Maks. '.$maxMb.' MB';
+@endphp
+<div class="form-workspace">
+    <x-page-header subtitle="Seminar" title="Pengajuan {{ $jenisLabel }}"
+        description="Lengkapi informasi dan dokumen untuk pengajuan {{ $jenisLabel }} Anda." class="mb-5">
+        <x-slot:actions>
+            <a href="{{ route('dashboard') }}"
+                class="btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+                <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_back</span> Dashboard
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
-    <form method="POST" action="{{ route('seminar-submission.store', $mahasiswaTa) }}" enctype="multipart/form-data" class="space-y-4">
+    <form method="POST" action="{{ route('seminar-submission.store', $mahasiswaTa) }}"
+        enctype="multipart/form-data" id="seminar-form" class="form-workspace-grid">
         @csrf
 
-        {{-- ===== Rencana Jadwal ===== --}}
-        <div class="card p-6">
-            <h2 class="font-heading font-semibold text-text-primary mb-4">Rencana Jadwal {{ $jenisLabel }}</h2>
-            <div class="grid sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs text-text-secondary mb-1">Tanggal <span class="text-status-danger">*</span></label>
-                    <input type="date" name="tanggal" required value="{{ old('tanggal') }}" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
-                    @error('tanggal') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <label class="block text-xs text-text-secondary mb-1">Waktu <span class="text-status-danger">*</span></label>
-                    <input type="time" name="waktu" required value="{{ old('waktu') }}" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
-                    @error('waktu') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-                </div>
-            </div>
-            <div class="mt-4">
-                <label class="block text-xs text-text-secondary mb-1">Lokasi (jika luring)</label>
-                <input type="text" name="lokasi" value="{{ old('lokasi') }}" placeholder="Gedung A, Ruang Sidang 2" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
-                <p class="text-xs text-text-secondary mt-1">Kosongkan bila pelaksanaan penuh daring.</p>
-                @error('lokasi') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            </div>
-            <div class="mt-4">
-                <label class="block text-xs text-text-secondary mb-1">Tautan video conference (jika daring)</label>
-                <input type="url" name="meeting_link" value="{{ old('meeting_link') }}" placeholder="https://zoom.us/j/... / https://meet.google.com/..." class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
-                <p class="text-xs text-text-secondary mt-1">Opsional — Zoom, Google Meet, Teams, atau platform lainnya.</p>
-                @error('meeting_link') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            </div>
-        </div>
-
-        {{-- ===== Surat Undangan ===== --}}
-        <div class="card p-6">
-            <h2 class="font-heading font-semibold text-text-primary mb-4">Surat Undangan</h2>
-            <div>
-                <label class="block text-xs text-text-secondary mb-1">File Surat Undangan <span class="text-status-danger">*</span></label>
-                <input type="file" name="undangan" required accept="{{ $fileAccept }}" class="w-full text-sm">
-                <p class="text-xs text-text-secondary mt-1">Format: {{ implode(', ', $allowedTypes) }} · Maks {{ $maxMb }} MB</p>
-                @error('undangan') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            </div>
-            <div class="mt-4">
-                <label class="block text-xs text-text-secondary mb-1">Diundang (penerima surat) <span class="text-status-danger">*</span></label>
-                <div class="space-y-2">
-                    @foreach ($undanganOptions as $key => $label)
-                        <label class="flex items-start gap-2 rounded-xl border border-border bg-bg-surface px-3 py-2 cursor-pointer">
-                            <input type="checkbox" name="undangan_kepada[]" value="{{ $key }}"
-                                @checked(in_array($key, old('undangan_kepada', []))) class="mt-0.5">
-                            <span class="text-sm text-text-primary">{{ $label }}</span>
-                        </label>
-                    @endforeach
-                </div>
-                <p class="text-xs text-text-secondary mt-1">Pilih satu atau lebih dosen yang namanya tercantum di surat undangan.</p>
-                @error('undangan_kepada') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            </div>
-        </div>
-
-        {{-- ===== Dokumen Materi ===== --}}
-        <div class="card p-6">
-            <h2 class="font-heading font-semibold text-text-primary mb-4">Dokumen Materi {{ $jenisLabel }} <span class="text-status-danger">*</span></h2>
-            <p class="text-sm text-text-secondary mb-3">Pilih salah satu: upload file baru ATAU ambil dari workspace.</p>
-
-            <div class="space-y-3">
-                <label class="flex items-start gap-3 p-3 rounded-xl bg-bg-panel border border-border cursor-pointer">
-                    <input type="radio" name="materi_source" value="upload" class="mt-1" checked onchange="toggleMateriSource(this.value)">
-                    <div class="flex-1">
-                        <span class="text-sm font-medium">Upload file baru</span>
-                        <input type="file" name="materi_upload" id="materi_upload" accept="{{ $fileAccept }}" class="w-full text-sm mt-2" onchange="toggleMateriSource('upload')">
-                        <p class="text-xs text-text-secondary mt-1">Format: {{ implode(', ', $allowedTypes) }} · Maks {{ $maxMb }} MB</p>
+        <div class="form-workspace-column">
+            {{-- ===== Banner kelengkapan (presentasi state form, bukan validasi baru) ===== --}}
+            <section class="card form-workspace-card p-5" aria-labelledby="seminar-info-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">info</span>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 id="seminar-info-title" class="font-heading font-semibold text-text-primary">Informasi Pengajuan</h2>
+                        <p class="text-caption text-text-secondary">Pastikan semua data dan dokumen sudah lengkap sebelum mengirimkan pengajuan.</p>
                     </div>
-                </label>
+                </div>
+                <ul class="mt-4 space-y-1.5 text-sm" data-completeness aria-live="polite">
+                    <li class="flex items-center gap-2 text-text-secondary" data-check="jadwal">
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
+                        <span>Jadwal lengkap</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-text-secondary" data-check="undangan">
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
+                        <span>Surat undangan tersedia</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-text-secondary" data-check="materi">
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
+                        <span>Materi seminar tersedia</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-text-secondary">
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
+                        <span>Dokumen tambahan opsional</span>
+                    </li>
+                </ul>
+            </section>
 
-                <label class="flex items-start gap-3 p-3 rounded-xl bg-bg-panel border border-border cursor-pointer">
-                    <input type="radio" name="materi_source" value="workspace" class="mt-1" onchange="toggleMateriSource(this.value)">
-                    <div class="flex-1">
-                        <span class="text-sm font-medium">Ambil dari workspace</span>
-                        <select name="materi_workspace_id" id="materi_workspace_id" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm mt-2" onchange="toggleMateriSource('workspace')">
+            {{-- ===== 1. Jadwal Seminar ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-jadwal-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">calendar_month</span>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 id="seminar-jadwal-title" class="font-heading font-semibold text-text-primary">1. Jadwal Seminar</h2>
+                        <p class="text-caption text-text-secondary">Tentukan waktu dan tempat pelaksanaan.</p>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div class="form-field">
+                        <label class="form-field-label" for="tanggal">Tanggal <span class="text-status-danger" aria-hidden="true">*</span></label>
+                        <div class="form-field-body">
+                            <input type="date" name="tanggal" id="tanggal" required value="{{ old('tanggal') }}" class="form-control">
+                            @error('tanggal') <p class="form-field-error">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-field-label" for="waktu">Waktu <span class="text-status-danger" aria-hidden="true">*</span></label>
+                        <div class="form-field-body">
+                            <input type="time" name="waktu" id="waktu" required value="{{ old('waktu') }}" class="form-control">
+                            @error('waktu') <p class="form-field-error">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+                </div>
+                <div class="form-field mt-4">
+                    <label class="form-field-label" for="lokasi">Lokasi</label>
+                    <div class="form-field-body">
+                        <input type="text" name="lokasi" id="lokasi" value="{{ old('lokasi') }}" placeholder="Gedung A, Ruang Sidang 2" class="form-control">
+                        @error('lokasi') <p class="form-field-error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+                <div class="form-field mt-4">
+                    <label class="form-field-label" for="meeting_link">Tautan video conference</label>
+                    <div class="form-field-body">
+                        <input type="url" name="meeting_link" id="meeting_link" value="{{ old('meeting_link') }}" placeholder="https://zoom.us/j/... / https://meet.google.com/..." class="form-control">
+                        @error('meeting_link') <p class="form-field-error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            </section>
+
+            {{-- ===== 2. Surat Undangan ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-undangan-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">mail</span>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <h2 id="seminar-undangan-title" class="font-heading font-semibold text-text-primary">2. Surat Undangan <span class="text-status-danger" aria-hidden="true">*</span></h2>
+                        <p class="text-caption text-text-secondary">Surat undangan resmi pelaksanaan seminar.</p>
+                    </div>
+                </div>
+
+                <div class="form-field mt-5">
+                    <span class="form-field-label" id="undangan-label">File Surat Undangan</span>
+                    <div class="form-field-body" role="group" aria-labelledby="undangan-label">
+                        <x-file-upload input="undangan" title="Upload Surat Undangan" :hint="$fileHint"
+                            :accept="$fileAccept" :max-mb="$maxMb" :types="$allowedTypes" :required="true" />
+                    </div>
+                </div>
+
+                <div class="form-field mt-5">
+                    <span class="form-field-label" id="undangan-kepada-label">Diundang (penerima surat) <span class="text-status-danger" aria-hidden="true">*</span></span>
+                    <div class="form-field-body" role="group" aria-labelledby="undangan-kepada-label">
+                        <div class="space-y-2">
+                            @foreach ($undanganOptions as $key => $label)
+                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-bg-panel px-3 py-2.5 transition hover:border-brand/40">
+                                    <input type="checkbox" name="undangan_kepada[]" value="{{ $key }}"
+                                        @checked(in_array($key, old('undangan_kepada', []))) class="mt-1 shrink-0 accent-brand">
+                                    <span class="min-w-0 text-sm font-medium text-text-primary">{{ $label }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                        <p class="form-field-hint">Pilih satu atau lebih dosen yang namanya tercantum di surat undangan.</p>
+                        @error('undangan_kepada') <p class="form-field-error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            </section>
+
+            {{-- ===== 3. Dokumen Materi ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-materi-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">picture_as_pdf</span>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <h2 id="seminar-materi-title" class="font-heading font-semibold text-text-primary">3. Dokumen Materi {{ $jenisLabel }} <span class="text-status-danger" aria-hidden="true">*</span></h2>
+                        <p class="text-caption text-text-secondary">Pilih salah satu sumber materi.</p>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Sumber materi">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="materi_source" value="upload" class="peer sr-only" checked onchange="toggleMateriSource(this.value)">
+                        <span class="block h-full rounded-xl border border-border bg-bg-panel p-4 transition peer-checked:border-brand peer-checked:bg-brand/5 peer-checked:ring-1 peer-checked:ring-brand/40 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand">
+                            <span class="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                                <span class="material-symbols-outlined icon-sm text-brand" aria-hidden="true">upload_file</span> Upload file baru
+                            </span>
+                            <span class="mt-1 block text-xs text-text-secondary">Pilih file dari perangkat Anda.</span>
+                        </span>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="materi_source" value="workspace" class="peer sr-only" onchange="toggleMateriSource(this.value)">
+                        <span class="block h-full rounded-xl border border-border bg-bg-panel p-4 transition peer-checked:border-brand peer-checked:bg-brand/5 peer-checked:ring-1 peer-checked:ring-brand/40 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand">
+                            <span class="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                                <span class="material-symbols-outlined icon-sm text-brand" aria-hidden="true">folder_shared</span> Ambil dari Workspace
+                            </span>
+                            <span class="mt-1 block text-xs text-text-secondary">Gunakan file yang sudah tersimpan.</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="form-field mt-4" data-materi-upload>
+                    <span class="form-field-label" id="materi-upload-label">File dari perangkat</span>
+                    <div class="form-field-body" role="group" aria-labelledby="materi-upload-label">
+                        <x-file-upload input="materi_upload" title="Upload Materi" :hint="$fileHint"
+                            :accept="$fileAccept" :max-mb="$maxMb" :types="$allowedTypes" />
+                    </div>
+                </div>
+
+                <div class="form-field mt-4 hidden" data-materi-workspace>
+                    <label class="form-field-label" for="materi_workspace_id">File Workspace</label>
+                    <div class="form-field-body">
+                        <select name="materi_workspace_id" id="materi_workspace_id" class="form-control" disabled onchange="toggleMateriSource('workspace')">
                             <option value="">— Pilih file workspace —</option>
                             @foreach ($workspaceFiles as $file)
                                 <option value="{{ $file->id }}" @selected(old('materi_workspace_id') == $file->id)>
@@ -97,100 +189,155 @@
                             @endforeach
                         </select>
                         @if ($workspaceFiles->isEmpty())
-                            <p class="text-xs text-text-secondary mt-1">Belum ada file di workspace.</p>
+                            <p class="form-field-hint">Belum ada file yang sesuai di Workspace.</p>
                         @endif
                     </div>
-                </label>
-            </div>
-            @error('materi_upload') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            @error('materi_workspace_id') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-        </div>
-
-        {{-- ===== Dokumen Tambahan (opsional) ===== --}}
-        <div class="card p-6">
-            <div class="flex flex-wrap items-center gap-2 mb-4">
-                <h2 class="font-heading font-semibold text-text-primary">Dokumen Tambahan</h2>
-                <span class="badge badge-neutral">Opsional</span>
-            </div>
-            <div>
-                <label class="block text-xs text-text-secondary mb-1">File tambahan (maks 3 file)</label>
-                <input type="file" name="dokumen_tambahan[]" multiple accept=".pdf,.doc,.docx,.xls,.xlsx" class="w-full text-sm">
-                <p class="text-xs text-text-secondary mt-1">Format: PDF, DOC, Excel · Total maks 10 MB untuk semua file tambahan</p>
-                @error('dokumen_tambahan') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-                @error('dokumen_tambahan.*') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-            </div>
-            <div class="mt-4">
-                <label class="block text-xs text-text-secondary mb-1">Tautan (mis. Google Drive)</label>
-                <div id="tautan-list" class="space-y-2">
-                    @foreach (old('tautan', ['']) as $tautan)
-                        <div class="flex items-center gap-2">
-                            <input type="url" name="tautan[]" value="{{ $tautan }}" placeholder="https://..." class="flex-1 rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
-                            <button type="button" onclick="removeTautanRow(this)" class="px-3 py-2 rounded-xl bg-bg-hover text-text-primary text-sm hover:bg-border" aria-label="Hapus tautan">✕</button>
-                        </div>
-                    @endforeach
                 </div>
-                <button type="button" onclick="addTautanRow()" class="mt-2 px-3 py-1.5 rounded-xl bg-bg-hover text-text-primary text-xs font-medium hover:bg-border">＋ Tambah tautan</button>
-                @error('tautan') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-                @error('tautan.*') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
+                @error('materi_upload') <p class="form-field-error">{{ $message }}</p> @enderror
+                @error('materi_workspace_id') <p class="form-field-error">{{ $message }}</p> @enderror
+            </section>
+
+            {{-- ===== 4. Dokumen Tambahan (opsional) ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-tambahan-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">attach_file</span>
+                    </span>
+                    <div class="min-w-0 flex flex-wrap items-center gap-2">
+                        <h2 id="seminar-tambahan-title" class="font-heading font-semibold text-text-primary">4. Dokumen Tambahan</h2>
+                        <span class="badge badge-neutral">Opsional</span>
+                    </div>
+                </div>
+
+                <div class="form-field mt-5">
+                    <span class="form-field-label" id="tambahan-label">File tambahan</span>
+                    <div class="form-field-body" role="group" aria-labelledby="tambahan-label">
+                        @include('seminar-submission.partials.tambahan-picker', [
+                            'typesLabel' => 'PDF, DOC, Excel',
+                            'maxFiles' => $tambahanMaxFiles,
+                            'maxTotalMb' => $tambahanMaxTotalMb,
+                        ])
+                    </div>
+                </div>
+
+                <div class="form-field mt-5">
+                    <span class="form-field-label" id="tautan-label">Tautan</span>
+                    <div class="form-field-body" role="group" aria-labelledby="tautan-label">
+                        @include('seminar-submission.partials.tautan-rows', [
+                            'values' => old('tautan', ['']),
+                            'maxLinks' => $tautanMaxLinks,
+                        ])
+                    </div>
+                </div>
+            </section>
+
+            {{-- ===== 5. Catatan (opsional) ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-catatan-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">notes</span>
+                    </span>
+                    <div class="min-w-0 flex flex-wrap items-center gap-2">
+                        <h2 id="seminar-catatan-title" class="font-heading font-semibold text-text-primary">5. Catatan Keterangan</h2>
+                        <span class="badge badge-neutral">Opsional</span>
+                    </div>
+                </div>
+                <div class="form-field mt-5">
+                    <label class="form-field-label sr-only" for="catatan_keterangan">Catatan Keterangan</label>
+                    <div class="form-field-body">
+                        <textarea name="catatan_keterangan" id="catatan_keterangan" rows="3" class="form-control"
+                            placeholder="Tambahkan catatan atau informasi tambahan...">{{ old('catatan_keterangan') }}</textarea>
+                        @error('catatan_keterangan') <p class="form-field-error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            </section>
+
+            @if ($defaultCatatan)
+                <section class="card form-workspace-card p-5" aria-labelledby="seminar-hardcopy-title">
+                    <div class="form-card-head">
+                        <span class="icon-chip h-10 w-10" aria-hidden="true">
+                            <span class="material-symbols-outlined icon-md text-brand">info</span>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 id="seminar-hardcopy-title" class="font-heading font-semibold text-text-primary">Catatan Penting</h2>
+                        </div>
+                    </div>
+                    <p class="mt-4 whitespace-pre-line text-sm text-text-secondary">{{ $defaultCatatan }}</p>
+                </section>
+            @endif
+
+            {{-- ===== Action bar ===== --}}
+            <div class="card form-workspace-card flex flex-wrap items-center gap-2 p-5">
+                <a href="{{ route('dashboard') }}" class="btn-ghost px-4 py-2 text-sm font-medium">Batal</a>
+                <button type="submit" class="btn-primary ml-auto inline-flex items-center gap-2 px-5 py-2 text-sm font-medium">
+                    Kirim Pengajuan
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">send</span>
+                </button>
             </div>
         </div>
 
-        {{-- ===== Catatan Hardcopy ===== --}}
-        @if ($defaultCatatan)
-            <div class="card p-6">
-                <h2 class="font-heading font-semibold text-text-primary mb-2">Catatan Penting</h2>
-                <p class="text-sm text-text-secondary whitespace-pre-line">{{ $defaultCatatan }}</p>
-            </div>
-        @endif
-
-        {{-- ===== Catatan Keterangan ===== --}}
-        <div class="card p-6">
-            <h2 class="font-heading font-semibold text-text-primary mb-4">Catatan Keterangan (jika ada)</h2>
-            <textarea name="catatan_keterangan" rows="3" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm" placeholder="Informasi tambahan untuk dosen...">{{ old('catatan_keterangan') }}</textarea>
-            @error('catatan_keterangan') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-            <button type="submit" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Kirim Bahan {{ $jenisLabel }}</button>
-            <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Batal</a>
-        </div>
+        <aside class="form-workspace-panel" aria-label="Konteks pengajuan">
+            @include('seminar-submission.partials.context-sidebar', [
+                'recipients' => array_values($undanganOptions),
+                'mahasiswaTa' => $mahasiswaTa,
+                'allowedTypes' => $allowedTypes,
+                'maxMb' => $maxMb,
+            ])
+        </aside>
     </form>
 </div>
 @endsection
 
 @section('scripts')
+@include('partials.form-workspace-script')
 <script>
-    function addTautanRow(value) {
-        var list = document.getElementById('tautan-list');
-        if (list.querySelectorAll('input[name="tautan[]"]').length >= 10) return;
-        var row = document.createElement('div');
-        row.className = 'flex items-center gap-2';
-        row.innerHTML = '<input type="url" name="tautan[]" value="" placeholder="https://..." class="flex-1 rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">'
-            + '<button type="button" onclick="removeTautanRow(this)" class="px-3 py-2 rounded-xl bg-bg-hover text-text-primary text-sm hover:bg-border" aria-label="Hapus tautan">✕</button>';
-        if (value) row.querySelector('input').value = value;
-        list.appendChild(row);
-    }
-    function removeTautanRow(btn) {
-        var list = document.getElementById('tautan-list');
-        if (list.querySelectorAll('input[name="tautan[]"]').length <= 1) {
-            btn.closest('div').querySelector('input').value = '';
-            return;
-        }
-        btn.closest('div').remove();
-    }
-    function toggleMateriSource(source) {        var upload = document.getElementById('materi_upload');
+    function toggleMateriSource(source) {
+        var upload = document.getElementById('materi_upload');
         var workspace = document.getElementById('materi_workspace_id');
+        var blockUpload = document.querySelector('[data-materi-upload]');
+        var blockWorkspace = document.querySelector('[data-materi-workspace]');
         var radioWorkspace = document.querySelector('input[name="materi_source"][value="workspace"]');
         var radioUpload = document.querySelector('input[name="materi_source"][value="upload"]');
-        if (source === 'workspace') {
-            if (radioWorkspace) radioWorkspace.checked = true;
-            upload.disabled = true;
-            workspace.disabled = false;
-        } else if (source === 'upload') {
-            if (radioUpload) radioUpload.checked = true;
-            upload.disabled = false;
-            workspace.disabled = true;
-        }
+        var isWorkspace = source === 'workspace';
+        if (radioWorkspace) radioWorkspace.checked = isWorkspace;
+        if (radioUpload) radioUpload.checked = !isWorkspace;
+        if (blockUpload) blockUpload.classList.toggle('hidden', isWorkspace);
+        if (blockWorkspace) blockWorkspace.classList.toggle('hidden', !isWorkspace);
+        if (upload) upload.disabled = isWorkspace;
+        if (workspace) workspace.disabled = !isWorkspace;
     }
+
+    // Banner kelengkapan: cerminan state form (bukan validasi baru).
+    (function () {
+        var form = document.getElementById('seminar-form');
+        if (!form) return;
+
+        function fileChosen(id) {
+            var el = document.getElementById(id);
+            return !!(el && el.files && el.files.length);
+        }
+
+        function setCheck(key, done) {
+            var li = form.querySelector('[data-check="' + key + '"]');
+            if (!li) return;
+            var icon = li.querySelector('.material-symbols-outlined');
+            li.classList.toggle('text-status-info', done);
+            li.classList.toggle('text-text-secondary', !done);
+            if (icon) icon.textContent = done ? 'check_circle' : 'radio_button_unchecked';
+        }
+
+        function sync() {
+            var tanggal = document.getElementById('tanggal');
+            var waktu = document.getElementById('waktu');
+            var workspace = document.getElementById('materi_workspace_id');
+            setCheck('jadwal', !!(tanggal && tanggal.value && waktu && waktu.value));
+            setCheck('undangan', fileChosen('undangan'));
+            setCheck('materi', fileChosen('materi_upload') || !!(workspace && !workspace.disabled && workspace.value));
+        }
+
+        form.addEventListener('input', sync);
+        form.addEventListener('change', sync);
+        sync();
+    })();
 </script>
 @endsection

@@ -123,4 +123,57 @@ class SeminarMeetingLinkTest extends TestCase
         $this->assertSame('https://zoom.us/j/123456', $submission->effectiveMeetingLink());
         $this->assertSame('Ruang Rapat', $submission->locationText());
     }
+
+    public function test_create_renders_workspace_layout_with_sidebar(): void
+    {
+        $response = $this->actingAs($this->mhs)->get(route('seminar-submission.create', $this->ta));
+
+        $response->assertOk()
+            ->assertSee('Pengajuan Seminar Proposal')
+            ->assertSee('form-workspace-grid', false)
+            ->assertSee('Informasi Pengajuan')
+            ->assertSee('1. Jadwal Seminar')
+            ->assertSee('2. Surat Undangan')
+            ->assertSee('3. Dokumen Materi')
+            ->assertSee('4. Dokumen Tambahan')
+            ->assertSee('5. Catatan Keterangan')
+            ->assertSee('Kirim Pengajuan')
+            ->assertSee('Status Pengajuan')
+            ->assertSee('Info Mahasiswa')
+            ->assertSee('Tips Pengajuan')
+            ->assertSee('Tautan video conference')
+            ->assertSee('name="undangan"', false)
+            ->assertSee('name="materi_upload"', false)
+            ->assertSee('name="dokumen_tambahan[]"', false)
+            ->assertSee('name="tautan[]"', false)
+            ->assertSee('name="undangan_kepada[]"', false);
+    }
+
+    public function test_edit_renders_workspace_layout_with_existing_files(): void
+    {
+        $submission = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_PROPOSAL,
+            'tanggal' => now()->addDays(7)->toDateString(),
+            'waktu' => '13:00',
+            'lokasi' => 'Gedung A',
+            'meeting_link' => 'https://zoom.us/j/999',
+            'undangan_path' => 'seminar/undangan.pdf',
+            'undangan_original_name' => 'undangan.pdf',
+            'undangan_kepada' => ['pembimbing_1'],
+            'materi_path' => 'seminar/materi.pdf',
+            'materi_original_name' => 'materi.pdf',
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+
+        $response = $this->actingAs($this->mhs)->get(route('seminar-submission.edit', $submission));
+
+        $response->assertOk()
+            ->assertSee('form-workspace-grid', false)
+            ->assertSee('Simpan Perubahan')
+            ->assertSee('undangan.pdf')
+            ->assertSee('materi.pdf')
+            ->assertSee('Status Pengajuan')
+            ->assertSee('Dikirim');
+    }
 }

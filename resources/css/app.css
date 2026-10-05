@@ -567,6 +567,10 @@ select.form-control { padding-right: 34px; }
 .upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .upload-row > .upload-row-text { flex: 1 1 200px; min-width: 0; }
 
+/* Utilitas .hidden harus menang atas display kustom komponen. */
+.upload-row.hidden,
+.form-field.hidden { display: none; }
+
 /* ---------- Stepper wizard revisi ---------- */
 .stepper { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 2px 0 6px; }
 .stepper-item { display: flex; align-items: center; flex: 1 1 0; min-width: 200px; }
