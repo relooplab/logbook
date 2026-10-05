@@ -1,3 +1,13 @@
+# [1.1.0](https://github.com/relooplab/logbook/compare/v1.0.0...v1.1.0) (2026-10-05)
+
+
+### Features
+
+* **chat:** pending message digest H+2 with day-7 escalation ([#36](https://github.com/relooplab/logbook/issues/36)) ([cac3d4f](https://github.com/relooplab/logbook/commit/cac3d4f73a061ad1d503134bc97c98af012e47a4))
+* **logbook:** feedback thread view, seminar supporting documents and program context fixes ([3adb5f6](https://github.com/relooplab/logbook/commit/3adb5f6b3cfed95c367a8c1ebb55c53d0c23dc74b))
+* throttle workspace upload email digest to 24h with recap ([73c9b12](https://github.com/relooplab/logbook/commit/73c9b12d76868ca7cf4944b4413a6089f68d1b28))
+* polish logbook form, profile page and chat message ordering ([17a3b59](https://github.com/relooplab/logbook/commit/17a3b590bf1c04a0f09c92303c3089e832f3060))
+
 # [1.0.0](https://github.com/relooplab/logbook/compare/v0.55.0...v1.0.0) (2026-10-04)
 
 
