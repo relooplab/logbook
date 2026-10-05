@@ -31,9 +31,16 @@
                 </div>
             </div>
             <div class="mt-4">
-                <label class="block text-xs text-text-secondary mb-1">Lokasi/Link (jika ada)</label>
-                <input type="text" name="lokasi" value="{{ old('lokasi') }}" placeholder="Ruang sidang / link meeting" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
+                <label class="block text-xs text-text-secondary mb-1">Lokasi (jika luring)</label>
+                <input type="text" name="lokasi" value="{{ old('lokasi') }}" placeholder="Gedung A, Ruang Sidang 2" class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
+                <p class="text-xs text-text-secondary mt-1">Kosongkan bila pelaksanaan penuh daring.</p>
                 @error('lokasi') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div class="mt-4">
+                <label class="block text-xs text-text-secondary mb-1">Tautan video conference (jika daring)</label>
+                <input type="url" name="meeting_link" value="{{ old('meeting_link') }}" placeholder="https://zoom.us/j/... / https://meet.google.com/..." class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm">
+                <p class="text-xs text-text-secondary mt-1">Opsional — Zoom, Google Meet, Teams, atau platform lainnya.</p>
+                @error('meeting_link') <p class="text-xs text-status-danger mt-1">{{ $message }}</p> @enderror
             </div>
         </div>
 

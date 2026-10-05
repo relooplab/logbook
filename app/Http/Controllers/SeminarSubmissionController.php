@@ -70,6 +70,7 @@ class SeminarSubmissionController extends Controller
             'tanggal' => ['required', 'date', 'after_or_equal:today'],
             'waktu' => ['required', 'date_format:H:i'],
             'lokasi' => ['nullable', 'string', 'max:255'],
+            'meeting_link' => ['nullable', 'url', 'max:2048'],
             'undangan' => ['required', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'undangan_kepada' => ['required', 'array', 'min:1'],
             'undangan_kepada.*' => ['in:pembimbing_1,pembimbing_2,penguji_1,penguji_2'],
@@ -128,6 +129,7 @@ class SeminarSubmissionController extends Controller
                 'tanggal' => $data['tanggal'],
                 'waktu' => $data['waktu'],
                 'lokasi' => $data['lokasi'] ?? null,
+                'meeting_link' => $data['meeting_link'] ?? null,
                 'undangan_path' => $undanganPath,
                 'undangan_original_name' => $request->file('undangan')->getClientOriginalName(),
                 'undangan_kepada' => $data['undangan_kepada'],
@@ -185,7 +187,10 @@ class SeminarSubmissionController extends Controller
             $submission->markReadBy($request->user());
         }
 
-        return view('seminar-submission.show', compact('submission', 'isDosen', 'isMember'));
+        $meetingLink = $submission->effectiveMeetingLink();
+        $locationText = $submission->locationText();
+
+        return view('seminar-submission.show', compact('submission', 'isDosen', 'isMember', 'meetingLink', 'locationText'));
     }
 
     /**
@@ -228,6 +233,7 @@ class SeminarSubmissionController extends Controller
             'tanggal' => ['required', 'date', 'after_or_equal:today'],
             'waktu' => ['required', 'date_format:H:i'],
             'lokasi' => ['nullable', 'string', 'max:255'],
+            'meeting_link' => ['nullable', 'url', 'max:2048'],
             'undangan' => ['nullable', 'file', 'mimes:'.$mimes, 'max:'.($maxMb * 1024)],
             'undangan_kepada' => ['required', 'array', 'min:1'],
             'undangan_kepada.*' => ['in:pembimbing_1,pembimbing_2,penguji_1,penguji_2'],
@@ -262,6 +268,7 @@ class SeminarSubmissionController extends Controller
             'tanggal' => $data['tanggal'],
             'waktu' => $data['waktu'],
             'lokasi' => $data['lokasi'] ?? null,
+            'meeting_link' => $data['meeting_link'] ?? null,
             'undangan_kepada' => $data['undangan_kepada'],
             'catatan_keterangan' => $data['catatan_keterangan'] ?? null,
         ];
@@ -546,6 +553,10 @@ class SeminarSubmissionController extends Controller
 
         if (($data['lokasi'] ?? null) !== $submission->lokasi) {
             $changed[] = 'Lokasi';
+        }
+
+        if (($data['meeting_link'] ?? null) !== $submission->meeting_link) {
+            $changed[] = 'Tautan video conference';
         }
 
         $oldKepada = (array) ($submission->undangan_kepada ?? []);

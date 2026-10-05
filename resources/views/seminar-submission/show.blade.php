@@ -4,17 +4,10 @@
 
 @section('content')
 @php
-    // Lokasi dan tautan masih disimpan dalam satu field. Pisahkan hanya untuk tampilan.
-    $rawLocation = (string) ($submission->lokasi ?? '');
-    preg_match_all('~https?://[^\s<>()]+~iu', $rawLocation, $locationMatches);
-    $meetingLinks = [];
-    foreach ($locationMatches[0] as $match) {
-        $url = rtrim($match, '.,;!?');
-        if (filter_var($url, FILTER_VALIDATE_URL)) {
-            $meetingLinks[$url] = $url;
-        }
-    }
-    $locationText = trim(str_replace($locationMatches[0], '', $rawLocation), " \t\n\r\0\x0B,;()");
+    // Tautan video conference kini kolom tersendiri; fallback parse dari
+    // `lokasi` hanya untuk data lama yang belum termigrasi.
+    $meetingLink = $meetingLink ?? $submission->effectiveMeetingLink();
+    $locationText = $locationText ?? $submission->locationText();
 @endphp
 
 <div class="detail-workspace space-y-6">
@@ -41,18 +34,16 @@
                 <div class="seminar-schedule-grid text-sm">
                     <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">calendar_month</span><p class="text-xs text-text-secondary mt-2">Tanggal</p><p class="font-semibold text-text-primary mt-1">{{ $submission->tanggal?->format('d M Y') ?? '—' }}</p><p class="text-xs text-text-secondary">{{ $submission->tanggal?->locale('id')->translatedFormat('l') }}</p></div>
                     <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">schedule</span><p class="text-xs text-text-secondary mt-2">Waktu</p><p class="font-semibold text-text-primary mt-1">{{ $submission->waktu?->format('H:i') ?? '—' }} WIB</p></div>
-                    <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0 detail-workspace-card"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">location_on</span><p class="text-xs text-text-secondary mt-2">Lokasi</p><p class="font-semibold text-text-primary mt-1">{{ $locationText !== '' ? $locationText : ($meetingLinks ? 'Pertemuan daring' : ($rawLocation ?: '—')) }}</p></div>
-                    <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">videocam</span><p class="text-xs text-text-secondary mt-2">Zoom Meeting</p><p class="font-semibold text-text-primary mt-1">{{ $meetingLinks ? 'Tersedia' : 'Tidak tersedia' }}</p></div>
+                    <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0 detail-workspace-card"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">location_on</span><p class="text-xs text-text-secondary mt-2">Lokasi</p><p class="font-semibold text-text-primary mt-1">{{ $locationText !== '' ? $locationText : ($meetingLink ? 'Pertemuan daring' : '—') }}</p></div>
+                    <div class="rounded-xl bg-bg-panel border border-border p-4 min-w-0"><span class="material-symbols-outlined text-status-info icon-md" aria-hidden="true">videocam</span><p class="text-xs text-text-secondary mt-2">Video Conference</p><p class="font-semibold text-text-primary mt-1">{{ $meetingLink ? 'Tersedia' : 'Tidak tersedia' }}</p></div>
                 </div>
-                @if ($meetingLinks)
+                @if ($meetingLink)
                     <div class="mt-4 rounded-xl border border-border bg-bg-panel p-4 flex flex-wrap items-center justify-between gap-3 min-w-0">
-                        <div class="min-w-0"><p class="text-xs text-text-secondary">Link pertemuan</p><p class="text-sm text-status-info truncate" title="{{ implode(', ', $meetingLinks) }}">{{ implode(', ', $meetingLinks) }}</p></div>
+                        <div class="min-w-0"><p class="text-xs text-text-secondary">Link pertemuan</p><p class="text-sm text-status-info truncate" title="{{ $meetingLink }}">{{ $meetingLink }}</p></div>
                         <div class="flex flex-wrap gap-2">
-                        @foreach ($meetingLinks as $url)
-                            <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 detail-workspace-card">
-                                <span class="material-symbols-outlined icon-sm">open_in_new</span> Buka Zoom{{ count($meetingLinks) > 1 ? ' '. $loop->iteration : '' }}
+                            <a href="{{ $meetingLink }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 detail-workspace-card">
+                                <span class="material-symbols-outlined icon-sm">open_in_new</span> Buka Tautan
                             </a>
-                        @endforeach
                         </div>
                     </div>
                 @endif
@@ -180,8 +171,8 @@
                     <dt class="text-text-secondary">Jenis</dt><dd class="font-medium">{{ $submission->jenisLabel() }}</dd>
                     <dt class="text-text-secondary">Tanggal</dt><dd class="font-medium">{{ $submission->tanggal?->format('d M Y') ?? '—' }}</dd>
                     <dt class="text-text-secondary">Waktu</dt><dd class="font-medium">{{ $submission->waktu?->format('H:i') ?? '—' }} WIB</dd>
-                    <dt class="text-text-secondary">Lokasi</dt><dd class="font-medium">{{ $locationText !== '' ? $locationText : ($meetingLinks ? 'Pertemuan daring' : ($rawLocation ?: '—')) }}</dd>
-                    <dt class="text-text-secondary">Zoom</dt><dd class="font-medium">{{ $meetingLinks ? 'Tersedia' : 'Tidak tersedia' }}</dd>
+                    <dt class="text-text-secondary">Lokasi</dt><dd class="font-medium">{{ $locationText !== '' ? $locationText : ($meetingLink ? 'Pertemuan daring' : '—') }}</dd>
+                    <dt class="text-text-secondary">Daring</dt><dd class="font-medium">{{ $meetingLink ? 'Tersedia' : 'Tidak tersedia' }}</dd>
                 </dl>
             </section>
 

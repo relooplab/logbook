@@ -106,7 +106,8 @@ class DetailWorkspaceTest extends AuditSmokeTest
             'jenis' => SeminarSubmission::JENIS_PROPOSAL,
             'tanggal' => now()->addDays(7)->toDateString(),
             'waktu' => '13:00',
-            'lokasi' => 'Ruang Rapat https://zoom.us/j/123456',
+            'lokasi' => 'Ruang Rapat',
+            'meeting_link' => 'https://meet.google.com/abc-defg-hij',
             'undangan_path' => 'seminar/undangan.pdf',
             'undangan_original_name' => 'surat-undangan-panjang.pdf',
             'materi_path' => 'seminar/proposal.pdf',
@@ -119,13 +120,40 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $response->assertOk()
             ->assertSee('Jadwal Seminar Proposal')
             ->assertSee('Ruang Rapat')
-            ->assertSee('Buka Zoom')
-            ->assertSee('Zoom Meeting')
+            ->assertSee('Buka Tautan')
+            ->assertSee('Video Conference')
             ->assertSee('surat-undangan-panjang.pdf')
             ->assertSee(route('seminar-submission.undangan-download', $submission))
             ->assertSee(route('seminar-submission.materi-preview', $submission))
             ->assertSee(route('seminar-submission.hardcopy-note', $submission))
             ->assertSee(route('dosen-sidang.index', ['submission' => $submission->id]));
+        $response->assertDontSee('Zoom Meeting');
+        $response->assertDontSee('Buka Zoom');
+        $this->assertStringNotContainsString('Ruang Rapat https://', $response->getContent());
+    }
+
+    public function test_seminar_detail_falls_back_to_legacy_url_inside_lokasi(): void
+    {
+        $submission = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_PROPOSAL,
+            'tanggal' => now()->addDays(7)->toDateString(),
+            'waktu' => '13:00',
+            'lokasi' => 'Ruang Rapat https://zoom.us/j/123456',
+            'meeting_link' => null,
+            'undangan_path' => 'seminar/undangan.pdf',
+            'undangan_original_name' => 'surat-undangan.pdf',
+            'materi_path' => 'seminar/proposal.pdf',
+            'materi_original_name' => 'proposal.pdf',
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+
+        $response = $this->actingAs($this->dosen)->get(route('seminar-submission.show', $submission));
+
+        $response->assertOk()
+            ->assertSee('Ruang Rapat')
+            ->assertSee('Video Conference')
+            ->assertSee('Buka Tautan');
         $this->assertStringNotContainsString('Ruang Rapat https://zoom.us', $response->getContent());
     }
 }

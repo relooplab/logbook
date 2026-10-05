@@ -59,7 +59,8 @@ class SeminarSubmissionNotification extends Notification implements ShouldQueue
                 'waktuMulai' => $submission->waktu?->format('H:i') ?? '—',
                 'waktuSelesai' => $submission->end()->format('H:i'),
                 'durasiMenit' => SeminarSubmission::DEFAULT_DURASI_MENIT,
-                'lokasi' => $submission->lokasi ?: '—',
+                'lokasi' => $submission->locationText() ?: '—',
+                'meetingLink' => $submission->effectiveMeetingLink(),
                 'diundang' => $submission->undanganKepadaLabel(),
                 'catatan' => $submission->catatan_keterangan,
                 'urlUndangan' => $urlUndangan,
@@ -136,7 +137,8 @@ class SeminarSubmissionNotification extends Notification implements ShouldQueue
             .'Mahasiswa: '.$mahasiswaName."\n"
             .'Tanggal: '.$submission->start()->format('l, d F Y')."\n"
             .'Waktu: '.$submission->start()->format('H:i').' – '.$submission->end()->format('H:i').' ('.SeminarSubmission::DEFAULT_DURASI_MENIT.' menit)'."\n"
-            .'Lokasi: '.($submission->lokasi ?: '—')."\n"
+            .'Lokasi: '.($submission->locationText() ?: '—')."\n"
+            .($submission->effectiveMeetingLink() ? 'Video Conference: '.$submission->effectiveMeetingLink()."\n" : '')
             .'Diundang: '.$submission->undanganKepadaLabel()
             .($submission->catatan_keterangan ? "\nCatatan: ".$submission->catatan_keterangan : '')
             ."\nLink Surat Undangan: ".$this->signedUrl('undangan')
@@ -157,7 +159,7 @@ class SeminarSubmissionNotification extends Notification implements ShouldQueue
             'DTSTART:'.$start->copy()->utc()->format('Ymd\THis\Z'),
             'DTEND:'.$end->copy()->utc()->format('Ymd\THis\Z'),
             'SUMMARY:'.$this->escapeIcs(($this->isUpdate ? 'PERUBAHAN: ' : '').$submission->jenisLabel().' — '.($mahasiswa?->name ?? 'Mahasiswa')),
-            'LOCATION:'.$this->escapeIcs((string) ($submission->lokasi ?? '')),
+            'LOCATION:'.$this->escapeIcs((string) ($submission->locationText() ?: '')),
             'DESCRIPTION:'.$this->escapeIcs($description),
             'ORGANIZER:MAILTO:'.($mahasiswa?->email ?: 'no-reply@example.com'),
             'ATTENDEE:MAILTO:'.$notifiable->email,

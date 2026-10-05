@@ -33,6 +33,7 @@ class SeminarSubmission extends Model
         'tanggal',
         'waktu',
         'lokasi',
+        'meeting_link',
         'undangan_path',
         'undangan_original_name',
         'undangan_kepada',
@@ -220,6 +221,45 @@ class SeminarSubmission extends Model
     private function isPdfName(?string $name): bool
     {
         return str_ends_with(strtolower((string) $name), '.pdf');
+    }
+
+    /**
+     * Tautan video conference yang efektif: kolom `meeting_link` bila terisi,
+     * fallback ke URL pertama yang tertanam di `lokasi` (format data lama).
+     */
+    public function effectiveMeetingLink(): ?string
+    {
+        $link = trim((string) ($this->meeting_link ?? ''));
+        if ($link !== '' && filter_var($link, FILTER_VALIDATE_URL)) {
+            return $link;
+        }
+
+        $raw = (string) ($this->lokasi ?? '');
+        if ($raw === '' || ! preg_match_all('~https?://[^\s<>()]+~iu', $raw, $matches)) {
+            return null;
+        }
+
+        foreach ($matches[0] as $match) {
+            $url = rtrim($match, '.,;!?');
+            if (filter_var($url, FILTER_VALIDATE_URL)) {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Teks lokasi fisik murni tanpa URL tertanam (URL kini tinggal di meeting_link).
+     */
+    public function locationText(): string
+    {
+        $raw = (string) ($this->lokasi ?? '');
+        if ($raw === '' || ! preg_match_all('~https?://[^\s<>()]+~iu', $raw, $matches)) {
+            return $raw;
+        }
+
+        return trim(str_replace($matches[0], '', $raw), " \t\n\r\0\x0B,;()");
     }
 
     // ------------------------------------------------------------- jadwal (.ics)

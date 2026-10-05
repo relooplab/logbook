@@ -23,6 +23,9 @@ Mahasiswa **{{ $namaMahasiswa }}** telah mengirim bahan **{{ $jenisLabel }}** be
 - **Tanggal:** {{ $tanggal }}
 - **Waktu:** {{ $waktuMulai }} – {{ $waktuSelesai }} ({{ $durasiMenit }} menit)
 - **Lokasi:** {{ $lokasi }}
+@if (!empty($meetingLink ?? null))
+- **Video Conference:** {{ $meetingLink }}
+@endif
 - **Diundang:** {{ $diundang }}
 @if ($catatan)
 - **Catatan:** {{ $catatan }}
