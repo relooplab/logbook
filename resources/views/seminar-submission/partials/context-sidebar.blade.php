@@ -69,37 +69,3 @@
         </dl>
     </section>
 @endif
-
-<section class="card form-workspace-card p-5" aria-labelledby="seminar-tips-title">
-    <div class="form-card-head">
-        <span class="icon-chip h-10 w-10" aria-hidden="true">
-            <span class="material-symbols-outlined icon-md text-brand">tips_and_updates</span>
-        </span>
-        <div class="min-w-0">
-            <h2 id="seminar-tips-title" class="font-heading font-semibold text-text-primary">Tips Pengajuan</h2>
-            <p class="text-caption text-text-secondary">Sesuai aturan pengajuan.</p>
-        </div>
-    </div>
-    <ul class="mt-4 space-y-2 text-sm text-text-secondary">
-        @if (!empty($allowedTypes))
-            <li class="flex items-start gap-2">
-                <span class="material-symbols-outlined icon-sm mt-0.5 shrink-0 text-status-info" aria-hidden="true">check_circle</span>
-                <span>Gunakan format {{ implode(', ', $allowedTypes) }} untuk surat dan materi.</span>
-            </li>
-        @endif
-        @if ($maxMb)
-            <li class="flex items-start gap-2">
-                <span class="material-symbols-outlined icon-sm mt-0.5 shrink-0 text-status-info" aria-hidden="true">check_circle</span>
-                <span>Ukuran tiap file surat/materi maksimal {{ $maxMb }} MB.</span>
-            </li>
-        @endif
-        <li class="flex items-start gap-2">
-            <span class="material-symbols-outlined icon-sm mt-0.5 shrink-0 text-status-info" aria-hidden="true">check_circle</span>
-            <span>Jadwal seminar minimal hari ini — tanggal lampau ditolak.</span>
-        </li>
-        <li class="flex items-start gap-2">
-            <span class="material-symbols-outlined icon-sm mt-0.5 shrink-0 text-status-info" aria-hidden="true">check_circle</span>
-            <span>Pastikan nama dosen pada surat undangan sesuai penerima yang dipilih.</span>
-        </li>
-    </ul>
-</section>

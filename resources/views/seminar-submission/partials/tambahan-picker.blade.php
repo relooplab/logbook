@@ -19,12 +19,11 @@
     <input type="file" name="{{ $input }}" id="{{ $inputId }}" multiple accept="{{ $accept }}"
         class="sr-only" data-multi-input aria-label="Pilih file tambahan">
 
-    <div class="rounded-xl border-2 border-dashed border-border bg-bg-panel p-6 text-center transition cursor-pointer hover:border-brand/40"
+    <div class="rounded-xl border-2 border-dashed border-border bg-bg-panel px-4 py-4 text-center transition cursor-pointer hover:border-brand/40"
         data-multi-drop role="button" tabindex="0" aria-label="Pilih file tambahan">
-        <p aria-hidden="true"><span class="material-symbols-outlined text-text-secondary" style="font-size:40px">cloud_upload</span></p>
-        <p class="mt-2 text-sm font-medium text-text-primary">Klik untuk memilih atau seret file ke sini</p>
+        <p class="flex items-center justify-center gap-2 text-sm font-medium text-text-primary" aria-hidden="true"><span class="material-symbols-outlined icon-md text-text-secondary">cloud_upload</span> Klik untuk memilih atau seret file ke sini</p>
         <p class="mt-1 text-xs text-text-secondary">{{ $typesLabel }} · Maks {{ $maxFiles }} file · Total maks {{ $maxTotalMb }} MB</p>
-        <span class="btn-secondary mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm">
+        <span class="btn-secondary mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs">
             <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah File
         </span>
     </div>

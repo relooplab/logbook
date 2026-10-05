@@ -23,37 +23,6 @@
         @csrf
 
         <div class="form-workspace-column">
-            {{-- ===== Banner kelengkapan (presentasi state form, bukan validasi baru) ===== --}}
-            <section class="card form-workspace-card p-5" aria-labelledby="seminar-info-title">
-                <div class="form-card-head">
-                    <span class="icon-chip h-10 w-10" aria-hidden="true">
-                        <span class="material-symbols-outlined icon-md text-brand">info</span>
-                    </span>
-                    <div class="min-w-0">
-                        <h2 id="seminar-info-title" class="font-heading font-semibold text-text-primary">Informasi Pengajuan</h2>
-                        <p class="text-caption text-text-secondary">Pastikan semua data dan dokumen sudah lengkap sebelum mengirimkan pengajuan.</p>
-                    </div>
-                </div>
-                <ul class="mt-4 space-y-1.5 text-sm" data-completeness aria-live="polite">
-                    <li class="flex items-center gap-2 text-text-secondary" data-check="jadwal">
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
-                        <span>Jadwal lengkap</span>
-                    </li>
-                    <li class="flex items-center gap-2 text-text-secondary" data-check="undangan">
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
-                        <span>Surat undangan tersedia</span>
-                    </li>
-                    <li class="flex items-center gap-2 text-text-secondary" data-check="materi">
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
-                        <span>Materi seminar tersedia</span>
-                    </li>
-                    <li class="flex items-center gap-2 text-text-secondary">
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">radio_button_unchecked</span>
-                        <span>Dokumen tambahan opsional</span>
-                    </li>
-                </ul>
-            </section>
-
             {{-- ===== 1. Jadwal Seminar ===== --}}
             <section class="card form-workspace-card p-6" aria-labelledby="seminar-jadwal-title">
                 <div class="form-card-head">
@@ -67,14 +36,14 @@
                 </div>
 
                 <div class="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div class="form-field">
+                    <div class="form-field form-field--stack">
                         <label class="form-field-label" for="tanggal">Tanggal <span class="text-status-danger" aria-hidden="true">*</span></label>
                         <div class="form-field-body">
                             <input type="date" name="tanggal" id="tanggal" required value="{{ old('tanggal') }}" class="form-control">
                             @error('tanggal') <p class="form-field-error">{{ $message }}</p> @enderror
                         </div>
                     </div>
-                    <div class="form-field">
+                    <div class="form-field form-field--stack">
                         <label class="form-field-label" for="waktu">Waktu <span class="text-status-danger" aria-hidden="true">*</span></label>
                         <div class="form-field-body">
                             <input type="time" name="waktu" id="waktu" required value="{{ old('waktu') }}" class="form-control">
@@ -242,7 +211,7 @@
                         <span class="badge badge-neutral">Opsional</span>
                     </div>
                 </div>
-                <div class="form-field mt-5">
+                <div class="form-field form-field--stack mt-5">
                     <label class="form-field-label sr-only" for="catatan_keterangan">Catatan Keterangan</label>
                     <div class="form-field-body">
                         <textarea name="catatan_keterangan" id="catatan_keterangan" rows="3" class="form-control"
@@ -307,37 +276,5 @@
         if (workspace) workspace.disabled = !isWorkspace;
     }
 
-    // Banner kelengkapan: cerminan state form (bukan validasi baru).
-    (function () {
-        var form = document.getElementById('seminar-form');
-        if (!form) return;
-
-        function fileChosen(id) {
-            var el = document.getElementById(id);
-            return !!(el && el.files && el.files.length);
-        }
-
-        function setCheck(key, done) {
-            var li = form.querySelector('[data-check="' + key + '"]');
-            if (!li) return;
-            var icon = li.querySelector('.material-symbols-outlined');
-            li.classList.toggle('text-status-info', done);
-            li.classList.toggle('text-text-secondary', !done);
-            if (icon) icon.textContent = done ? 'check_circle' : 'radio_button_unchecked';
-        }
-
-        function sync() {
-            var tanggal = document.getElementById('tanggal');
-            var waktu = document.getElementById('waktu');
-            var workspace = document.getElementById('materi_workspace_id');
-            setCheck('jadwal', !!(tanggal && tanggal.value && waktu && waktu.value));
-            setCheck('undangan', fileChosen('undangan'));
-            setCheck('materi', fileChosen('materi_upload') || !!(workspace && !workspace.disabled && workspace.value));
-        }
-
-        form.addEventListener('input', sync);
-        form.addEventListener('change', sync);
-        sync();
-    })();
 </script>
 @endsection
