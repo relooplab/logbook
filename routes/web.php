@@ -296,8 +296,10 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     // Alias: alamat ringkas untuk halaman yang sama (nama route lama tetap dipakai).
     Route::get('/revisi/create', [LogbookController::class, 'createRevisi'])->name('revisi.create');
     Route::post('/logbook/revisi', [LogbookController::class, 'storeRevisi'])->name('logbook.store-revisi');
+    Route::post('/logbook/revisi/draft', [LogbookController::class, 'storeRevisiDraft'])->name('logbook.store-revisi-draft');
     Route::get('/logbook/feedback', [LogbookController::class, 'feedback'])->name('logbook.feedback');
     Route::put('/logbook/{logbook}/feedback-note', [LogbookController::class, 'updateFeedbackNote'])->name('logbook.feedback-note');
+    Route::post('/logbook/bulk-destroy', [LogbookController::class, 'bulkDestroy'])->name('logbook.bulk-destroy');
 
     Route::get('/logbook/{logbook}', [LogbookController::class, 'show'])->name('logbook.show');
     Route::get('/logbook/{logbook}/edit', [LogbookController::class, 'edit'])->name('logbook.edit');
@@ -318,6 +320,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::get('/logbook/{logbook}/pdf/viewer', [LogbookController::class, 'viewer'])->name('logbook.pdf-viewer');
     Route::get('/logbook/{logbook}/pdf/comments', [LogbookController::class, 'comments'])->name('logbook.pdf.comments');
     Route::post('/logbook/{logbook}/pdf/comments', [LogbookController::class, 'storeComment'])->name('logbook.pdf.store-comment');
+    Route::post('/logbook/{logbook}/annotations/pull', [LogbookController::class, 'pullAnnotations'])->name('logbook.annotations.pull');
 
     Route::post('/pdf-comments/{comment}/resolve', [PdfCommentController::class, 'resolve'])->name('pdf-comments.resolve');
     Route::post('/pdf-comments/{comment}/reply', [PdfCommentController::class, 'reply'])->name('pdf-comments.reply');

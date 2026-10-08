@@ -672,6 +672,16 @@ select.form-control { padding-right: 34px; }
 .perbaikan-toggle:focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 1px; }
 .perbaikan-toggle .material-symbols-outlined { transition: transform .2s ease; }
 .perbaikan-card:not([data-collapsed="1"]) .perbaikan-toggle .material-symbols-outlined { transform: rotate(180deg); }
+.perbaikan-card.perbaikan-needs-attention { border-color: rgb(var(--status-pending) / .55); }
+.perbaikan-needs-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: rgb(var(--status-pending) / .12); color: rgb(var(--status-pending)); }
+.perbaikan-card.perbaikan-flash { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; }
+@media (max-width: 639px) {
+    [data-anotasi-cta] { position: sticky; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; box-shadow: 0 6px 20px rgb(0 0 0 / .08); }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .perbaikan-card.perbaikan-flash { animation: perbaikan-flash 2.4s ease; }
+    @keyframes perbaikan-flash { 0% { box-shadow: 0 0 0 4px rgb(var(--brand) / .35); } 100% { box-shadow: none; } }
+}
 
 /* ---------- Baris aksi form ---------- */
 .form-actions {

@@ -41,6 +41,27 @@ class LogbookHistoryRedesignTest extends TestCase
             'tanggal_bimbingan' => '2026-09-28'], $attributes));
     }
 
+    public function test_student_list_groups_revision_child_under_parent(): void
+    {
+        $lecturer = $this->account('dosen');
+        $program = $this->program($lecturer);
+        $parent = $this->entry($program, ['topik' => 'Topik Induk Unik', 'status' => 'revision_in_progress',
+            'submitted_at' => now()]);
+        $child = $this->entry($program, ['jenis' => 'revisi', 'sesi_ke' => null, 'topik' => 'Jawaban Anak Unik',
+            'status' => 'revision_in_progress', 'parent_entry_id' => $parent->id,
+            'tanggal_pengiriman' => '2026-10-01']);
+
+        $html = $this->actingAs($program->mahasiswa)->get(route('logbook.index', ['program' => 'ta']))
+            ->assertOk()->getContent();
+
+        // Induk selalu di atas anaknya yang menempel, plus tautan lanjutkan draf.
+        $this->assertTrue(strpos($html, 'Topik Induk Unik') < strpos($html, 'Jawaban Anak Unik'));
+        $this->assertStringContainsString('data-thread="entry-'.$parent->id.'"', $html);
+        $this->assertStringContainsString('data-thread-child="'.$parent->id.'"', $html);
+        $this->assertStringNotContainsString('jawaban menempel di bawah', $html);
+        $this->assertStringContainsString(route('logbook.edit', $child), $html);
+    }
+
     public function test_summary_and_student_options_are_scoped_and_independent_of_filters(): void
     {
         $lecturer = $this->account('dosen');

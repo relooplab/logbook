@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Download, ListTree, Maximize, Minimize, PanelLeft, Search, Square, Type, X, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Download, ListTree, Maximize, Minimize, PanelLeft, Search, Square, Type, X, Zap } from 'lucide-react';
 
 import {
   AreaHighlight,
@@ -13,7 +13,7 @@ import {
 import SelectionTip from './pdf/SelectionTip.jsx';
 import AnnotationSidebar from './pdf/AnnotationSidebar.jsx';
 import { useAnnotationControls } from './pdf/HighlightToolbar.jsx';
-import { capturePdfPosition, captureSpreadAnchor, centerPdfSpread, restorePdfPosition } from './pdf/viewPosition.js';
+import { capturePdfPosition, restorePdfPosition } from './pdf/viewPosition.js';
 import { correctAreaSelection } from './pdf/areaPosition.js';
 import { parseZoomPercent, ZOOM_OPTIONS } from './pdf/zoom.js';
 import {
@@ -38,7 +38,7 @@ import {
  */
 
 const DATA = window.PDF_VIEWER_DATA || {};
-const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl } = DATA;
+const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf } = DATA;
 
 const parseIdFromHash = () => {
   const m = (document.location.hash || '').match(/^#highlight-(.+)$/);
@@ -214,7 +214,7 @@ function PdfViewerApp() {
   const [scale, setScale] = useState('page-width');
   const [zoomInput, setZoomInput] = useState('Pas');
   const [error, setError] = useState(null);
-  const [areaMode, setAreaMode] = useState(true); // true = seret area, false = blok teks
+  const [areaMode, setAreaMode] = useState(false); // false = blok teks (default), true = seret area
   const [hasSelectableText, setHasSelectableText] = useState(null); // null = memeriksa, false = PDF pindaian
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [scrolledId, setScrolledId] = useState(null);
@@ -225,7 +225,11 @@ function PdfViewerApp() {
   const [searchCount, setSearchCount] = useState(null);
   const [leftOpen, setLeftOpen] = useState(false);
   const [searchReady, setSearchReady] = useState(false);
-  const [spread, setSpread] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [pullMessage, setPullMessage] = useState(null);
+  const [pullCount, setPullCount] = useState(0);
+  const sidebarCloseRef = useRef(null);
+  const spread = 0; // Selalu satu halaman (mode spread dimatikan agar fokus & stabil).
 
   const searchQueryRef = useRef('');
   searchQueryRef.current = searchQuery;
@@ -233,7 +237,6 @@ function PdfViewerApp() {
   const utilsRef = useRef(null);
   const positionsRef = useRef({ draft: null, catatan: null });
   const pendingRestoreRef = useRef(null);
-  const spreadAnchorRef = useRef(null);
 
   useEffect(() => {
     setZoomInput(typeof scale === 'number' ? `${Math.round(scale * 100)}%` : 'Pas');
@@ -291,9 +294,14 @@ function PdfViewerApp() {
   useEffect(() => {
     if (isMobile) {
       setSidebarOpen(false);
-      setSpread(0);
     }
   }, [isMobile]);
+
+  // Fokus: saat sidebar dibuka (terutama mobile), pindahkan fokus ke tombol tutup
+  // agar pengguna keyboard/pembaca layar langsung berada di panel anotasi.
+  useEffect(() => {
+    if (sidebarOpen) sidebarCloseRef.current?.focus();
+  }, [sidebarOpen]);
 
   useEffect(() => {
     const onModeShortcut = (event) => {
@@ -312,43 +320,7 @@ function PdfViewerApp() {
     return () => document.removeEventListener('keydown', onModeShortcut);
   }, [hasSelectableText]);
 
-  const prevScaleRef = useRef('page-width');
-  useEffect(() => {
-    if (!searchReady) return;
-    const viewer = utilsRef.current?.getViewer();
-    if (!viewer) return;
-    viewer.spreadMode = spread;
-    if (!spread) return;
-    const anchor = spreadAnchorRef.current;
-    if (!anchor) return;
-    // PDF.js already divides page-width by two for spreads. The previous
-    // manual division shrank the pages again and kept the old horizontal scroll.
-    viewer.currentScaleValue = 'page-width';
-    let secondFrame;
-    const firstFrame = requestAnimationFrame(() => {
-      secondFrame = requestAnimationFrame(() => {
-        if (spreadAnchorRef.current !== anchor || utilsRef.current?.getViewer() !== viewer) return;
-        if (centerPdfSpread(viewer, anchor)) spreadAnchorRef.current = null;
-      });
-    });
-    return () => {
-      cancelAnimationFrame(firstFrame);
-      if (secondFrame) cancelAnimationFrame(secondFrame);
-    };
-  }, [spread, searchReady]);
-
-  function toggleSpread() {
-    if (spread) {
-      spreadAnchorRef.current = null;
-      setSpread(0);
-      setScale(prevScaleRef.current);
-    } else {
-      spreadAnchorRef.current = captureSpreadAnchor(utilsRef.current?.getViewer());
-      prevScaleRef.current = scale;
-      setSpread(1);
-      setScale('page-width');
-    }
-  }
+  // (Mode dua halaman dimatikan — satu halaman penuh agar fokus & stabil di mobile.)
 
   function doSearch(q) {
     searchQueryRef.current = q;
@@ -409,11 +381,17 @@ function PdfViewerApp() {
     setSearchQuery('');
     setSearchCount(null);
     setSearchReady(false);
-    setSpread(positionsRef.current[activeType]?.spread ?? 0);
     setScale(positionsRef.current[activeType]?.scale ?? 'page-width');
     utilsRef.current = null;
     if (!pdfUrl) {
       setError('Tidak ada file PDF untuk ditampilkan.');
+      return;
+    }
+    // Edge non-PDF (doc/docx bila institusi mengizinkan): jangan tampilkan kanvas
+    // kosong — arahkan unduh file asli.
+    const activeIsPdf = activeType === 'catatan' ? isCatatanPdf !== false : isDraftPdf !== false;
+    if (!activeIsPdf) {
+      setError('NON_PDF');
       return;
     }
     fetch(commentsUrl + '?type=' + activeType, { credentials: 'same-origin' })
@@ -460,7 +438,7 @@ function PdfViewerApp() {
 
   const getAnnotationById = useCallback((id) => annotations.find((x) => String(x.id) === String(id)) || null, [annotations]);
 
-  // PDF pindaian tak punya teks yang bisa diblok -> paksa mode Area.
+  // PDF pindaian tak punya teks yang bisa diblok -> paksa mode Area; selain itu tetap mode Teks.
   useEffect(() => {
     if (hasSelectableText === false) setAreaMode(true);
   }, [hasSelectableText]);
@@ -614,6 +592,30 @@ function PdfViewerApp() {
     if (next) openAnnotation(next);
   }
 
+  async function pullToTable() {
+    if (!pullAnnotationsUrl || pulling) return;
+    setPulling(true);
+    setPullMessage(null);
+    try {
+      const res = await fetch(pullAnnotationsUrl, {
+        method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' }, credentials: 'same-origin',
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || ('HTTP ' + res.status));
+      var skipNote = d.skipped_empty > 0 ? ' ' + d.skipped_empty + ' anotasi kosong dilewati.' : '';
+      if (d.pulled > 0) {
+        setPullCount(d.pulled);
+        setPullMessage(d.pulled + (entryKind === 'revisi' ? ' perbaikan terisi otomatis dari anotasi.' : ' poin terisi otomatis ke ringkasan.') + ' Kembali untuk melengkapi yang bertanda perlu dilengkapi.' + skipNote);
+      } else {
+        setPullMessage('Belum ada anotasi baru — tandai dulu di PDF, lalu klik lagi.' + skipNote);
+      }
+    } catch (e) {
+      setPullMessage('Gagal menarik anotasi.');
+    } finally {
+      setPulling(false);
+    }
+  }
+
   const actions = useMemo(() => ({
     reply: saveReply,
     toggleResolve,
@@ -623,6 +625,15 @@ function PdfViewerApp() {
 
   // Kembali ke halaman revisi (manual, via tombol di banner sukses).
   function goBackToRevision() {
+    if (returnUrl) window.location.href = returnUrl;
+  }
+
+  // Kembali ke wizard create-revisi: beri sinyal ke tab wizard agar auto-pull
+  // lalu tutup tab ini (kembali fokus ke tab wizard). Bila tab viewer dibuka
+  // manual (tanpa opener), fallback ke navigasi returnUrl seperti biasa.
+  function goBackFromWizard() {
+    try { localStorage.setItem('lbta-revisi-autopull:' + entryId, String(Date.now())); } catch (e) { /* abaikan */ }
+    if (window.opener) { window.close(); return; }
     if (returnUrl) window.location.href = returnUrl;
   }
 
@@ -660,10 +671,17 @@ function PdfViewerApp() {
       : 'h-full flex flex-col gap-2 p-2 md:p-3'}>
       {/* Bar compact: kembali | judul | anotasi | outline | file | mode | zoom || aksi */}
       <div className="flex items-center gap-1.5 md:gap-2 rounded-lg border border-border bg-bg-surface px-2 py-1.5 overflow-x-auto shrink-0">
-        <a href={returnUrl} title="Kembali ke detail"
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-bg-panel hover:bg-bg-hover shrink-0">
-          <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
-        </a>
+        {fromCreateRevisi ? (
+          <button onClick={goBackFromWizard} title="Kembali ke wizard"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-bg-panel hover:bg-bg-hover shrink-0">
+            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
+          </button>
+        ) : (
+          <a href={returnUrl} title="Kembali ke detail"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-bg-panel hover:bg-bg-hover shrink-0">
+            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
+          </a>
+        )}
         <span className="text-sm font-bold whitespace-nowrap truncate" title={`Anotasi PDF · ${title || ''}`}>
           Anotasi PDF · {title}
         </span>
@@ -783,14 +801,6 @@ function PdfViewerApp() {
           </select>
           <button onClick={zoomIn} title="Perbesar"
             className="px-2 py-1 rounded text-xs font-bold leading-none hover:bg-bg-hover">+</button>
-          {!isMobile && (
-            <button onClick={toggleSpread} disabled={!searchReady || numPages < 2 || !!error}
-              aria-label="Dua halaman" aria-pressed={spread === 1}
-              title={spread ? 'Tampilkan satu halaman' : 'Tampilkan dua halaman berdampingan'}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${spread ? 'bg-brand text-white' : 'hover:bg-bg-hover'}`}>
-              <BookOpen className="h-3.5 w-3.5" /> {spread ? '2 hal' : '1 hal'}
-            </button>
-          )}
         </div>
         <span className="hidden lg:inline text-xs text-text-secondary whitespace-nowrap shrink-0">{numPages || '…'} hal</span>
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -798,6 +808,12 @@ function PdfViewerApp() {
             <button onClick={buildFeedback} title="Kompilasi komentar menjadi feedback"
               className="flex items-center gap-1 px-2 py-1 rounded-md bg-brand-fill hover:bg-brand-fill-hover text-white text-xs font-semibold whitespace-nowrap">
               <Zap className="h-3.5 w-3.5" /><span className="hidden md:inline">Feedback</span>
+            </button>
+          )}
+          {canPullAnnotations && (
+            <button onClick={pullToTable} disabled={pulling} title="Isi otomatis dari anotasi yang Anda tandai"
+              className="flex min-h-11 items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand whitespace-nowrap disabled:opacity-50">
+              <ListTree className="h-3.5 w-3.5" /><span className="hidden md:inline">{pulling ? 'Mengisi…' : 'Isi otomatis dari anotasi' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span><span className="md:hidden">{pulling ? '…' : 'Isi otomatis' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span>
             </button>
           )}
           {burnUrl && (
@@ -828,18 +844,42 @@ function PdfViewerApp() {
         </div>
       )}
 
+      {pullMessage && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs shrink-0" role="status">
+          <span>{pullMessage}</span>
+          {pullCount > 0 && (returnUrl || fromCreateRevisi) && (
+            <button onClick={fromCreateRevisi ? goBackFromWizard : () => { window.location.href = returnUrl; }} className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-brand px-3 py-2 font-semibold text-[#0b1420] hover:opacity-90">
+              {returnLabel || 'Kembali & lengkapi'} →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* PDF pindaian: tidak ada teks yang bisa diblok */}
-      {hasSelectableText === false && (
-        <div className="rounded-lg border border-status-pending/40 bg-status-pending/10 px-3 py-2 text-xs shrink-0">
+      {hasSelectableText === false && !error && (
+        <div className="rounded-lg border border-status-pending/40 bg-status-pending/10 px-3 py-2 text-xs shrink-0" role="status">
           <span className="font-semibold">PDF ini tampaknya hasil pindaian (gambar)</span>
-          <span className="text-text-secondary"> — teks tidak dapat diblok. Gunakan Mode Area.</span>
+          <span className="text-text-secondary"> — teks tidak dapat diblok. Mode Area sudah diaktifkan otomatis; seret kotak pada halaman untuk menandai.</span>
         </div>
       )}
 
       {/* Main flex-fill: sidebar anotasi + viewer PDF */}
+      {/* Mobile: sidebar menjadi drawer + tombol tutup yang bisa difokus (Esc menutup). */}
       <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-lg border border-border bg-bg-surface">
         {isMobile && sidebarOpen && (
           <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />
+        )}
+        {isMobile && sidebarOpen && (
+          <button
+            ref={sidebarCloseRef}
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setSidebarOpen(false); }}
+            aria-label="Tutup panel anotasi"
+            className="absolute right-2 top-2 z-50 rounded-lg bg-bg-surface px-3 py-2 text-xs font-semibold shadow-lg border border-border"
+          >
+            Tutup ✕ (Esc)
+          </button>
         )}
 
         <div className={sidebarClass}>
@@ -864,11 +904,19 @@ function PdfViewerApp() {
         </div>
 
         <div className="relative min-w-0 flex-1">
-          {error && (
+          {error === 'NON_PDF' ? (
+            <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-sm">
+              <p className="font-semibold">File ini bukan PDF sehingga tidak bisa dianotasi di sini.</p>
+              <p className="text-text-secondary">Unduh file asli, perbaiki, lalu unggah ulang sebagai PDF bila perlu anotasi.</p>
+              <a href={pdfUrl} download className="rounded-lg bg-brand px-4 py-2 font-semibold text-[#0b1420] hover:opacity-90">
+                Unduh file asli
+              </a>
+            </div>
+          ) : error ? (
             <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
               {error}
             </div>
-          )}
+          ) : null}
           {!error && pdfUrl && (
             <PdfLoader
               key={activeType}

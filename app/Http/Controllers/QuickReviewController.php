@@ -31,7 +31,7 @@ class QuickReviewController extends Controller
         }
         $queueIndex = $selectedId === null ? 0 : $queueIds->search((int) $selectedId);
         $entryId = $queueIds->get($queueIndex);
-        $entry = $entryId ? LogbookEntry::with(['mahasiswaTa.mahasiswa', 'comments', 'parentEntry.comments'])
+        $entry = $entryId ? LogbookEntry::with(['mahasiswaTa.mahasiswa', 'mahasiswaTa.pembimbing1', 'dosen', 'comments', 'parentEntry.comments', 'revisionChildren'])
             ->findOrFail($entryId) : null;
 
         if ($entry) {
@@ -51,7 +51,12 @@ class QuickReviewController extends Controller
         $previousId = $queueIndex > 0 ? $queueIds->get($queueIndex - 1) : null;
         $nextId = $queueIds->get($queueIndex + 1);
 
-        return view('logbook.quick-review', compact('entry', 'templates', 'lastFeedback', 'feedbackDraft', 'queueCount', 'queueIndex', 'previousId', 'nextId'));
+        // Pratinjau kartu "Berikutnya dalam antrean" (tanpa otorisasi tampilan
+        // penuh — tautannya tetap dijaga antrean saat dibuka).
+        $nextEntry = $nextId ? LogbookEntry::with(['mahasiswaTa.mahasiswa'])
+            ->find($nextId) : null;
+
+        return view('logbook.quick-review', compact('entry', 'templates', 'lastFeedback', 'feedbackDraft', 'queueCount', 'queueIndex', 'previousId', 'nextId', 'nextEntry'));
     }
 
     /**
@@ -151,7 +156,9 @@ class QuickReviewController extends Controller
 
     /**
      * Compile feedback otomatis dari komentar PDF yang belum resolve,
-     * lalu simpan ke session untuk dipakai di quick review.
+     * mencakup SEMUA peran penulis (dosen + mahasiswa) agar anotasi
+     * perbaikan mahasiswa tidak hilang, lalu simpan ke session untuk
+     * dipakai di quick review.
      */
     public function buildFeedbackFromComments(Request $request, LogbookEntry $logbook): JsonResponse
     {
@@ -165,6 +172,7 @@ class QuickReviewController extends Controller
         }
 
         $comments = PdfComment::whereIn('logbook_entry_id', $entryIds)
+            ->with('user')
             ->where('resolution_status', PdfComment::STATUS_OPEN)
             ->orderBy('page_number')
             ->get();
@@ -177,8 +185,9 @@ class QuickReviewController extends Controller
             $source = $c->logbook_entry_id === $logbook->id
                 ? 'Sesi ini'
                 : 'Sesi sebelumnya, entri #'.$c->logbook_entry_id;
+            $role = $c->user && $c->user->isDosen() ? 'dosen' : 'mahasiswa';
 
-            return ($i + 1).'. ('.$source.', Hal. '.$c->page_number.') '.$c->comment;
+            return ($i + 1).'. ('.$source.' · '.$role.', Hal. '.$c->page_number.') '.$c->comment;
         });
         $feedback = $lines->implode("\n");
 

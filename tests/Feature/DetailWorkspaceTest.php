@@ -68,8 +68,9 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $response->assertOk()
             ->assertSee('Catatan Perbaikan')
             ->assertSee('1 dari 2 diperbaiki')
-            ->assertSee('Perbaikan yang Dilakukan Mahasiswa')
-            ->assertSee('revision-expand-all')
+            ->assertSee('Komentar Dosen')
+            ->assertSee('Perbaikan Mahasiswa')
+            ->assertSee('Perbaiki data tabel.')
             ->assertSee('action-item-add-toggle')
             ->assertSee('review-decision-form')
             ->assertSee(route('logbook.pdf-viewer', $this->entryRevisi))
@@ -77,6 +78,27 @@ class DetailWorkspaceTest extends AuditSmokeTest
             ->assertSee(route('chat.start', ['user' => $this->mhs->id, 'ta' => $this->ta->id, 'entry' => $this->entryRevisi->id]))
             ->assertSee(route('logbook.request-revisi', $this->entryRevisi));
         $this->assertSame(1, substr_count($response->getContent(), 'Buka PDF &amp; Anotasi'));
+    }
+
+    public function test_show_lists_own_entry_comments_in_context_table(): void
+    {
+        $this->entryRevisi->update([
+            'dosen_id' => $this->dosen->id,
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+        $this->entryRevisi->comments()->create([
+            'user_id' => $this->dosen->id, 'file_type' => \App\Models\PdfComment::FILE_TYPE_DRAFT,
+            'page_number' => 4, 'comment' => 'Komentar milik entri ini.',
+            'resolution_status' => \App\Models\PdfComment::STATUS_OPEN, 'is_resolved' => false,
+        ]);
+
+        $this->actingAs($this->dosen)->get(route('logbook.show', $this->entryRevisi))
+            ->assertOk()
+            ->assertSee('Komentar Sebelumnya', false)
+            ->assertSee('Komentar entri ini', false)
+            ->assertSee('Komentar milik entri ini.', false)
+            ->assertSee('Belum ditindaklanjuti', false);
     }
 
     public function test_approval_feedback_is_optional_but_revision_feedback_remains_required(): void

@@ -213,6 +213,80 @@
             <x-autosave-status panel="lb-create" />
         </aside>
     </form>
+
+    {{-- Bulk delete: draf / revisi sedang dikerjakan pada program ini. --}}
+    <section class="card p-5 mt-6" aria-label="Hapus draf terpilih">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="min-w-0">
+                <h2 class="font-heading font-semibold text-text-primary">Hapus Draf Terpilih</h2>
+                <p class="text-caption text-text-secondary">Hanya draf / revisi sedang dikerjakan yang bisa dipilih.</p>
+            </div>
+            <div class="ml-auto flex items-center gap-2">
+                @if (($deletableEntries ?? collect())->isNotEmpty())
+                    <button type="submit" form="bulk-delete-form-create" id="bulk-delete-btn-create" disabled
+                        class="px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Hapus terpilih (<span id="bulk-delete-count-create">0</span>)
+                    </button>
+                @endif
+            </div>
+        </div>
+        @if (($deletableEntries ?? collect())->isEmpty())
+            <p class="mt-3 text-sm text-text-secondary">Tidak ada draf yang bisa dihapus pada program ini.</p>
+        @else
+            <form id="bulk-delete-form-create" method="POST" action="{{ route('logbook.bulk-destroy') }}" class="mt-4 space-y-2">
+                @csrf
+                @if ($ta?->jenis) <input type="hidden" name="program" value="{{ $ta->jenis }}"> @endif
+                <label class="flex items-center gap-2 text-xs text-text-secondary">
+                    <input type="checkbox" id="bulk-select-all-create"> Pilih semua
+                </label>
+                @foreach ($deletableEntries as $entry)
+                    <label class="flex items-start gap-3 rounded-xl border border-border px-3 py-2 text-sm hover:bg-bg-panel/50">
+                        <input type="checkbox" name="ids[]" value="{{ $entry->id }}" class="bulk-checkbox-create mt-1">
+                        <span class="min-w-0">
+                            <span class="block font-medium text-text-primary">{{ $entry->jenis === 'revisi' ? 'Revisi' : 'Sesi '.$entry->sesi_ke }} · {{ $entry->topik ?? 'Tanpa topik' }}</span>
+                            <span class="block text-xs text-text-secondary">{{ $entry->tanggal_tampil?->format('d M Y') ?? '—' }} · @include('partials.status-badge', ['status' => $entry->status, 'entry' => $entry])</span>
+                        </span>
+                    </label>
+                @endforeach
+            </form>
+            <script>
+                (function () {
+                    var form = document.getElementById('bulk-delete-form-create');
+                    if (!form) return;
+                    var boxes = Array.from(form.querySelectorAll('.bulk-checkbox-create'));
+                    var countEl = document.getElementById('bulk-delete-count-create');
+                    var btn = document.getElementById('bulk-delete-btn-create');
+                    var selectAll = document.getElementById('bulk-select-all-create');
+
+                    function refresh() {
+                        var n = boxes.filter(function (b) { return b.checked; }).length;
+                        if (countEl) countEl.textContent = n;
+                        if (btn) btn.disabled = n === 0;
+                        if (selectAll) {
+                            selectAll.checked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
+                            selectAll.indeterminate = n > 0 && n < boxes.length;
+                        }
+                    }
+
+                    boxes.forEach(function (b) { b.addEventListener('change', refresh); });
+                    if (selectAll) {
+                        selectAll.addEventListener('change', function () {
+                            boxes.forEach(function (b) { b.checked = selectAll.checked; });
+                            refresh();
+                        });
+                    }
+                    form.addEventListener('submit', function (e) {
+                        var n = boxes.filter(function (b) { return b.checked; }).length;
+                        if (n === 0) { e.preventDefault(); return; }
+                        if (!confirm('Hapus ' + n + ' entri terpilih? Hanya draf / revisi sedang dikerjakan yang akan dihapus.')) {
+                            e.preventDefault();
+                        }
+                    });
+                    refresh();
+                })();
+            </script>
+        @endif
+    </section>
 </div>
 @endsection
 

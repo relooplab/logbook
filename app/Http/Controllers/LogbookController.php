@@ -7,6 +7,7 @@ use App\Events\PdfCommentCreated;
 use App\Http\Requests\StoreLogbookEntryRequest;
 use App\Http\Requests\StoreRevisiRequest;
 use App\Http\Requests\UpdateLogbookEntryRequest;
+use App\Models\FeedbackTemplate;
 use App\Models\LogbookEntry;
 use App\Models\MahasiswaTa;
 use App\Models\PdfComment;
@@ -50,7 +51,18 @@ class LogbookController extends Controller
         $dosenOptions = $ta->dosenRecipientOptions();
         $defaultRecipientId = old('addressed_dosen_id', $ta->pembimbing_1_id ?: array_key_first($dosenOptions));
 
-        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId'));
+        // Daftar entri yang masih bisa dihapus massal (isEditable: draf atau
+        // revisi sedang dikerjakan yang belum dikirim) untuk kartu bulk delete.
+        $deletableEntries = $ta->entries()
+            ->withExists('revisionChildren')
+            ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->filter(fn (LogbookEntry $e) => $e->isEditable())
+            ->values();
+
+        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId', 'deletableEntries'));
     }
 
     public function createRevisi(Request $request): View
@@ -58,10 +70,25 @@ class LogbookController extends Controller
         $ta = ProgramContext::resolve($request->user(), $request);
         abort_unless($ta, 403, 'Anda belum memiliki program aktif (TA/KP).');
 
+        // Mode lanjutkan draf (?draft_id=): wizard memuat draf revisi yang
+        // sudah ada (satu pintu editor). Draf harus milik user + editable.
+        $draft = null;
+        $draftId = $request->query('draft_id');
+        if ($draftId) {
+            $candidate = LogbookEntry::with(['mahasiswaTa', 'comments.user'])->find($draftId);
+            $ownsDraft = $candidate && $request->user()->allPrograms()->where('id', $candidate->mahasiswaTa_id)->exists();
+            abort_unless($candidate && $candidate->jenis === LogbookEntry::JENIS_REVISI && $ownsDraft, 404);
+            abort_unless($request->user()->can('update', $candidate), 403);
+            $draft = $candidate;
+            if ($draft->mahasiswaTa && $draft->mahasiswaTa->id !== $ta->id) {
+                $ta = $draft->mahasiswaTa;
+            }
+        }
+
         // Bila parent entry diberikan, program mengikuti parent agar tautan
         // dari feedback/detail logbook selalu mengarah ke program yang benar
         // meskipun query ?program= tidak dibawa.
-        $selectedParentId = $request->query('parent_entry_id');
+        $selectedParentId = $draft?->parent_entry_id ?: $request->query('parent_entry_id');
         if ($selectedParentId) {
             $parent = LogbookEntry::with('mahasiswaTa')->find($selectedParentId);
             if ($parent && $parent->mahasiswaTa && $parent->mahasiswaTa->id !== $ta->id) {
@@ -82,6 +109,18 @@ class LogbookController extends Controller
             ->latest('reviewed_at')
             ->get();
 
+        // Induk milik draf yang dilanjutkan ikut ditampilkan (terkunci untuk
+        // induk lain, tapi valid sebagai jawaban draf ini).
+        if ($draft?->parentEntry && ! $parents->firstWhere('id', $draft->parentEntry->id)) {
+            $draft->parentEntry->loadMissing('comments.user');
+            $parents->push($draft->parentEntry);
+        }
+
+        // Draf yang sedang dibuka tidak boleh menjadi induk bagi dirinya sendiri.
+        if ($draft) {
+            $parents = $parents->reject(fn ($p) => $p->id === $draft->id)->values();
+        }
+
 
         $selectedParent = $selectedParentId
             ? $parents->firstWhere('id', $selectedParentId)
@@ -95,18 +134,55 @@ class LogbookController extends Controller
         }
 
         // Pilihan penerima revisi: pembimbing 1/2 ATAU dosen penguji 1/2.
-        // Default: penerima entri induk (bila ada), selain itu pembimbing 1.
+        // Default: penerima draf (mode lanjutkan), penerima entri induk
+        // (bila ada), selain itu pembimbing 1.
         $dosenOptions = $ta->dosenRecipientOptions();
         $defaultRecipientId = old('addressed_dosen_id')
-            ?: ($selectedParent?->dosen_id ?: $ta->pembimbing_1_id);
+            ?: ($draft?->dosen_id ?: ($selectedParent?->dosen_id ?: $ta->pembimbing_1_id));
 
         if ($defaultRecipientId && ! isset($dosenOptions[(int) $defaultRecipientId])) {
             // Dosen default sudah tidak lagi terkait program (mis. penguji diganti).
             $defaultRecipientId = $ta->pembimbing_1_id ?: array_key_first($dosenOptions);
         }
 
+        // Draf aktif yang menghalangi (untuk kotak aksi "Lanjutkan draf"):
+        // dari submit yang baru ditolak, atau dari pilihan induk yang sudah
+        // terkunci (tab basi / query parent_entry_id langsung).
+        $activeRevision = null;
+        $flashed = session('active_revision');
+        if (is_array($flashed) && ! empty($flashed['id'])) {
+            $child = $ta->entries()->whereKey($flashed['id'])->first();
+            if ($child && $child->parent_entry_id && in_array($child->status, [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS], true)) {
+                $activeRevision = $this->activeRevisionPayload($child);
+            }
+        }
+        if (! $activeRevision) {
+            $attemptedParentId = $request->old('parent_entry_id', $selectedParentId);
+            if ($attemptedParentId && ! $parents->firstWhere('id', (int) $attemptedParentId)) {
+                $blockedParent = $ta->entries()->whereKey($attemptedParentId)->first();
+                if ($blockedParent && ($child = $this->activeRevisionChild($blockedParent))) {
+                    $activeRevision = $this->activeRevisionPayload($child);
+                }
+            }
+        }
+
+        // Nilai awal form: draf yang dilanjutkan menang atas default baru.
+        $defaultTanggal = old('tanggal_pengiriman', $draft?->tanggal_pengiriman?->format('Y-m-d') ?? now()->format('Y-m-d'));
+        $defaultPesan = old('progres_kendala', $draft?->progres_kendala);
+        $draftLampiran = $draft?->lampiran_path
+            ? ['name' => $draft->lampiran_original_name ?: basename($draft->lampiran_path), 'url' => route('logbook.pdf', $draft)]
+            : null;
+        $draftBoot = $draft ? [
+            'entry_id' => $draft->id,
+            'viewer_url' => route('logbook.pdf-viewer', $draft),
+            'pull_url' => route('logbook.annotations.pull', $draft),
+            'file_name' => $draftLampiran['name'] ?? null,
+            'has_file' => (bool) $draftLampiran,
+        ] : null;
+
         return view('logbook.create-revisi', compact(
-            'ta', 'parents', 'selectedParentId', 'parentComments', 'dosenOptions', 'defaultRecipientId'
+            'ta', 'parents', 'selectedParentId', 'parentComments', 'dosenOptions', 'defaultRecipientId', 'activeRevision',
+            'draft', 'defaultTanggal', 'defaultPesan', 'draftLampiran', 'draftBoot'
         ));
     }
 
@@ -182,17 +258,86 @@ class LogbookController extends Controller
                 : 'Entri logbook tersimpan sebagai draf.');
     }
 
-    public function storeRevisi(StoreRevisiRequest $request): RedirectResponse
+    /**
+     * Draf-cepat untuk alur wizard: langkah Upload -> Lanjut -> PDF anotasi.
+     * Menyimpan file + membuat entri draf (tabel boleh kosong), lalu
+     * mengembalikan URL viewer/edit/pull agar wizard bisa membuka PDF di tab
+     * baru dan mengisi kartu otomatis tanpa pindah halaman.
+     * Idempoten per entri: panggil sekali, pakai ulang entry_id berikutnya.
+     */
+    public function storeRevisiDraft(StoreRevisiRequest $request): JsonResponse
     {
         $ta = ProgramContext::resolve($request->user(), $request);
         abort_unless($ta, 403);
 
         $data = $request->validated();
-        $submit = $request->boolean('submit');
 
-        [$parent, $entry] = DB::transaction(function () use ($ta, $data, $submit) {
-            // Mahasiswa dapat membuat entri revisi tanpa harus ada logbook dulu.
-            // Jika parent dipilih, validasi & tautkan ke entri induk.
+        // Mode lanjutkan draf (?draft_id=): draf sudah ada — simpan file baru
+        // bila diunggah, lalu kembalikan URL alur anotasi draf tersebut.
+        if (! empty($data['draft_id'])) {
+            $explicit = LogbookEntry::whereKey($data['draft_id'])
+                ->where('jenis', LogbookEntry::JENIS_REVISI)
+                ->first();
+            abort_unless($explicit && $request->user()->can('update', $explicit), 404);
+            $ta = $explicit->mahasiswaTa;
+            abort_unless($ta, 403);
+
+            $explicit->update(array_filter([
+                'tanggal_pengiriman' => $data['tanggal_pengiriman'] ?? null,
+                'progres_kendala' => $data['progres_kendala'] ?? null,
+                'dosen_id' => $data['addressed_dosen_id'] ?? null,
+            ], fn ($v) => $v !== null));
+
+            if ($request->hasFile('lampiran')) {
+                $dosen = $ta->storageChargeTarget();
+                $replaceLampiran = function () use ($request, $explicit) {
+                    $explicit->update([
+                        'lampiran_path' => $this->storeUniqueFile($request->file('lampiran'), 'lampiran', $explicit->id),
+                        'lampiran_original_name' => $request->file('lampiran')->getClientOriginalName(),
+                        'lampiran_size' => $request->file('lampiran')->getSize(),
+                    ]);
+                };
+                if ($dosen) {
+                    app(StorageUsageService::class)->withUploadLock($dosen, $request->file('lampiran')->getSize(), $replaceLampiran);
+                } else {
+                    $replaceLampiran();
+                }
+                $explicit = $explicit->fresh();
+            }
+
+            return response()->json([
+                'ok' => true,
+                'reused' => true,
+                'entry_id' => $explicit->id,
+                'viewer_url' => route('logbook.pdf-viewer', $explicit),
+                'edit_url' => route('logbook.edit', $explicit),
+                'pull_url' => route('logbook.annotations.pull', $explicit),
+            ], 200);
+        }
+        // Idempoten: dua tab menekan Lanjut bersamaan → satu menang, satunya
+        // memakai ulang. Tanpa induk hanya draf mandiri yang dipakai ulang
+        // (draf berinduk milik alur lain tidak boleh terbajak).
+        $reuse = $ta->entries()
+            ->where('jenis', LogbookEntry::JENIS_REVISI)
+            ->where('status', LogbookEntry::STATUS_REVISION_IN_PROGRESS)
+            ->whereNull('submitted_at')
+            ->when(! empty($data['parent_entry_id']),
+                fn ($q) => $q->where('parent_entry_id', $data['parent_entry_id']),
+                fn ($q) => $q->whereNull('parent_entry_id'))
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->latest('id')->first();
+        if ($reuse && $reuse->lampiran_path) {
+            return response()->json([
+                'ok' => true,
+                'reused' => true,
+                'entry_id' => $reuse->id,
+                'viewer_url' => route('logbook.pdf-viewer', $reuse),
+                'edit_url' => route('logbook.edit', $reuse),
+                'pull_url' => route('logbook.annotations.pull', $reuse),
+            ], 200);
+        }
+
+        [$parent, $entry] = DB::transaction(function () use ($ta, $data) {
             $parent = null;
             if (! empty($data['parent_entry_id'])) {
                 $parent = $ta->entries()
@@ -205,7 +350,7 @@ class LogbookController extends Controller
                     ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
                     ->exists()) {
                     throw ValidationException::withMessages([
-                        'parent_entry_id' => 'Entri induk sudah memiliki revisi aktif. Pilih entri induk lain.',
+                        'parent_entry_id' => $this->activeRevisionMessage($parent),
                     ]);
                 }
 
@@ -216,15 +361,157 @@ class LogbookController extends Controller
                 }
             }
 
-            // Buat entry dulu agar path unik bisa memakai id.
             $entry = $ta->entries()->create([
                 'parent_entry_id' => $parent?->id,
                 'revision_round' => $parent ? ($parent->revision_round ?? 0) + 1 : null,
-                'sesi_ke' => null, // revisi: sesi tidak dipakai (null agar unique index (mahasiswa_ta_id, sesi_ke) mengizinkan banyak revisi)
+                'sesi_ke' => null,
                 'jenis' => LogbookEntry::JENIS_REVISI,
-                // `dosen_id` = reviewer entri. Penerima revisi yang dipilih
-                // mahasiswa (pembimbing ATAU dosen penguji) menjadi reviewer;
-                // kosong = rantai entri induk / pembimbing 1.
+                'dosen_id' => $data['addressed_dosen_id']
+                    ?? ($parent?->dosen_id ?: $parent?->reviewDosen()?->id ?: $ta->pembimbing_1_id),
+                'topik' => $parent?->topik,
+                'progres_kendala' => $data['progres_kendala'] ?? null,
+                'tanggal_pengiriman' => $data['tanggal_pengiriman'],
+                'status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+                'submitted_at' => null,
+            ]);
+
+            if ($parent) {
+                $parent->update(['status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS]);
+            }
+
+            return [$parent, $entry];
+        });
+
+        $dosen = $ta->storageChargeTarget();
+        $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+            ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
+            ->values()->all();
+        $storeLampiran = function () use ($request, $entry, $riwayat) {
+            $entry->update([
+                'lampiran_path' => $this->storeUniqueFile($request->file('lampiran'), 'lampiran', $entry->id),
+                'lampiran_original_name' => $request->file('lampiran')->getClientOriginalName(),
+                'lampiran_size' => $request->file('lampiran')->getSize(),
+                'riwayat_perbaikan' => $riwayat ?: null,
+            ]);
+        };
+
+        // Edge: kuota penuh / file tak valid → withUploadLock melempar 422 SEBELUM
+        // entri yatim tersimpan; bersihkan draf tanpa lampiran agar tidak menumpuk.
+        if (! $request->hasFile('lampiran') && ! $entry->fresh()->lampiran_path) {
+            $entry->delete();
+            throw ValidationException::withMessages(['lampiran' => 'File perbaikan wajib diunggah.']);
+        }
+
+        try {
+            if ($request->hasFile('lampiran')) {
+                if ($dosen) {
+                    app(StorageUsageService::class)->withUploadLock($dosen, $request->file('lampiran')->getSize(), $storeLampiran);
+                } else {
+                    $storeLampiran();
+                }
+            }
+        } catch (\Throwable $e) {
+            if (! $entry->fresh()->lampiran_path) {
+                $entry->delete();
+            }
+            throw $e;
+        }
+
+        if (! empty($entry->fresh()->riwayat_perbaikan)) {
+            $this->generateCatatanPerbaikanPdf($entry);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'entry_id' => $entry->id,
+            'viewer_url' => route('logbook.pdf-viewer', $entry),
+            'edit_url' => route('logbook.edit', $entry),
+            'pull_url' => route('logbook.annotations.pull', $entry),
+        ], 201);
+    }
+
+    public function storeRevisi(StoreRevisiRequest $request): RedirectResponse
+    {
+        $ta = ProgramContext::resolve($request->user(), $request);
+        abort_unless($ta, 403);
+
+        $data = $request->validated();
+        $submit = $request->boolean('submit');
+
+        [$parent, $entry] = DB::transaction(function () use ($ta, $data, $submit, $request) {
+            // Mode lanjutkan draf (?draft_id=): pakai draf yang dimaksud.
+            // Kepemilikan + editable diverifikasi; program mengikuti draf
+            // lewat field program tersembunyi (divalidasi di request).
+            if (! empty($data['draft_id'])) {
+                $explicit = LogbookEntry::whereKey($data['draft_id'])
+                    ->where('jenis', LogbookEntry::JENIS_REVISI)
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($explicit && $request->user()->can('update', $explicit), 404);
+                abort_unless($explicit->mahasiswaTa, 403);
+
+                $parent = $explicit->parentEntry;
+                $entry = $explicit;
+                $entry->update([
+                    'dosen_id' => $data['addressed_dosen_id']
+                        ?? ($explicit->dosen_id ?: ($parent?->dosen_id ?: $parent?->reviewDosen()?->id ?: $ta->pembimbing_1_id)),
+                    'topik' => $parent?->topik ?? $explicit->topik,
+                    'progres_kendala' => $data['progres_kendala'] ?? null,
+                    'tanggal_pengiriman' => $data['tanggal_pengiriman'],
+                    'status' => $submit ? LogbookEntry::STATUS_SUBMITTED : LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+                    'submitted_at' => $submit ? now() : null,
+                ]);
+
+                if ($parent && ! $submit) {
+                    $parent->update(['status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS]);
+                }
+
+                return [$parent, $entry];
+            }
+
+            // Mahasiswa dapat membuat entri revisi tanpa harus ada logbook dulu.
+            // Jika parent dipilih, validasi & tautkan ke entri induk.
+            $parent = null;
+            $reuse = null;
+            if (! empty($data['parent_entry_id'])) {
+                $parent = $ta->entries()
+                    ->whereKey($data['parent_entry_id'])
+                    ->whereIn('status', [LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                // Pakai ulang draf wizard yang belum dikirim (langkah 2 "Lanjut
+                // ke anotasi" sudah membuat anak) agar submit akhir tidak
+                // menabrak deteksi anak-aktif. Baris anak dikunci agar
+                // double-submit tidak membuat duplikat.
+                $reuse = $parent->revisionChildren()
+                    ->where('mahasiswa_ta_id', $ta->id)
+                    ->where('status', LogbookEntry::STATUS_REVISION_IN_PROGRESS)
+                    ->whereNull('submitted_at')
+                    ->lockForUpdate()
+                    ->latest('id')
+                    ->first();
+
+                if ($reuse && ! $request->user()->can('update', $reuse)) {
+                    $reuse = null;
+                }
+
+                if (! $reuse && ($activeChild = $this->activeRevisionChild($parent))) {
+                    session()->flash('active_revision', $this->activeRevisionPayload($activeChild));
+                    throw ValidationException::withMessages([
+                        'parent_entry_id' => $this->activeRevisionMessage($parent, $activeChild),
+                    ]);
+                }
+
+                if (! $reuse && ($parent->revision_round ?? 0) + 1 > LogbookEntry::MAX_REVISION_ROUND) {
+                    throw ValidationException::withMessages([
+                        'parent_entry_id' => 'Entri ini sudah mencapai batas maksimal '.LogbookEntry::MAX_REVISION_ROUND.' sesi revisi.',
+                    ]);
+                }
+            }
+
+            // Nilai field sama untuk buat-baru maupun pakai-ulang draf.
+            $wants = [
                 'dosen_id' => $data['addressed_dosen_id']
                     ?? ($parent?->dosen_id ?: $parent?->reviewDosen()?->id ?: $ta->pembimbing_1_id),
                 'topik' => $parent?->topik,
@@ -232,7 +519,23 @@ class LogbookController extends Controller
                 'tanggal_pengiriman' => $data['tanggal_pengiriman'],
                 'status' => $submit ? LogbookEntry::STATUS_SUBMITTED : LogbookEntry::STATUS_REVISION_IN_PROGRESS,
                 'submitted_at' => $submit ? now() : null,
-            ]);
+            ];
+
+            if ($reuse) {
+                $reuse->update($wants);
+                $entry = $reuse;
+            } else {
+                // Buat entry dulu agar path unik bisa memakai id.
+                $entry = $ta->entries()->create($wants + [
+                    'parent_entry_id' => $parent?->id,
+                    'revision_round' => $parent ? ($parent->revision_round ?? 0) + 1 : null,
+                    'sesi_ke' => null, // revisi: sesi tidak dipakai (null agar unique index (mahasiswa_ta_id, sesi_ke) mengizinkan banyak revisi)
+                    'jenis' => LogbookEntry::JENIS_REVISI,
+                    // `dosen_id` = reviewer entri. Penerima revisi yang dipilih
+                    // mahasiswa (pembimbing ATAU dosen penguji) menjadi reviewer;
+                    // kosong = rantai entri induk / pembimbing 1.
+                ]);
+            }
 
             // Parent yang sedang dikerjakan revisinya ditandai "Revisi sedang dikerjakan".
             if ($parent && ! $submit) {
@@ -244,25 +547,45 @@ class LogbookController extends Controller
 
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $ta->storageChargeTarget();
-        $storeLampiranRevisi = function () use ($request, $entry, $data) {
+        // Alur anotasi-dulu: draf boleh disimpan tanpa tabel perbaikan agar
+        // mahasiswa bisa upload -> anotasi di PDF -> tarik otomatis ke tabel.
+        // Tabel tetap wajib lengkap saat kirim ke dosen (dijaga validasi).
+        $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+            ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
+            ->values()->all();
+        $storeLampiranRevisi = function () use ($request, $entry, $data, $riwayat) {
             $entry->update([
                 'lampiran_path' => $this->storeUniqueFile($request->file('lampiran'), 'lampiran', $entry->id),
                 'lampiran_original_name' => $request->file('lampiran')->getClientOriginalName(),
                 'lampiran_size' => $request->file('lampiran')->getSize(),
-                'riwayat_perbaikan' => $data['riwayat_perbaikan'],
+                'riwayat_perbaikan' => $riwayat ?: null,
             ]);
         };
 
-        if ($dosen && $request->hasFile('lampiran')) {
-            app(StorageUsageService::class)->withUploadLock($dosen, $request->file('lampiran')->getSize(), $storeLampiranRevisi);
+        if ($request->hasFile('lampiran')) {
+            if ($dosen) {
+                app(StorageUsageService::class)->withUploadLock($dosen, $request->file('lampiran')->getSize(), $storeLampiranRevisi);
+            } else {
+                $storeLampiranRevisi();
+            }
         } else {
-            $storeLampiranRevisi();
+            // Tanpa upload baru (mis. refresh wizard lalu kirim): pertahankan
+            // file draf yang ada, tetap simpan tabel perbaikan yang dikirim.
+            $entry->update(['riwayat_perbaikan' => $riwayat ?: null]);
         }
 
-        // Generate PDF catatan perbaikan otomatis dari tabel riwayat perbaikan.
-        $this->generateCatatanPerbaikanPdf($entry);
+        // Generate PDF catatan perbaikan otomatis dari tabel riwayat perbaikan
+        // (dilewati bila draf anotasi-dulu belum punya tabel).
+        if (! empty($entry->fresh()->riwayat_perbaikan)) {
+            $this->generateCatatanPerbaikanPdf($entry);
+        }
 
-        $commentIds = collect($data['addressed_comment_ids'] ?? [])->filter()->values();
+        // Komentar yang diberi status di langkah 1 dianggap dijawab mahasiswa.
+        $commentIds = collect($data['addressed_comment_status'] ?? [])
+            ->filter()
+            ->keys()
+            ->map(fn ($k) => (int) $k)
+            ->values();
         if ($submit && $parent && $commentIds->isNotEmpty()) {
             $parent->comments()
                 ->whereIn('id', $commentIds)
@@ -288,10 +611,15 @@ class LogbookController extends Controller
             );
         }
 
-        return redirect()->route('logbook.show', $entry)
-            ->with('success', $submit
-                ? 'Entri revisi dikirim ke '.$recipientLabel.'.'
-                : 'Entri revisi tersimpan sebagai draf.');
+        if ($submit) {
+            return redirect()->route('logbook.show', $entry)
+                ->with('success', 'Entri revisi dikirim ke '.$recipientLabel.'.');
+        }
+
+        // P4: draf mendarat di halaman Edit agar mahasiswa langsung lanjut
+        // langkah 2 (buka PDF & tandai) -> langkah 3 (isi otomatis) tanpa putus.
+        return redirect()->route('logbook.edit', $entry)
+            ->with('success', 'Draf tersimpan. Buka PDF & tandai perbaikan, lalu isi otomatis ke kartu.');
     }
 
     // ---------------------------------------------------------------- index
@@ -579,14 +907,31 @@ class LogbookController extends Controller
         $draftPdf = $logbook->lampiran_path ? Storage::disk('local')->path($logbook->lampiran_path) : null;
         $catatanPdf = $logbook->catatan_perbaikan_path ? Storage::disk('local')->path($logbook->catatan_perbaikan_path) : null;
 
-        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf'));
+        // Fitur keputusan review (template + pakai-ulang) disamakan dengan quick-review.
+        $templates = FeedbackTemplate::where('user_id', $request->user()->id)->get();
+        $lastFeedback = LogbookEntry::where('mahasiswa_ta_id', $logbook->mahasiswa_ta_id)
+            ->whereNotNull('feedback_dosen')
+            ->orderByDesc('id')
+            ->value('feedback_dosen');
+
+        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf', 'templates', 'lastFeedback'));
     }
 
     // ---------------------------------------------------------------- edit
 
-    public function edit(Request $request, LogbookEntry $logbook): View
+    public function edit(Request $request, LogbookEntry $logbook): View|RedirectResponse
     {
         $this->authorize('update', $logbook);
+
+        // Satu pintu editor: draf revisi dilanjutkan lewat wizard create-revisi
+        // (?draft_id=) agar layout & perilakunya sama; draf logbook biasa
+        // tetap memakai halaman edit.
+        if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
+            return redirect()->route('logbook.create-revisi', array_filter([
+                'draft_id' => $logbook->id,
+                'program' => $logbook->mahasiswaTa?->jenis,
+            ]));
+        }
 
         return view('logbook.edit', compact('logbook'));
     }
@@ -615,14 +960,21 @@ class LogbookController extends Controller
         }
 
         if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
+            // Alur anotasi-dulu: baris kosong tidak disimpan; catatan PDF hanya
+            // dibuat ulang bila tabel punya isi (submit menjaga kelengkapan).
+            $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+                ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
+                ->values()->all();
             $logbook->update([
                 'tanggal_pengiriman' => $data['tanggal_pengiriman'],
                 'progres_kendala' => $data['progres_kendala'] ?? null,
-                'riwayat_perbaikan' => $data['riwayat_perbaikan'],
+                'riwayat_perbaikan' => $riwayat ?: null,
             ]);
 
             // Generate ulang PDF catatan perbaikan dari tabel.
-            $this->generateCatatanPerbaikanPdf($logbook);
+            if (! empty($logbook->fresh()->riwayat_perbaikan)) {
+                $this->generateCatatanPerbaikanPdf($logbook);
+            }
         } else {
             $logbook->update([
                 'tanggal_bimbingan' => $data['tanggal_bimbingan'],
@@ -695,9 +1047,148 @@ class LogbookController extends Controller
             }
         }
 
+        $parent = $logbook->parentEntry;
         $logbook->delete();
 
+        // Bila ini revisi aktif terakhir milik induk, kembalikan induk yatim
+        // ke "revisi" agar tidak menggantung tanpa aksi (kasus entri #25).
+        $this->restoreStrandedParent($parent);
+
         return redirect()->route('logbook.index')->with('success', 'Entri logbook berhasil dihapus.');
+    }
+
+    /**
+     * Hapus massal entri logbook — hanya pemilik & hanya entri yang masih
+     * dapat diedit (isEditable: draf / revisi sedang dikerjakan yang belum
+     * dikirim). Entri yang tidak memenuhi syarat dilewati (tidak 403) agar
+     * satu pilihan yang kedaluwarsa tidak menggagalkan seluruh aksi.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['integer', 'distinct', 'exists:logbook_entries,id'],
+        ]);
+
+        $entries = LogbookEntry::whereIn('id', $validated['ids'])
+            ->with('mahasiswaTa')
+            ->withExists('revisionChildren')
+            ->get();
+
+        $user = $request->user();
+        $deleted = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($entries, $user, &$deleted, &$skipped) {
+            $parentIds = [];
+            foreach ($entries as $entry) {
+                if (! $user->can('delete', $entry) || ! $entry->isEditable()) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Lepas relasi anak revisi agar FK tidak menghalangi penghapusan.
+                $entry->revisionChildren()->update(['parent_entry_id' => null]);
+
+                // Hapus file dari penyimpanan lokal.
+                foreach (['lampiran_path', 'catatan_perbaikan_path'] as $field) {
+                    if ($entry->{$field}) {
+                        Storage::disk('local')->delete($entry->{$field});
+                    }
+                }
+
+                if ($entry->parent_entry_id) {
+                    $parentIds[] = $entry->parent_entry_id;
+                }
+                $entry->delete();
+                $deleted++;
+            }
+
+            // Kembalikan induk yatim ke "revisi" (lihat destroy()).
+            foreach (array_unique($parentIds) as $parentId) {
+                $this->restoreStrandedParent(LogbookEntry::find($parentId));
+            }
+        });
+
+        if ($deleted === 0) {
+            return back()->with('error', 'Tidak ada entri yang dihapus. Hanya draf / revisi sedang dikerjakan yang bisa dihapus.');
+        }
+
+        $message = $deleted.' entri berhasil dihapus.';
+        if ($skipped > 0) {
+            $message .= ' '.$skipped.' entri dilewati (sudah tidak bisa dihapus).';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Anak revisi aktif terbaru milik induk (draf / menunggu review / diminta
+     * revisi / sedang dikerjakan). Dipakai agar penolakan "revisi aktif" bisa
+     * menunjuk draf mana yang dimaksud, bukan sekadar pesan umum.
+     */
+    private function activeRevisionChild(LogbookEntry $parent): ?LogbookEntry
+    {
+        return $parent->revisionChildren()
+            ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Payload draf aktif untuk kotak aksi di halaman create-revisi
+     * (link "Lanjutkan draf" + info status/tanggal).
+     */
+    private function activeRevisionPayload(LogbookEntry $child): array
+    {
+        return [
+            'id' => $child->id,
+            'parent_id' => $child->parent_entry_id,
+            'status' => $child->status,
+            'status_label' => LogbookEntry::STATUS_LABELS[$child->status] ?? $child->status,
+            'tanggal' => $child->tanggal_tampil?->format('d M Y') ?? '—',
+            'edit_url' => route('logbook.edit', $child),
+            'editable' => $child->isEditable(),
+        ];
+    }
+
+    /**
+     * Pesan penolakan yang menyebut draf aktifnya (id + status) agar
+     * mahasiswa tahu harus melanjutkan draf mana.
+     */
+    private function activeRevisionMessage(LogbookEntry $parent, ?LogbookEntry $activeChild = null): string
+    {
+        $activeChild ??= $this->activeRevisionChild($parent);
+
+        if (! $activeChild) {
+            return 'Entri induk sudah memiliki revisi aktif. Pilih entri induk lain.';
+        }
+
+        $label = LogbookEntry::STATUS_LABELS[$activeChild->status] ?? $activeChild->status;
+
+        return 'Entri induk sudah memiliki revisi aktif (draf #'.$activeChild->id.', '.$label.'). Lanjutkan draf tersebut, bukan membuat baru.';
+    }
+
+    /**
+     * Kembalikan induk yatim ke "Revisi Diminta" bila revisi aktif terakhirnya
+     * dihapus: induk revision_in_progress tanpa anak aktif dan tidak editable
+     * tidak bisa diapa-apakan (mati permanen). Tanpa suara (tanpa notifikasi).
+     */
+    private function restoreStrandedParent(?LogbookEntry $parent): void
+    {
+        $parent = $parent?->fresh();
+        if (! $parent || $parent->status !== LogbookEntry::STATUS_REVISION_IN_PROGRESS) {
+            return;
+        }
+        if ($parent->isEditable()) {
+            return;
+        }
+        $hasActive = $parent->revisionChildren()
+            ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+            ->exists();
+        if (! $hasActive) {
+            $parent->update(['status' => LogbookEntry::STATUS_REVISI]);
+        }
     }
 
     /**
@@ -782,6 +1273,14 @@ class LogbookController extends Controller
     public function submit(LogbookEntry $logbook): RedirectResponse
     {
         $this->authorize('submit', $logbook);
+
+        // Alur anotasi-dulu: revisi yang drafnya kosong belum boleh dikirim;
+        // tabel harus diisi dulu (manual atau tarik dari anotasi di halaman Edit).
+        if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
+            if ($logbook->completePerbaikanRows()->isEmpty()) {
+                return back()->with('error', 'Lengkapi tabel perbaikan terlebih dahulu (Isi otomatis dari anotasi di halaman Edit, lalu lengkapi kartu bertanda Perlu dilengkapi) sebelum mengirim ke dosen.');
+            }
+        }
 
         // Hanya program aktif yang bisa submit.
         abort_unless(in_array($logbook->mahasiswaTa?->status_ta, [MahasiswaTa::STATUS_AKTIF, MahasiswaTa::STATUS_PENDING_APPROVAL], true), 403, 'Program belum aktif atau ditolak.');
@@ -1239,7 +1738,14 @@ class LogbookController extends Controller
         }
         $logbook->load('comments.user');
 
-        return view('logbook.pdf-viewer', compact('logbook'));
+        // Edge non-PDF: institusi bisa mengizinkan doc/docx — viewer hanya untuk PDF.
+        // Beri tahu view agar menampilkan unduhan, bukan kanvas kosong.
+        $draftName = (string) ($logbook->lampiran_original_name ?? '');
+        $catatanName = (string) ($logbook->catatan_original_name ?? '');
+        $isDraftPdf = ! $logbook->lampiran_path || str_ends_with(strtolower($draftName), '.pdf');
+        $isCatatanPdf = ! $logbook->catatan_perbaikan_path || str_ends_with(strtolower($catatanName), '.pdf');
+
+        return view('logbook.pdf-viewer', compact('logbook', 'isDraftPdf', 'isCatatanPdf'));
     }
 
     public function comments(Request $request, LogbookEntry $logbook): JsonResponse
@@ -1367,6 +1873,126 @@ class LogbookController extends Controller
             'resolution_status' => $comment->resolution_status,
             'created_at' => $comment->created_at,
         ], 201);
+    }
+
+    /**
+     * Tarik anotasi mahasiswa pada PDF entri ini menjadi isian field perbaikan.
+     * Alur anotasi-dulu: mahasiswa upload file -> buat anotasi perbaikan di PDF
+     * -> tarik otomatis menjadi isian tanpa tulis manual.
+     * - Entri revisi: anotasi menjadi baris tabel riwayat_perbaikan.
+     * - Entri logbook: anotasi menjadi ringkasan progres_kendala.
+     * Hanya pemilik yang masih bisa edit; isian lama dipertahankan dan
+     * anotasi hanya menambah yang baru. Idempoten: anotasi yang sudah
+     * tertarik (ada penanda di payload) tidak ditarik ulang.
+     */
+    public function pullAnnotations(Request $request, LogbookEntry $logbook): JsonResponse
+    {
+        $this->authorize('update', $logbook);
+
+        $ownerId = $logbook->mahasiswaTa?->user_id;
+        $comments = $logbook->comments()
+            ->where('file_type', PdfComment::FILE_TYPE_DRAFT)
+            ->where('user_id', $ownerId)
+            ->where('resolution_status', '!=', PdfComment::STATUS_RESOLVED)
+            ->orderBy('page_number')->orderBy('id')
+            ->get();
+
+        $pulled = 0;
+        $skippedResolved = 0;
+        $skippedEmpty = 0;
+
+        if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
+            $rows = collect($logbook->riwayat_perbaikan ?? [])->map(fn ($row) => is_array($row) ? $row : [])->values()->all();
+
+            foreach ($comments as $comment) {
+                $payload = is_array($comment->payload) ? $comment->payload : [];
+                if (! empty($payload['pulled_to_riwayat'])) {
+                    continue;
+                }
+                if (! filled($comment->comment)) {
+                    $payload['pulled_to_riwayat'] = true;
+                    $payload['pulled_empty'] = true;
+                    $comment->payload = $payload;
+                    $comment->save();
+                    $skippedEmpty++;
+                    continue;
+                }
+                $existing = null;
+                foreach ($rows as $i => $row) {
+                    $empty = ! filled($row['halaman'] ?? null) && ! filled($row['komentar_dosen'] ?? null) && ! filled($row['perbaikan'] ?? null);
+                    if ($empty) {
+                        $existing = $i;
+                        break;
+                    }
+                }
+                $newRow = [
+                    'halaman' => 'Hal. '.($comment->page_number ?: '—'),
+                    'komentar_dosen' => '',
+                    'perbaikan' => (string) $comment->comment,
+                    'status' => LogbookEntry::PERBAIKAN_DRAF,
+                ];
+                if ($existing === null) {
+                    $rows[] = $newRow;
+                } else {
+                    $rows[$existing] = array_merge($newRow, ['status' => $rows[$existing]['status'] ?? LogbookEntry::PERBAIKAN_DRAF]);
+                }
+                $payload['pulled_to_riwayat'] = true;
+                $comment->payload = $payload;
+                $comment->save();
+                $pulled++;
+            }
+
+            if ($pulled > 0) {
+                $logbook->update(['riwayat_perbaikan' => array_values($rows)]);
+                $this->generateCatatanPerbaikanPdf($logbook);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'pulled' => $pulled,
+                'skipped_resolved' => $skippedResolved,
+                'skipped_empty' => $skippedEmpty,
+                'rows' => array_values($logbook->fresh()->riwayat_perbaikan ?? []),
+            ]);
+        }
+
+        // Entri logbook: anotasi menjadi ringkasan perbaikan (satu poin per baris).
+        $lines = collect(preg_split('/\R/u', (string) $logbook->progres_kendala))
+            ->map(fn ($line) => trim((string) $line))->filter()->values()->all();
+        foreach ($comments as $comment) {
+            $payload = is_array($comment->payload) ? $comment->payload : [];
+            if (! empty($payload['pulled_to_riwayat'])) {
+                continue;
+            }
+            if (! filled($comment->comment)) {
+                $payload['pulled_to_riwayat'] = true;
+                $payload['pulled_empty'] = true;
+                $comment->payload = $payload;
+                $comment->save();
+                $skippedEmpty++;
+                continue;
+            }
+            $text = '- Hal. '.($comment->page_number ?: '—').': '.trim((string) $comment->comment);
+            if (! in_array($text, $lines, true)) {
+                $lines[] = $text;
+            }
+            $payload['pulled_to_riwayat'] = true;
+            $comment->payload = $payload;
+            $comment->save();
+            $pulled++;
+        }
+        if ($pulled > 0) {
+            $logbook->update(['progres_kendala' => implode("
+", $lines)]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'pulled' => $pulled,
+            'skipped_resolved' => $skippedResolved,
+            'skipped_empty' => $skippedEmpty,
+            'summary' => (string) $logbook->fresh()->progres_kendala,
+        ]);
     }
 
     /** Resolve current and parent annotations when a review is approved. */

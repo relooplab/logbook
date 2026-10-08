@@ -19,10 +19,11 @@
         @method('PUT')
         @if ($isRevisi)
             <div>
-                <label class="block text-xs text-text-secondary mb-1" for="tanggal_pengiriman">Tanggal Pengiriman Revisi</label>
+                <label class="block text-xs text-text-secondary mb-1" for="tanggal_pengiriman">Tanggal revisi</label>
                 <input type="date" name="tanggal_pengiriman" id="tanggal_pengiriman" required
                     value="{{ old('tanggal_pengiriman', $logbook->tanggal_pengiriman?->format('Y-m-d') ?? now()->format('Y-m-d')) }}"
                     class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40">
+                <p class="text-[11px] text-text-secondary mt-1">Dihitung sejak draf dibuat; dapat diubah sebelum dikirim ke dosen.</p>
                 @error('tanggal_pengiriman')
                     <p class="text-status-danger text-xs mt-1">{{ $message }}</p>
                 @enderror
@@ -50,18 +51,26 @@
         @if ($isRevisi)
             {{-- ===== Catatan Perbaikan (tabel terstruktur) ===== --}}
             <div>
-                <div class="flex items-center justify-between mb-2">
-                    <label class="block text-sm font-medium">Catatan Perbaikan</label>
-                    <button type="button" id="tambah-baris" class="px-3 py-1.5 rounded-xl bg-brand hover:bg-brand-hover text-[#0b1420] text-xs font-semibold">+ Tambah Baris</button>
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <label class="block text-sm font-medium">Catatan Perbaikan <span class="font-normal text-text-secondary">(urutan: Halaman → Komentar → Perbaikan → Status)</span></label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if ($logbook->lampiran_path)
+                            <a href="{{ route('logbook.pdf-viewer', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-brand/40 bg-brand/10 text-brand text-xs font-semibold hover:bg-brand/20">Buka PDF &amp; Anotasi</a>
+                        @endif
+                        <button type="button" id="tarik-anotasi" data-url="{{ route('logbook.annotations.pull', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-border text-xs font-semibold hover:bg-bg-hover disabled:opacity-50 min-h-11">Isi otomatis dari anotasi <span data-isi-count></span></button>
+                        <button type="button" id="tambah-baris" class="px-3 py-1.5 rounded-xl border border-border bg-bg-panel text-xs font-medium hover:bg-bg-hover min-h-11">+ Tambah Baris</button>
+                    </div>
                 </div>
-                <p class="text-xs text-text-secondary mb-2">PDF catatan perbaikan dibuat otomatis oleh sistem dari tabel ini.</p>
+                <p class="text-xs text-text-secondary mb-2">1. Buka PDF &amp; tandai perbaikan → 2. klik Isi otomatis → 3. lengkapi baris yang kosong. PDF catatan perbaikan dibuat otomatis oleh sistem dari tabel ini.</p>
+                <p id="tarik-anotasi-msg" class="hidden text-xs mb-2" role="status" aria-live="polite"></p>
+                <p class="text-[11px] text-text-secondary">Menarik anotasi hanya menambah yang baru — isian yang sudah ada tidak ditimpa. Baris kosong diabaikan saat disimpan.</p>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm border border-border" id="tabel-perbaikan">
                         <thead>
                             <tr class="bg-bg-panel text-left text-text-secondary">
-                                <th class="py-2 px-2 border-b border-border w-[15%]">Halaman/Bagian</th>
-                                <th class="py-2 px-2 border-b border-border w-[25%]">Komentar Dosen</th>
-                                <th class="py-2 px-2 border-b border-border w-[30%]">Perbaikan yang Dilakukan</th>
+                                <th class="py-2 px-2 border-b border-border w-[30%]">Komentar Dosen</th>
+                                <th class="py-2 px-2 border-b border-border w-[110px]">Halaman</th>
+                                <th class="py-2 px-2 border-b border-border">Perbaikan yang Dilakukan</th>
                                 <th class="py-2 px-2 border-b border-border w-[15%]">Status</th>
                                 <th class="py-2 px-2 border-b border-border w-[8%]"></th>
                             </tr>
@@ -69,9 +78,9 @@
                         <tbody>
                             @forelse ($riwayat as $i => $row)
                                 <tr class="border-b border-border">
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][halaman]" value="{{ $row['halaman'] ?? '' }}" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][komentar_dosen]" value="{{ $row['komentar_dosen'] ?? '' }}" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][perbaikan]" value="{{ $row['perbaikan'] ?? '' }}" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][komentar_dosen]" value="{{ $row['komentar_dosen'] ?? '' }}" placeholder="mis. Jelaskan dasar pemilihan metode" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][halaman]" value="{{ $row['halaman'] ?? '' }}" placeholder="mis. Hal. 5" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[{{ $i }}][perbaikan]" value="{{ $row['perbaikan'] ?? '' }}" placeholder="mis. Menambah penjelasan di Hal. 5" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
                                     <td class="py-1.5 px-1">
                                         <select name="riwayat_perbaikan[{{ $i }}][status]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm">
                                             <option value="">—</option>
@@ -84,9 +93,9 @@
                                 </tr>
                             @empty
                                 <tr class="border-b border-border">
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][halaman]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][komentar_dosen]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
-                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][perbaikan]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][komentar_dosen]" placeholder="mis. Jelaskan dasar pemilihan metode" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][halaman]" placeholder="mis. Hal. 5" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
+                                    <td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][perbaikan]" placeholder="mis. Menambah penjelasan di Hal. 5" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>
                                     <td class="py-1.5 px-1">
                                         <select name="riwayat_perbaikan[0][status]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm">
                                             <option value="">—</option>
@@ -124,6 +133,14 @@
             @enderror
         </div>
 
+        @if (! $isRevisi && $logbook->lampiran_path)
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{{ route('logbook.pdf-viewer', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-brand/40 bg-brand/10 text-brand text-xs font-semibold hover:bg-brand/20">Buka PDF &amp; Anotasi</a>
+                <button type="button" id="tarik-anotasi" data-url="{{ route('logbook.annotations.pull', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-border text-xs font-semibold hover:bg-bg-hover disabled:opacity-50">Tarik dari Anotasi</button>
+            </div>
+            <p id="tarik-anotasi-msg" class="hidden text-xs" role="status"></p>
+            <p class="text-xs text-text-secondary">Upload lampiran, tandai perbaikan lewat anotasi PDF, lalu tarik otomatis ke ringkasan di bawah tanpa tulis manual.</p>
+        @endif
         {{-- Lampiran draft --}} <div> <label class="block text-sm font-medium mb-1">Lampiran Draft
                 ({{ $typesLabel }})</label>
             @if ($logbook->lampiran_path)
@@ -141,11 +158,8 @@
                             class="px-2 py-1 rounded-xl bg-brand hover:bg-brand-hover text-[#0b1420] text-xs cursor-pointer">
                             Ganti <input type="file" name="lampiran" accept="{{ $accept }}" class="hidden">
                         </label>
-                        <form method="POST" action="{{ route("logbook.remove-lampiran", $logbook) }}"
-                            onsubmit="return confirm('Hapus lampiran ini? File tidak bisa dikembalikan.')"> @csrf
-                            @method("DELETE") <button
-                                class="px-2 py-1 rounded-xl bg-status-danger hover:bg-status-danger/90 text-white text-xs">Hapus</button>
-                        </form>
+                        <button type="submit" form="form-hapus-lampiran"
+                            class="px-2 py-1 rounded-xl bg-status-danger hover:bg-status-danger/90 text-white text-xs">Hapus</button>
                     </div>
                 </div>
             @else
@@ -163,6 +177,15 @@
         <a href="{{ route('logbook.show', $logbook) }}" class="px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20">Batal</a>
     </div>
 </form>
+{{-- Form hapus lampiran WAJIB di luar form utama (nested <form> membuat
+    browser menutup form utama lebih awal sehingga tombol Simpan mati). --}}
+@if ($logbook->lampiran_path)
+    <form id="form-hapus-lampiran" method="POST" action="{{ route('logbook.remove-lampiran', $logbook) }}"
+        onsubmit="return confirm('Hapus lampiran ini? File tidak bisa dikembalikan.')">
+        @csrf
+        @method('DELETE')
+    </form>
+@endif
 </div>
 @endsection @section("scripts")
 <script>
@@ -195,9 +218,9 @@
         var tr = document.createElement('tr');
         tr.className = 'border-b border-border';
         tr.innerHTML =
-            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][halaman]" value="' + (data.halaman || '') + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
-            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][komentar_dosen]" value="' + (data.komentar_dosen || '') + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
-            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][perbaikan]" value="' + (data.perbaikan || '') + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
+            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][komentar_dosen]" value="' + escapeHtml(data.komentar_dosen) + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
+            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][halaman]" value="' + escapeHtml(data.halaman) + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
+            '<td class="py-1.5 px-1"><input type="text" name="riwayat_perbaikan[0][perbaikan]" value="' + escapeHtml(data.perbaikan) + '" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"></td>' +
             '<td class="py-1.5 px-1"><select name="riwayat_perbaikan[0][status]" class="w-full rounded border border-border bg-bg-surface px-2 py-1.5 text-sm"><option value="">—</option>' + statusOptions.map(function (s) { return '<option value="' + s + '"' + (data.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td>' +
             '<td class="py-1.5 px-1 text-center"><button type="button" class="hapus-baris text-status-danger hover:underline text-xs">Hapus</button></td>';
         tbody.appendChild(tr);
@@ -206,13 +229,60 @@
 
     if (tambahBtn) tambahBtn.addEventListener('click', function () { addRow(); });
 
+    // Tarik anotasi PDF milik mahasiswa menjadi baris tabel (tanpa isi manual).
+    var tarikBtn = document.getElementById('tarik-anotasi');
+    var tarikMsg = document.getElementById('tarik-anotasi-msg');
+    function showTarikMsg(text, ok) {
+        if (!tarikMsg) return;
+        tarikMsg.classList.remove('hidden');
+        tarikMsg.className = 'text-xs mb-2 ' + (ok ? 'text-status-success' : 'text-status-danger');
+        tarikMsg.textContent = text;
+    }
+    function escapeHtml(v) {
+        return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    if (tarikBtn && (tbody || !isRevisi)) tarikBtn.addEventListener('click', function () {
+        tarikBtn.disabled = true;
+        fetch(tarikBtn.dataset.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value, 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
+            .then(function (out) {
+                if (!out.ok) throw new Error((out.d && out.d.message) || 'Gagal');
+                if (!isRevisi) {
+                    var summary = (out.d && out.d.summary) || '';
+                    var ringkasan = document.getElementById('progres_kendala');
+                    if (ringkasan && summary) ringkasan.value = summary;
+                    var skipN = out.d.skipped_empty || 0;
+                    var skipT = skipN > 0 ? ' ' + skipN + ' anotasi kosong dilewati.' : '';
+showTarikMsg(out.d.pulled > 0 ? out.d.pulled + ' perbaikan terisi otomatis ke ringkasan.' + skipT : 'Belum ada anotasi baru — tandai dulu di PDF, lalu klik lagi.' + skipT, true);
+                    return;
+                }
+                var rows = (out.d && out.d.rows) || [];
+                tbody.innerHTML = '';
+                if (!rows.length) addRow();
+                rows.forEach(function (r) { addRow({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', perbaikan: r.perbaikan || '', status: r.status || '' }); });
+                var countEl = tarikBtn.querySelector('[data-isi-count]');
+                if (countEl && out.d.pulled > 0) countEl.textContent = '(' + out.d.pulled + ')';
+                var skipM = out.d.skipped_empty || 0;
+                var skipU = skipM > 0 ? ' ' + skipM + ' anotasi kosong dilewati.' : '';
+                var msg = out.d.pulled > 0
+                    ? out.d.pulled + ' perbaikan terisi otomatis. Lengkapi kolom Komentar Dosen yang bertanda.' + skipU
+                    : 'Belum ada anotasi — tandai dulu di PDF, lalu klik lagi.' + skipU;
+                showTarikMsg(msg, true);
+            })
+            .catch(function () { showTarikMsg('Gagal menarik anotasi. Coba lagi.', false); })
+            .finally(function () { tarikBtn.disabled = false; });
+    });
+
     if (tbody) tbody.addEventListener('click', function (e) {
         if (e.target.classList.contains('hapus-baris')) {
             var tr = e.target.closest('tr');
-            if (tbody.querySelectorAll('tr').length > 1) {
-                tr.remove();
-                reindex();
+            if (tbody.querySelectorAll('tr').length <= 1) {
+                showTarikMsg('Minimal 1 baris perbaikan harus ada.', false);
+                return;
             }
+            if (!confirm('Hapus baris perbaikan ini? Tindakan tidak dapat dibatalkan.')) return;
+            tr.remove();
+            reindex();
         }
     });
 

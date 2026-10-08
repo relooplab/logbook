@@ -145,6 +145,8 @@ h1, h2, h3, .font-heading {
 .badge-danger  { background: rgba(var(--status-danger) / 0.14); color: rgb(var(--status-danger)); }
 .badge-info    { background: rgba(var(--status-info) / 0.14); color: rgb(var(--status-info)); }
 .badge-neutral { background: rgba(var(--text-secondary) / 0.14); color: rgb(var(--text-secondary)); }
+.badge-draft { background: transparent; color: rgb(var(--text-secondary)); border: 1px dashed rgb(var(--border)); }
+.badge-draft::before { border-radius: 2px; width: 6px; height: 6px; }
 
 /* ---------- Tombol hierarchy ---------- */
 .btn-primary {

@@ -39,7 +39,11 @@ class LogbookEntry extends Model
 
     public const PERBAIKAN_BELUM = 'Belum';
 
-    public const PERBAIKAN_STATUSES = [self::PERBAIKAN_SUDAH, self::PERBAIKAN_SEBAGIAN, self::PERBAIKAN_BELUM];
+    public const PERBAIKAN_DRAF = 'Draf';
+
+    public const PERBAIKAN_STATUSES = [self::PERBAIKAN_SUDAH, self::PERBAIKAN_SEBAGIAN, self::PERBAIKAN_BELUM, self::PERBAIKAN_DRAF];
+
+    public const PERBAIKAN_DRAF_LABEL = 'Draf (dari anotasi, perlu dilengkapi)';
 
     public const MAX_REVISION_ROUND = 3;
 
@@ -210,8 +214,10 @@ class LogbookEntry extends Model
      */
     public function getTanggalTampilAttribute(): ?Carbon
     {
+        // toDate() mengembalikan CarbonDateTime (bukan Carbon) sehingga
+        // melanggar return type — pakai copy()->startOfDay() yang setipe.
         return $this->jenis === self::JENIS_REVISI
-            ? ($this->tanggal_pengiriman ?? $this->submitted_at?->toDate())
+            ? ($this->tanggal_pengiriman ?? $this->submitted_at?->copy()->startOfDay())
             : $this->tanggal_bimbingan;
     }
 
@@ -319,6 +325,33 @@ class LogbookEntry extends Model
                 }
             }
         }
+    }
+
+    /**
+     * Satu definisi "baris perbaikan lengkap": halaman + komentar dosen +
+     * perbaikan + status terisi, dan status bukan Draf (hasil isi-otomatis
+     * yang belum dilengkapi). Dipakai submit(), badge progres, dan gate UI
+     * agar tidak ada tiga definisi berbeda.
+     */
+    public static function isPerbaikanRowComplete(mixed $row): bool
+    {
+        $row = is_array($row) ? $row : [];
+
+        return filled($row['halaman'] ?? null)
+            && filled($row['komentar_dosen'] ?? null)
+            && filled($row['perbaikan'] ?? null)
+            && filled($row['status'] ?? null)
+            && ($row['status'] ?? null) !== self::PERBAIKAN_DRAF;
+    }
+
+    public function completePerbaikanRows(): \Illuminate\Support\Collection
+    {
+        return collect($this->riwayat_perbaikan ?? [])->filter(fn ($row) => self::isPerbaikanRowComplete($row));
+    }
+
+    public function incompletePerbaikanCount(): int
+    {
+        return collect($this->riwayat_perbaikan ?? [])->count() - $this->completePerbaikanRows()->count();
     }
 
     /** Isi notifikasi pengiriman entri, termasuk identitas mahasiswa pemilik program. */

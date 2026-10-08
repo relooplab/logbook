@@ -28,12 +28,14 @@ class UpdateLogbookEntryRequest extends FormRequest
         $rules = ['progres_kendala' => ['nullable', 'string', 'max:500']];
 
         if ($isRevisi) {
+            // Alur anotasi-dulu: edit boleh menyimpan tabel kosong; tabel wajib
+            // lengkap hanya saat kirim ke dosen (dijaga submit()).
             $rules['tanggal_pengiriman'] = ['required', 'date', 'before_or_equal:today'];
-            $rules['riwayat_perbaikan'] = ['required', 'array', 'min:1'];
-            $rules['riwayat_perbaikan.*.halaman'] = ['required', 'string', 'max:255'];
-            $rules['riwayat_perbaikan.*.komentar_dosen'] = ['required', 'string', 'max:1000'];
-            $rules['riwayat_perbaikan.*.perbaikan'] = ['required', 'string', 'max:2000'];
-            $rules['riwayat_perbaikan.*.status'] = ['required', 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)];
+            $rules['riwayat_perbaikan'] = ['nullable', 'array'];
+            $rules['riwayat_perbaikan.*.halaman'] = ['nullable', 'string', 'max:255'];
+            $rules['riwayat_perbaikan.*.komentar_dosen'] = ['nullable', 'string', 'max:1000'];
+            $rules['riwayat_perbaikan.*.perbaikan'] = ['nullable', 'string', 'max:2000'];
+            $rules['riwayat_perbaikan.*.status'] = ['nullable', 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)];
         } else {
             $rules['tanggal_bimbingan'] = ['required', 'date', 'before_or_equal:today'];
             $rules['topik'] = ['required', 'string', 'max:255'];

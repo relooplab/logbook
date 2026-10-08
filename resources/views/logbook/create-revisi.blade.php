@@ -11,33 +11,47 @@
     $typesLabel = strtoupper(implode(', ', $allowedTypes));
     $fileHint = $typesLabel . ' • Maks. ' . $maxMb . ' MB';
     $statusOptions = \App\Models\LogbookEntry::PERBAIKAN_STATUSES;
+    $statusOptions3 = array_values(array_filter($statusOptions, fn ($s) => $s !== \App\Models\LogbookEntry::PERBAIKAN_DRAF));
     $oldRiwayat = old("riwayat_perbaikan", []);
     $initialRows = $oldRiwayat;
+    if (!$initialRows && !empty($draft?->riwayat_perbaikan)) {
+        $initialRows = $draft->riwayat_perbaikan;
+    }
     if (!$initialRows && $parentComments->isNotEmpty()) {
         $initialRows = $parentComments->map(fn ($c) => [
+            'id' => $c->id,
             'halaman' => 'Hal. '.$c->page_number,
             'komentar_dosen' => $c->comment,
             'perbaikan' => $c->reply,
-            'status' => $statusOptions[0] ?? null,
+            'status' => old("addressed_comment_status.{$c->id}", ''),
         ])->toArray();
     }
+    // Opsi komentar dosen: HANYA milik induk terpilih (mandiri = kosong,
+    // tinggal tulis manual). Opsi lintas induk menyesatkan status prefill.
+    $commentOptions = $parentComments
+        ->where('resolution_status', '!=', \App\Models\PdfComment::STATUS_RESOLVED)
+        ->map(fn ($c) => [
+            'id' => $c->id,
+            'text' => $c->comment,
+            'label' => 'Hal. '.($c->page_number ?: '—').': '.\Illuminate\Support\Str::limit($c->comment, 70),
+        ])->values()->all();
 
     // Langkah yang perlu dibuka ulang saat validasi gagal (kesalahan tetap terlihat).
     $riwayatErrors = collect($errors->getMessages())
         ->filter(fn ($messages, $key) => str_starts_with($key, 'riwayat_perbaikan'))
         ->flatten();
     $errorStep = 1;
-    if ($riwayatErrors->isNotEmpty()) {
+    if ($errors->has('lampiran') || $errors->has('tanggal_pengiriman')) {
         $errorStep = 2;
     }
-    if ($errors->has('lampiran') || $errors->has('tanggal_pengiriman') || $errors->has('progres_kendala')) {
+    if ($riwayatErrors->isNotEmpty() || $errors->has('progres_kendala')) {
         $errorStep = 3;
     }
 
     $steps = [
         1 => ['Pilih Umpan Balik', 'forum', 'Pilih umpan balik yang dijawab'],
-        2 => ['Isi Perbaikan', 'build', 'Isi kartu perbaikan'],
-        3 => ['Upload File', 'upload_file', 'Unggah file revisi'],
+        2 => ['Upload File', 'upload_file', 'Unggah file revisi'],
+        3 => ['Hasil Penandaan', 'build', 'Hasil anotasi PDF jadi kartu otomatis'],
         4 => ['Review & Kirim', 'send', 'Periksa ringkasan dan kirim'],
     ];
     // Baris kartu perbaikan: hasil old()/prefill komentar, atau satu kartu kosong.
@@ -56,6 +70,9 @@
     @if ($ta)
         <p class="mb-4 -mt-3 text-sm text-text-secondary">Program:
             <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-brand/10 text-brand">{{ $ta->jenisLabel() }}</span>
+            @if ($draft)
+                <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-status-pending/10 text-status-pending">Melanjutkan draf #{{ $draft->id }}</span>
+            @endif
         </p>
     @endif
 
@@ -90,6 +107,9 @@
         @csrf
 
         <input type="hidden" name="program" value="{{ $ta?->jenis }}">
+        @if ($draft)
+            <input type="hidden" name="draft_id" value="{{ $draft->id }}">
+        @endif
 
         <div class="form-workspace-column">
             {{-- ===== STEP 1: Pilih Umpan Balik ===== --}}
@@ -112,7 +132,7 @@
                             @foreach ($parents as $parent)
                                 <option value="{{ $parent->id }}" data-dosen-id="{{ $parent->dosen_id }}"
                                     @selected(old('parent_entry_id', $selectedParentId) == $parent->id)>
-                                    Entri #{{ $parent->id }} · {{ $parent->revision_round ? "Revisi ke-{$parent->revision_round}" : 'Logbook' }} · {{ $parent->reviewed_at?->format('d M Y') }}
+                                    #{{ $parent->id }} · {{ $parent->jenis === 'revisi' ? ($parent->revision_round ? "Revisi ke-{$parent->revision_round}" : 'Revisi') : ('Logbook'.($parent->sesi_ke ? ' sesi '.$parent->sesi_ke : '')) }} · {{ \Illuminate\Support\Str::limit($parent->topik ?: 'Tanpa topik', 50) }} · {{ $parent->tanggal_tampil?->format('d M Y') ?? '—' }} · {{ \App\Models\LogbookEntry::STATUS_LABELS[$parent->status] ?? $parent->status }}
                                 </option>
                             @endforeach
                         </select>
@@ -120,6 +140,23 @@
                         @error('parent_entry_id')
                             <p class="form-field-error">{{ $message }}</p>
                         @enderror
+                        @if (! empty($activeRevision))
+                            <div class="mt-3 rounded-xl border border-status-pending/40 bg-status-pending/10 p-3" role="alert">
+                                <p class="text-sm font-medium text-text-primary">Induk ini sudah punya revisi aktif: draf #{{ $activeRevision['id'] }} ({{ $activeRevision['status_label'] }}, {{ $activeRevision['tanggal'] }}).</p>
+                                @if ($activeRevision['editable'])
+                                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                                        <a href="{{ $activeRevision['edit_url'] }}" class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">Lanjutkan draf #{{ $activeRevision['id'] }}</a>
+                                        <form method="POST" action="{{ route('logbook.destroy', $activeRevision['id']) }}" onsubmit="return confirm('Hapus draf #{{ $activeRevision['id'] }}? File draf ikut terhapus.')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn-ghost px-4 py-2 text-sm font-medium text-status-danger">Hapus draf</button>
+                                        </form>
+                                    </div>
+                                @else
+                                    <p class="mt-1 text-xs text-text-secondary">Draf sudah dikirim dan menunggu review dosen — selesaikan/review dulu sebelum membuat revisi baru dari induk yang sama.</p>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -141,20 +178,30 @@
 
                 {{-- Feedback & komentar parent --}}
                 @foreach ($parents as $parent)
-                    @php $openComments = $parent->comments->where('resolution_status', '!=', \App\Models\PdfComment::STATUS_RESOLVED); @endphp
+                    @php
+                        $openComments = $parent->comments->where('resolution_status', '!=', \App\Models\PdfComment::STATUS_RESOLVED);
+                        $commentPayload = $openComments->map(fn ($c) => ['id' => $c->id, 'page_number' => $c->page_number, 'comment' => $c->comment, 'reply' => $c->reply])->values()->all();
+                    @endphp
                     <div data-parent-feedback="{{ $parent->id }}"
-                        data-comments='@json($openComments->map(fn ($c) => ['page_number' => $c->page_number, 'comment' => $c->comment, 'reply' => $c->reply])->values())'
+                        data-comments='@json($commentPayload)'
                         class="mt-4 hidden space-y-2 rounded-xl border border-border bg-bg-panel p-3">
                         <p class="text-xs font-semibold text-text-secondary">Umpan Balik entri #{{ $parent->id }}</p>
                         <p class="text-sm whitespace-pre-wrap">{{ $parent->feedback_dosen ?: "Tidak ada feedback teks." }}</p>
                         @if ($openComments->isNotEmpty())
-                            <p class="pt-1 text-xs font-semibold text-text-secondary">Komentar PDF yang belum diselesaikan:</p>
+                            <p class="pt-1 text-xs font-semibold text-text-secondary">Beri status tiap komentar yang dijawab (kosongkan bila dilewati):</p>
                             @foreach ($openComments as $comment)
-                                <label class="flex items-start gap-2 text-xs">
-                                    <input type="checkbox" name="addressed_comment_ids[]" value="{{ $comment->id }}"
-                                        @checked(in_array($comment->id, old("addressed_comment_ids", []))) class="mt-0.5">
-                                    <span>Hal. {{ $comment->page_number ?: '—' }}: {{ $comment->comment }}</span>
-                                </label>
+                                <div class="rounded-lg bg-bg-surface p-2">
+                                    <p class="text-xs">Hal. {{ $comment->page_number ?: '—' }}: {{ $comment->comment }}</p>
+                                    <div class="mt-1.5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Status komentar Hal. {{ $comment->page_number ?: '—' }}">
+                                        @foreach (['Sudah', 'Sebagian', 'Belum'] as $s)
+                                            <label class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-bg-hover has-checked:border-brand has-checked:bg-brand/10">
+                                                <input type="radio" name="addressed_comment_status[{{ $comment->id }}]" value="{{ $s }}"
+                                                    @checked(old("addressed_comment_status.{$comment->id}") === $s) class="accent-brand">
+                                                {{ $s }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </div>
                             @endforeach
                         @endif
                     </div>
@@ -162,6 +209,7 @@
 
                 <div class="form-actions">
                     <div class="form-actions-end">
+                        <p id="step1-hint" class="hidden w-full text-right text-xs text-status-danger" role="alert">Pilih umpan balik dan penerima revisi untuk melanjutkan.</p>
                         <button type="button" class="wizard-next btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
                             Lanjut
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
@@ -170,16 +218,108 @@
                 </div>
             </section>
 
-            {{-- ===== STEP 2: Isi Perbaikan ===== --}}
+            {{-- ===== STEP 2: Upload File & Pesan ===== --}}
             <section class="card form-workspace-card wizard-panel hidden p-6" data-panel="2">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">upload_file</span>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 class="font-heading font-semibold text-text-primary">2. Upload File</h2>
+                        <p class="text-caption text-text-secondary">Unggah file revisi, lalu lanjut ke anotasi PDF.</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 space-y-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">File Revisi</p>
+                        <div class="mt-3">
+                            <div class="form-field">
+                                <label class="form-field-label" for="tanggal_pengiriman">Tanggal revisi</label>
+                                <div class="form-field-body">
+                                    <input type="date" name="tanggal_pengiriman" id="tanggal_pengiriman" required
+                                        value="{{ $defaultTanggal }}" class="form-control">
+                                    <p class="form-field-hint">Dihitung sejak draf dibuat; dapat diubah sebelum dikirim ke dosen.</p>
+                                    @error('tanggal_pengiriman')
+                                        <p class="form-field-error">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-field form-field--stack">
+                                <label class="form-field-label" for="lampiran">File Perbaikan/Draft</label>
+                                <div class="form-field-body">
+                                    @if ($draftLampiran)
+                                        <div class="mb-3 flex items-center gap-3 rounded-xl border border-border bg-bg-panel px-3 py-2">
+                                            <span class="material-symbols-outlined icon-md text-brand" aria-hidden="true">description</span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="truncate text-sm font-medium text-text-primary">{{ $draftLampiran['name'] }}</p>
+                                                <p class="text-xs text-text-secondary">Sudah diunggah — biarkan bila tidak diganti.</p>
+                                            </div>
+                                            <a href="{{ $draftLampiran['url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-brand hover:underline">Lihat</a>
+                                        </div>
+                                    @endif
+                                    <x-file-upload input="lampiran" title="Upload File Revisi" :hint="$fileHint"
+                                        :accept="$accept" :max-mb="$maxMb" :types="$allowedTypes" :required="empty($draftLampiran)" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="wizard-prev btn-ghost min-h-11 px-4 py-2 text-sm font-medium">← Kembali</button>
+                    <div class="form-actions-end">
+                        <p id="upload-hint" class="hidden text-xs text-status-danger" role="alert">
+                            Unggah file perbaikan terlebih dahulu sebelum lanjut ke anotasi.
+                        </p>
+                        <p id="draft-hint" class="hidden w-full text-right text-xs text-status-danger" role="status"></p>
+                        <button type="button" id="lanjut-tanpa-anotasi"
+                            class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium"
+                            title="Lewati anotasi PDF, langsung isi kartu perbaikan manual">
+                            Lanjut tanpa anotasi
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">skip_next</span>
+                        </button>
+                        <button type="button" id="lanjut-anotasi"
+                            class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:cursor-wait disabled:opacity-60"
+                            data-draft-url="{{ route('logbook.store-revisi-draft') }}">
+                            <span data-lanjut-label>Lanjut ke anotasi PDF</span>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            {{-- ===== STEP 3: Tandai Perbaikan ===== --}}
+            <section class="card form-workspace-card wizard-panel hidden p-6" data-panel="3">
                 <div class="form-card-head">
                     <span class="icon-chip h-10 w-10" aria-hidden="true">
                         <span class="material-symbols-outlined icon-md text-brand">build</span>
                     </span>
                     <div class="min-w-0">
-                        <h2 class="font-heading font-semibold text-text-primary">2. Isi Perbaikan</h2>
-                        <p class="text-caption text-text-secondary">Isi kartu perbaikan sesuai komentar dosen. PDF catatan perbaikan dibuat otomatis oleh sistem.</p>
+                        <h2 class="font-heading font-semibold text-text-primary">3. Hasil Penandaan</h2>
+                        <p class="text-caption text-text-secondary">Hasil penandaan PDF tampil sebagai kartu di bawah — lengkapi yang bertanda perlu dilengkapi, atau tambah manual.</p>
                     </div>
+                </div>
+
+                <div class="mt-4 rounded-xl border border-dashed border-brand/40 bg-brand/5 p-4" data-anotasi-cta>
+                    <ol class="flex flex-wrap items-center gap-2 text-xs text-text-secondary" aria-label="Cara cepat anotasi">
+                        <li><span class="font-semibold text-text-primary">1.</span> Tandai di PDF</li>
+                        <li aria-hidden="true">→</li>
+                        <li><span class="font-semibold text-text-primary">2.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Isi otomatis ↓</a></li>
+                        <li aria-hidden="true">→</li>
+                        <li><span class="font-semibold text-text-primary">3.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Lengkapi kartu di bawah ↓</a></li>
+                    </ol>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <button type="button" class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50" data-anotasi-open disabled>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">open_in_new</span> Buka PDF &amp; tandai
+                        </button>
+                        <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50" data-isi-otomatis disabled>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Isi otomatis <span data-isi-count></span>
+                        </button>
+                    </div>
+                    <p class="mt-2 text-xs text-text-secondary" data-anotasi-hint>Draf tersimpan otomatis saat klik Lanjut — PDF terbuka di tab baru.</p>
+                    <p class="mt-2 hidden text-xs" role="status" aria-live="polite" data-isi-msg></p>
                 </div>
 
                 @if ($riwayatErrors->isNotEmpty())
@@ -195,120 +335,76 @@
 
                 <div id="kartu-perbaikan" class="mt-4 space-y-4">
                     @foreach ($cardRows as $i => $row)
-                        <div class="perbaikan-card" data-collapsed="0">
+                        <div class="perbaikan-card" @if ($i === 0) id="kartu-perbaikan" @endif data-collapsed="0">
                             <div class="perbaikan-head">
                                 <span class="icon-chip h-9 w-9" aria-hidden="true">
                                     <span class="material-symbols-outlined icon-md text-brand">build</span>
                                 </span>
                                 <div class="perbaikan-head-text">
-                                    <span class="perbaikan-number" data-card-number>Perbaikan #{{ $i + 1 }}</span>
+                                    <span class="perbaikan-number" data-card-number>Perbaikan #{{ $i + 1 }}</span><span class="perbaikan-needs-badge hidden" data-card-badge>Perlu dilengkapi</span>
                                     <span class="perbaikan-summary" data-card-summary></span>
                                 </div>
                                 <button type="button" class="perbaikan-toggle" data-card-toggle aria-expanded="true">
                                     <span class="material-symbols-outlined icon-sm" aria-hidden="true">expand_more</span>
                                     <span class="sr-only">Buka atau tutup kartu perbaikan #{{ $i + 1 }}</span>
                                 </button>
-                                <button type="button"
-                                    class="hapus-kartu inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-status-danger hover:bg-status-danger/10">
-                                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">delete</span> Hapus
-                                </button>
                             </div>
                             <div class="perbaikan-body">
-                                @include('logbook.partials.perbaikan-fields', ['i' => $i, 'row' => $row, 'statusOptions' => $statusOptions])
+                                @include('logbook.partials.perbaikan-fields', ['i' => $i, 'row' => $row, 'statusOptions' => $statusOptions, 'statusList' => $statusOptions3, 'commentOptions' => $commentOptions])
+                                <div class="flex items-center justify-between gap-2 pt-1">
+                                    <p class="text-[11px] text-text-secondary">Status diisi terakhir setelah perbaikan jelas.</p>
+                                    <button type="button"
+                                        class="hapus-kartu inline-flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-status-danger hover:bg-status-danger/10">
+                                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">delete</span> Hapus kartu ini
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     @endforeach
                 </div>
 
-                <div class="mt-4">
+                <div class="mt-4 flex flex-wrap items-center gap-2">
                     <button type="button" id="tambah-kartu"
-                        class="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah Kartu
+                        class="btn-ghost inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium">
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah manual
+                    </button>
+                    <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium" data-isi-otomatis-bawah disabled>
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Isi otomatis dari anotasi <span data-isi-count-bawah></span>
                     </button>
                 </div>
+                <p class="mt-2 text-xs text-text-secondary">Alur utama: tandai di PDF → Isi otomatis → lengkapi kartu. Tambah manual hanya bila perlu baris tambahan.</p>
+
+                <div class="mt-4 border-t border-border pt-5">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Pesan untuk Dosen</p>
+                    <div class="mt-3">
+                        <div class="form-field form-field--stack">
+                            <label class="form-field-label" for="progres_kendala">
+                                Pesan untuk Dosen <span class="font-normal">(opsional)</span>
+                            </label>
+                            <div class="form-field-body">
+                                <textarea name="progres_kendala" id="progres_kendala" rows="4" maxlength="500"
+                                    placeholder="Tambahkan konteks untuk dosen, misalnya kendala, alasan, atau pertanyaan tertentu..."
+                                    class="form-control">{{ $defaultPesan }}</textarea>
+                                <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+                                    <p class="text-xs text-text-secondary">Gunakan untuk konteks yang tidak tertampung di kartu perbaikan.</p>
+                                    <span class="text-xs text-text-secondary" id="pesan-counter">0/500</span>
+                                </div>
+                                @error('progres_kendala')
+                                    <p class="form-field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="form-actions">
                     <button type="button" class="wizard-prev btn-ghost px-4 py-2 text-sm font-medium">← Kembali</button>
                     <div class="form-actions-end">
-                        <p id="kartu-hint" class="hidden text-xs text-status-pending">
-                            Lengkapi halaman/bagian, komentar dosen, dan perbaikan pada setiap kartu.
+                        <p id="kartu-hint" class="hidden text-xs text-status-pending" role="status">
+                            <span data-kartu-count></span> atau lengkapi manual: halaman/bagian, komentar dosen, dan perbaikan pada setiap kartu.
                         </p>
+                        <p class="mt-2 text-xs text-text-secondary">Tips: unggah file pada langkah 2, tandai lewat anotasi PDF, lalu kartu terisi otomatis.</p>
                         <button type="button" class="wizard-next btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-                            Lanjut
-                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
-                        </button>
-                    </div>
-                </div>
-            </section>
-
-            {{-- ===== STEP 3: Upload File & Pesan ===== --}}
-            <section class="card form-workspace-card wizard-panel hidden p-6" data-panel="3">
-                <div class="form-card-head">
-                    <span class="icon-chip h-10 w-10" aria-hidden="true">
-                        <span class="material-symbols-outlined icon-md text-brand">upload_file</span>
-                    </span>
-                    <div class="min-w-0">
-                        <h2 class="font-heading font-semibold text-text-primary">3. Upload File &amp; Pesan</h2>
-                        <p class="text-caption text-text-secondary">Unggah file revisi, lalu tambahkan konteks bila diperlukan.</p>
-                    </div>
-                </div>
-
-                <div class="mt-4 space-y-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">File Revisi</p>
-                        <div class="mt-3">
-                            <div class="form-field">
-                                <label class="form-field-label" for="tanggal_pengiriman">Tanggal Pengiriman Revisi</label>
-                                <div class="form-field-body">
-                                    <input type="date" name="tanggal_pengiriman" id="tanggal_pengiriman" required
-                                        value="{{ old('tanggal_pengiriman', now()->format('Y-m-d')) }}" class="form-control">
-                                    @error('tanggal_pengiriman')
-                                        <p class="form-field-error">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-                            <div class="form-field form-field--stack">
-                                <label class="form-field-label" for="lampiran">File Perbaikan/Draft</label>
-                                <div class="form-field-body">
-                                    <x-file-upload input="lampiran" title="Upload File Revisi" :hint="$fileHint"
-                                        :accept="$accept" :max-mb="$maxMb" :types="$allowedTypes" :required="true" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-border pt-5">
-                        <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Pesan untuk Dosen</p>
-                        <div class="mt-3">
-                            <div class="form-field form-field--stack">
-                                <label class="form-field-label" for="progres_kendala">
-                                    Pesan untuk Dosen <span class="font-normal">(opsional)</span>
-                                </label>
-                                <div class="form-field-body">
-                                    <textarea name="progres_kendala" id="progres_kendala" rows="4" maxlength="500"
-                                        placeholder="Tambahkan konteks untuk dosen, misalnya kendala, alasan, atau pertanyaan tertentu..."
-                                        class="form-control">{{ old('progres_kendala') }}</textarea>
-                                    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
-                                        <p class="text-xs text-text-secondary">Gunakan untuk konteks yang tidak tertampung di kartu perbaikan.</p>
-                                        <span class="text-xs text-text-secondary" id="pesan-counter">0/500</span>
-                                    </div>
-                                    @error('progres_kendala')
-                                        <p class="form-field-error">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="wizard-prev btn-ghost px-4 py-2 text-sm font-medium">← Kembali</button>
-                    <div class="form-actions-end">
-                        <p id="upload-hint" class="hidden text-xs text-status-danger" role="alert">
-                            Unggah file perbaikan terlebih dahulu sebelum lanjut ke Review.
-                        </p>
-                        <button type="button" id="lanjut-upload"
-                            class="wizard-next btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
                             Lanjut
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
                         </button>
@@ -346,9 +442,10 @@
                     <div class="rounded-xl border border-border bg-bg-panel p-4">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Ringkasan Perbaikan</p>
-                            <span class="text-xs text-text-secondary" id="review-jumlah">0 kartu</span>
+                            <span class="text-xs text-text-secondary" id="review-jumlah" role="status">0 kartu</span>
                         </div>
                         <ul class="mt-2 space-y-2" id="review-kartu-list"></ul>
+                        <p class="mt-2 text-xs text-text-secondary" id="review-kartu-empty"></p>
                         <p class="mt-2 text-sm text-text-secondary" id="review-kartu-empty">Belum ada kartu perbaikan.</p>
                     </div>
 
@@ -367,17 +464,21 @@
                     </div>
 
                     <div class="rounded-xl border border-border bg-bg-panel p-4">
-                        <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Pesan Dosen</p>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Pesan untuk Dosen</p>
+                            <button type="button" class="text-xs font-semibold text-brand hover:underline" data-ubah-pesan>Ubah →</button>
+                        </div>
                         <p class="mt-2 whitespace-pre-wrap text-sm text-text-primary" id="review-pesan">Tidak ada pesan tambahan</p>
                     </div>
                 </div>
 
                 <div class="form-actions">
-                    <button type="button" class="wizard-prev btn-ghost px-4 py-2 text-sm font-medium">← Kembali</button>
+                    <button type="button" class="wizard-prev btn-ghost min-h-11 px-4 py-2 text-sm font-medium">← Kembali</button>
                     <div class="form-actions-end">
-                        <button type="submit" class="btn-secondary px-4 py-2 text-sm font-medium">Simpan Draft</button>
+                        <p id="kirim-hint" class="hidden w-full text-right text-xs text-status-pending" role="status"></p>
+                        <button type="submit" class="btn-secondary min-h-11 px-4 py-2 text-sm font-medium">Simpan Draft</button>
                         <button type="submit" name="submit" value="1" id="btn-kirim"
-                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+                            class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50" aria-describedby="kirim-hint">
                             <span data-kirim-label>Kirim ke Dosen</span>
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">send</span>
                         </button>
@@ -426,7 +527,7 @@
                     </div>
                     <div class="summary-row">
                         <span class="summary-key">
-                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">build</span> Jumlah Kartu
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">build</span> Kartu Perbaikan
                         </span>
                         <span class="summary-value" data-revisi-kartu>0 kartu</span>
                     </div>
@@ -479,7 +580,27 @@
     var kartuContainer = document.getElementById('kartu-perbaikan');
     var tambahBtn = document.getElementById('tambah-kartu');
     var statusOptions = @json($statusOptions);
+    // Status kartu wizard: 3 opsi (tanpa Draf) + default kosong.
+    var cardStatusOptions = statusOptions.filter(function (s) { return s !== 'Draf'; });
+    // Opsi komentar selalu milik induk terpilih (mandiri = kosong + manual).
+    function currentParentId() { return parentSelect ? parentSelect.value : ''; }
+    function parentCommentsOf(parentId) {
+        if (!parentId) return [];
+        var div = document.querySelector('[data-parent-feedback="' + parentId + '"]');
+        if (!div) return [];
+        try { return JSON.parse(div.dataset.comments || '[]'); } catch (e) { return []; }
+    }
+    function komentarOptionsHTML(parentId) {
+        var html = '<option value="">— Pilih komentar —</option>';
+        parentCommentsOf(parentId == null ? currentParentId() : parentId).forEach(function (c) {
+            var label = 'Hal. ' + (c.page_number || '—') + ': ' + String(c.comment || '').substring(0, 70);
+            html += '<option value="' + escapeAttr(c.comment || '') + '" data-comment-id="' + escapeAttr(c.id) + '">' + escapeHtml(label) + '</option>';
+        });
+        return html + '<option value="__manual">Tulis manual…</option>';
+    }
     var defaultRecipientValue = '{{ $defaultRecipientId }}';
+    var draftBoot = @json($draftBoot);
+    var hasExistingFile = !!(draftBoot && draftBoot.has_file);
     var initialStep = {{ $errorStep }};
     var cardSeq = 0;
 
@@ -488,7 +609,8 @@
     }
 
     function fileValid() {
-        return window.LbUpload ? window.LbUpload.isValid('lampiran') : hasFile();
+        if (hasFile()) return window.LbUpload ? window.LbUpload.isValid('lampiran') : true;
+        return hasExistingFile;
     }
 
     function escapeHtml(value) {
@@ -500,8 +622,10 @@
     }
 
     // Warna chip status mengikuti urutan LogbookEntry::PERBAIKAN_STATUSES
-    // (Sudah = selesai, Sebagian = sebagian, sisanya netral).
+    // (Sudah = selesai, Sebagian = sebagian, Draf = perlu dilengkapi, sisanya netral).
+    // R2: Draf memakai badge khusus (abu dashed) — bukan kuning "Sebagian" yang menipu.
     function statusBadgeClass(status) {
+        if (status === 'Draf') return 'badge-draft';
         var idx = statusOptions.indexOf(status);
         if (idx === 0) return 'badge-success';
         if (idx === 1) return 'badge-pending';
@@ -532,9 +656,31 @@
         };
     }
 
+    // FIX 2: definisi "lengkap" tunggal, sejajar LogbookEntry::isPerbaikanRowComplete().
     function cardComplete(card) {
         var d = cardData(card);
-        return !!(d.halaman.trim() && d.komentar_dosen.trim() && d.perbaikan.trim());
+        return !!(d.halaman.trim() && d.komentar_dosen.trim() && d.perbaikan.trim() && d.status && d.status !== 'Draf');
+    }
+
+    function cardNeedsAttention(card) {
+        var d = cardData(card);
+        return !cardComplete(card);
+    }
+
+    function incompleteCount() {
+        return cards().filter(cardNeedsAttention).length;
+    }
+
+    // Daftar nama field yang masih kosong pada satu kartu — dipakai pesan
+    // gate kirim agar mahasiswa tahu persis apa yang harus dilengkapi.
+    function cardMissingFields(card) {
+        var d = cardData(card);
+        var missing = [];
+        if (!d.halaman.trim()) missing.push('Halaman');
+        if (!d.komentar_dosen.trim()) missing.push('Komentar Dosen');
+        if (!d.perbaikan.trim()) missing.push('Perbaikan');
+        if (!d.status || d.status === 'Draf') missing.push('Status');
+        return missing;
     }
 
     function cards() {
@@ -552,15 +698,56 @@
         var d = cardData(card);
         var parts = [d.halaman.trim() || 'Halaman belum diisi'];
         parts.push(d.status ? 'Status: ' + d.status : 'Status belum dipilih');
+        if (cardNeedsAttention(card)) parts.push('Perlu dilengkapi');
         summaryEl.textContent = parts.join(' • ');
+        card.classList.toggle('perbaikan-needs-attention', cardNeedsAttention(card));
+        var badge = card.querySelector('[data-card-badge]');
+        if (badge) badge.classList.toggle('hidden', !cardNeedsAttention(card));
+    }
+
+    // P5: sorot kartu yang baru terisi + kembalikan fokus untuk keyboard/SR.
+    function highlightNewCards(count) {
+        var list = cards().slice(-Math.max(count, 0));
+        list.forEach(function (card) {
+            card.classList.add('perbaikan-flash');
+            setTimeout(function () { card.classList.remove('perbaikan-flash'); }, 2400);
+        });
+        var first = list[0];
+        if (first) {
+            first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var input = first.querySelector('input, textarea, select');
+            if (input) input.focus({ preventScroll: true });
+        }
     }
 
     // ===== Stepper: selesai / aktif / berikutnya =====
     function stepComplete(n) {
         if (n === 1) return !!(recipientSelect && recipientSelect.value);
-        if (n === 2) return allCardsComplete();
-        if (n === 3) return fileValid() && !!(tanggalEl && tanggalEl.value);
+        if (n === 2) return fileValid() && !!(tanggalEl && tanggalEl.value);
+        if (n === 3) return allCardsComplete();
         return false;
+    }
+
+    // R7: hint langkah 2 dinamis — menyebut sebab sebenarnya (file vs kartu).
+    function updateStepHint() {
+        var hint = document.getElementById('kartu-hint');
+        if (!hint) return;
+        var fileOk = fileValid();
+        var missing = incompleteCount();
+        var total = cards().length;
+        var countEl = hint.querySelector('[data-kartu-count]');
+        var msg;
+        if (!fileOk) {
+            msg = 'Unggah file revisi pada langkah 2 — tanpa file, anotasi PDF tidak bisa dibuat.';
+        } else if (total === 0) {
+            msg = 'Belum ada kartu — tandai di PDF lalu Isi otomatis, atau tambah manual.';
+        } else if (missing > 0) {
+            msg = missing + ' dari ' + total + ' kartu perlu dilengkapi';
+        } else {
+            msg = total + ' kartu siap dikirim';
+        }
+        if (countEl) countEl.textContent = msg;
+        else hint.textContent = msg;
     }
 
     function updateProgress() {
@@ -574,8 +761,7 @@
             var n = parseInt(seg.dataset.progressSegment);
             seg.dataset.state = (n === currentStep) ? 'active' : (stepComplete(n) ? 'completed' : 'upcoming');
         });
-        var hint = document.getElementById('kartu-hint');
-        if (hint) hint.classList.toggle('hidden', allCardsComplete());
+        updateStepHint();
     }
 
     function renderSteps() {
@@ -607,11 +793,30 @@
         syncSummaryPanel();
     }
 
+    // Isi otomatis berjalan sendiri saat masuk langkah 3 (tanpa klik tombol)
+    // bila kartu masih kosong — mahasiswa tinggal memilih komentar dosen.
+    // Tombol manual tetap tersedia sebagai cadangan.
+    var autoPulledFor = null;
+    function cardsPristine() {
+        return cards().length > 0 && cards().every(function (card) {
+            var d = cardData(card);
+            return !d.halaman.trim() && !d.komentar_dosen.trim() && !d.perbaikan.trim() && !d.status;
+        });
+    }
+    function maybeAutoPull() {
+        if (!draftPullUrl || autoPulledFor === draftPullUrl) return;
+        if (!cardsPristine()) return;
+        autoPulledFor = draftPullUrl;
+        isiOtomatisFrom(draftPullUrl, null);
+    }
+
+    // R9: nomor langkah di luar 1-4 diabaikan — tidak pernah render panel kosong.
     function showStep(n, options) {
+        if (typeof n !== 'number' || n < 1 || n > totalSteps) n = 1;
         options = options || {};
         var focusUpload = false;
         if (n === 4 && !fileValid()) {
-            n = 3;
+            n = 2;
             focusUpload = true;
             if (uploadHintEl) {
                 uploadHintEl.classList.remove('hidden');
@@ -620,18 +825,245 @@
         }
         currentStep = Math.max(1, Math.min(totalSteps, n));
         renderSteps();
+        if (currentStep === 3) maybeAutoPull();
         if (focusUpload && fileInputEl) fileInputEl.focus();
         if (!options.silent) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    document.querySelectorAll('.wizard-next').forEach(function (btn) {
-        btn.addEventListener('click', function () { showStep(currentStep + 1); });
+    // ===== Lanjut ke anotasi: simpan draf di background, buka PDF tab baru =====
+    var lanjutBtn = document.getElementById('lanjut-anotasi');
+    var draftHint = document.getElementById('draft-hint');
+    var draftEntryId = null;
+    var draftViewerUrl = null;
+    var draftPullUrl = null;
+    var savingDraft = false;
+    function setDraftHint(text) {
+        if (!draftHint) return;
+        if (!text) { draftHint.textContent = ''; draftHint.classList.add('hidden'); return; }
+        draftHint.textContent = text;
+        draftHint.classList.remove('hidden');
+    }
+    function activateAnnotationStep(entry) {
+        draftEntryId = entry.entry_id;
+        draftViewerUrl = entry.viewer_url;
+        draftPullUrl = entry.pull_url;
+        var openBtn = document.querySelector('[data-anotasi-open]');
+        var isiBtn = document.querySelector('[data-isi-otomatis]');
+        if (openBtn) openBtn.disabled = false;
+        if (isiBtn) { isiBtn.disabled = false; isiBtn.dataset.pullUrl = draftPullUrl; }
+        syncIsiButtons();
+        var hint = document.querySelector('[data-anotasi-hint]');
+        if (hint) hint.textContent = 'Draf #' + draftEntryId + ' tersimpan — PDF terbuka di tab baru. Selesai menandai? Klik Isi otomatis.';
+    }
+    // Tandai URL viewer agar kembali ke alur revisi (dipakai saveDraftAndOpenPdf
+    // di scope luar maupun handler di dalam IIFE di bawah).
+    function withFrom(url) {
+        try {
+            var u = new URL(url, window.location.origin);
+            u.searchParams.set('from', 'create-revisi');
+            return u.toString();
+        } catch (e) { return url; }
+    }
+    function saveDraftAndOpenPdf() {
+        setDraftHint('');
+        if (!fileValid()) {
+            if (uploadHintEl) {
+                uploadHintEl.classList.remove('hidden');
+                setTimeout(function () { uploadHintEl.classList.add('hidden'); }, 4000);
+            }
+            if (fileInputEl) fileInputEl.focus();
+            return;
+        }
+        // Klik ulang memakai draf yang sama (idempoten, tidak membuat ganda).
+        if (draftEntryId && draftViewerUrl) {
+            window.open(withFrom(draftViewerUrl), '_blank');
+            showStep(3);
+            return;
+        }
+        // R1: kunci sinkron sebelum request — klik ganda tidak membuat draf ganda.
+        if (!lanjutBtn || lanjutBtn.disabled || savingDraft) return;
+        savingDraft = true;
+        lanjutBtn.disabled = true;
+        lanjutBtn.setAttribute('aria-busy', 'true');
+        var label = lanjutBtn.querySelector('[data-lanjut-label]');
+        var icon = lanjutBtn.querySelector('.material-symbols-outlined');
+        if (label) label.textContent = 'Menyimpan draf…';
+        if (icon) icon.textContent = 'progress_activity';
+        var fd = new FormData(form);
+        fd.delete('riwayat_perbaikan');
+        fetch(lanjutBtn.dataset.draftUrl, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, d: d }; }); })
+            .then(function (out) {
+                if (!out.ok) {
+                    var msg = (out.d && out.d.message) || 'Gagal menyimpan draf (kode ' + out.status + '). Periksa file lalu coba lagi.';
+                    if (out.d && out.d.errors) {
+                        var first = Object.values(out.d.errors)[0];
+                        if (first && first[0]) msg = first[0];
+                    }
+                    throw new Error(msg);
+                }
+                activateAnnotationStep(out.d);
+                window.open(withFrom(out.d.viewer_url), '_blank');
+                showStep(3);
+            })
+            .catch(function (e) { setDraftHint(e.message || 'Gagal menyimpan draf. Coba lagi.'); })
+            .finally(function () {
+                savingDraft = false;
+                lanjutBtn.disabled = false;
+                lanjutBtn.removeAttribute('aria-busy');
+                if (label) label.textContent = 'Lanjut ke anotasi PDF';
+                var iconEl = lanjutBtn.querySelector('.material-symbols-outlined');
+                if (iconEl) iconEl.textContent = 'arrow_forward';
+            });
+    }
+    if (lanjutBtn) lanjutBtn.addEventListener('click', saveDraftAndOpenPdf);
+    // Lewati anotasi: langsung ke langkah 3 tanpa simpan draf / buka PDF.
+    // Syarat sama (file + tanggal); isi otomatis tetap bisa dipakai nanti
+    // lewat langkah 2 bila berubah pikiran.
+    var lewatiBtn = document.getElementById('lanjut-tanpa-anotasi');
+    if (lewatiBtn) lewatiBtn.addEventListener('click', function () {
+        if (!fileValid() || !(tanggalEl && tanggalEl.value)) {
+            if (uploadHintEl) {
+                uploadHintEl.classList.remove('hidden');
+                setTimeout(function () { uploadHintEl.classList.add('hidden'); }, 4000);
+            }
+            if (!fileValid() && fileInputEl) fileInputEl.focus();
+            else if (tanggalEl) tanggalEl.focus();
+            return;
+        }
+        showStep(3);
     });
+    // Mode lanjutkan draf: URL anotasi milik draf langsung aktif.
+    if (draftBoot && draftBoot.entry_id) {
+        activateAnnotationStep(draftBoot);
+        var draftHintEl = document.querySelector('[data-anotasi-hint]');
+        if (draftHintEl) draftHintEl.textContent = 'Melanjutkan draf #' + draftBoot.entry_id + ' — PDF bisa dibuka & ditandai, lalu Isi otomatis.';
+    }
+    // Isi otomatis di langkah 3 memakai endpoint pull draf yang tersimpan.
+    // F5: tombol atas (CTA) dan tombol bawah (daftar kartu) berbagi handler isiOtomatisFrom.
+    function syncIsiButtons() {
+        var hasUrl = !!draftPullUrl;
+        document.querySelectorAll('[data-isi-otomatis], [data-isi-otomatis-bawah]').forEach(function (b) {
+            b.disabled = !hasUrl;
+            if (hasUrl && !b.dataset.pullUrl) b.dataset.pullUrl = draftPullUrl;
+        });
+    }
+    (function () {
+        var isiBtn = document.querySelector('[data-isi-otomatis]');
+        var isiBawah = document.querySelector('[data-isi-otomatis-bawah]');
+        var openBtn = document.querySelector('[data-anotasi-open]');
+        var isiMsg = document.querySelector('[data-isi-msg]');
+        function setMsg(text, ok) {
+            if (!isiMsg) return;
+            isiMsg.classList.remove('hidden');
+            isiMsg.className = 'mt-2 text-xs ' + (ok ? 'text-status-success' : 'text-status-danger');
+            isiMsg.textContent = text;
+        }
+        if (openBtn) openBtn.addEventListener('click', function () {
+            if (draftViewerUrl) window.open(withFrom(draftViewerUrl), '_blank');
+        });
+        if (isiBtn) isiBtn.addEventListener('click', function () { isiOtomatisFrom(isiBtn.dataset.pullUrl, isiBtn); });
+        if (isiBawah) isiBawah.addEventListener('click', function () { isiOtomatisFrom(isiBawah.dataset.pullUrl || draftPullUrl, isiBawah); });
+        function isiOtomatisFrom(url, btn) {
+            if (!url) return;
+            if (btn && btn.disabled) return;
+            if (btn) btn.disabled = true;
+            fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value, 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
+                .then(function (out) {
+                    if (!out.ok) throw new Error('pull gagal');
+                    var rows = (out.d && out.d.rows) || [];
+                    kartuContainer.innerHTML = '';
+                    if (!rows.length) addKartu();
+                    rows.forEach(function (r) { addKartu({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', perbaikan: r.perbaikan || '', status: '' }, { silentFocus: true }); });
+                    highlightNewCards(Math.max(out.d.pulled || 0, 0));
+                    var countEl = document.querySelector('[data-isi-count]');
+                    if (countEl && out.d.pulled > 0) countEl.textContent = '(' + out.d.pulled + ')';
+                    var countBawah = document.querySelector('[data-isi-count-bawah]');
+                    if (countBawah && out.d.pulled > 0) countBawah.textContent = '(' + out.d.pulled + ')';
+                    var parts = [];
+                    if (out.d.pulled > 0) parts.push(out.d.pulled + ' perbaikan terisi otomatis. Lengkapi kolom Komentar Dosen yang bertanda');
+                    if (out.d.skipped_empty > 0) parts.push(out.d.skipped_empty + ' anotasi kosong dilewati');
+                    setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada anotasi — tandai dulu di PDF, lalu klik lagi.', true);
+                    updateUploadGate();
+                })
+                .catch(function () { setMsg('Gagal mengisi otomatis. Coba lagi.', false); })
+                .finally(function () {
+                if (btn) btn.disabled = false;
+                syncIsiButtons();
+            });
+        }
+    })();
     document.querySelectorAll('.wizard-prev').forEach(function (btn) {
         btn.addEventListener('click', function () { showStep(currentStep - 1); });
     });
+    // Tombol Lanjut tiap langkah (semua memakai class .wizard-next).
+    document.querySelectorAll('.wizard-next').forEach(function (btn) {
+        btn.addEventListener('click', function () { tryAdvance(); });
+    });
+    // Pesan + penerima wajib dipilih sebelum keluar langkah 1.
+    function tryAdvance() {
+        if (currentStep === 1 && !stepComplete(1)) {
+            var warn = document.getElementById('step1-hint');
+            if (warn) warn.classList.remove('hidden');
+            var first = document.querySelector('input[name="parent_entry_id"]') || recipientSelect;
+            if (first) first.focus();
+            return;
+        }
+        if (currentStep === 2 && (!fileValid() || !(tanggalEl && tanggalEl.value))) {
+            if (uploadHintEl) {
+                uploadHintEl.classList.remove('hidden');
+                setTimeout(function () { uploadHintEl.classList.add('hidden'); }, 4000);
+            }
+            if (!fileValid() && fileInputEl) fileInputEl.focus();
+            else if (tanggalEl) tanggalEl.focus();
+            return;
+        }
+        // Langkah 3 harus lengkap sebelum boleh intip langkah 4.
+        if (currentStep === 3 && !stepComplete(3)) {
+            holdAtStepThree();
+            return;
+        }
+        showStep(currentStep + 1);
+    }
+    function holdAtStepThree() {
+        updateUploadGate();
+        var hint = document.getElementById('kartu-hint');
+        if (hint) hint.classList.remove('hidden');
+        var bad = cards().filter(cardNeedsAttention)[0];
+        if (bad) {
+            bad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var focusEl = null;
+            bad.querySelectorAll('input, select, textarea').forEach(function (el) {
+                if (focusEl || !el.offsetParent) return;
+                var v = el.value || '';
+                if (!v.trim() || v === 'Draf') focusEl = el;
+            });
+            if (focusEl) setTimeout(function () { focusEl.focus({ preventScroll: true }); }, 400);
+        }
+    }
     stepButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () { showStep(parseInt(btn.dataset.step)); });
+        btn.addEventListener('click', function () {
+            // Stepper tidak bisa melompati langkah yang belum valid.
+            var target = parseInt(btn.dataset.step);
+            if (target > 1 && !stepComplete(1)) {
+                showStep(1);
+                var warn = document.getElementById('step1-hint');
+                if (warn) warn.classList.remove('hidden');
+                return;
+            }
+            if (target > 2 && !stepComplete(2)) {
+                showStep(2);
+                return;
+            }
+            // Langsung ke langkah 4 tetap wajib lolos kelengkapan kartu.
+            if (target > 3 && !stepComplete(3)) {
+                showStep(3);
+                holdAtStepThree();
+                return;
+            }
+            showStep(target);
+        });
     });
 
     // ===== Kartu perbaikan dinamis =====
@@ -647,50 +1079,144 @@
     }
 
     function cardMarkup(data, seq) {
-        var defaultStatus = statusOptions.length ? statusOptions[0] : '';
-        var options = statusOptions.map(function (s) {
-            var selected = (data.status === s) || (!data.status && s === defaultStatus);
-            return '<option value="' + escapeAttr(s) + '"' + (selected ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
+        // Status kartu: 3 opsi + default kosong agar menjadi pilihan sadar.
+        var options = '<option value="">— Pilih —</option>' + cardStatusOptions.map(function (s) {
+            return '<option value="' + escapeAttr(s) + '">' + escapeHtml(s) + '</option>';
         }).join('');
+        if (data.status && cardStatusOptions.indexOf(data.status) === -1) {
+            options += '<option value="' + escapeAttr(data.status) + '" selected>' + escapeHtml(data.status) + ' (pilih ulang)</option>';
+        }
 
         return '<div class="perbaikan-head">' +
                 '<span class="icon-chip h-9 w-9" aria-hidden="true"><span class="material-symbols-outlined icon-md text-brand">build</span></span>' +
                 '<div class="perbaikan-head-text">' +
-                    '<span class="perbaikan-number" data-card-number>Perbaikan #</span>' +
+                    '<span class="perbaikan-number" data-card-number>Perbaikan #</span><span class="perbaikan-needs-badge hidden" data-card-badge>Perlu dilengkapi</span>' +
                     '<span class="perbaikan-summary" data-card-summary></span>' +
                 '</div>' +
                 '<button type="button" class="perbaikan-toggle" data-card-toggle aria-expanded="true">' +
                     '<span class="material-symbols-outlined icon-sm" aria-hidden="true">expand_more</span>' +
                     '<span class="sr-only">Buka atau tutup kartu perbaikan</span>' +
                 '</button>' +
-                '<button type="button" class="hapus-kartu inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-status-danger hover:bg-status-danger/10">' +
-                    '<span class="material-symbols-outlined icon-sm" aria-hidden="true">delete</span> Hapus' +
-                '</button>' +
             '</div>' +
             '<div class="perbaikan-body">' +
-                '<div class="grid gap-3 sm:grid-cols-2">' +
-                    '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-halaman-' + seq + '">Halaman/Bagian</label>' +
-                    '<input type="text" id="riwayat-halaman-' + seq + '" name="riwayat_perbaikan[0][halaman]" value="' + escapeAttr(data.halaman || '') + '" placeholder="mis. Hal. 5, Bab 3" class="form-control"></div>' +
-                    '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-status-' + seq + '">Status</label>' +
-                    '<select id="riwayat-status-' + seq + '" name="riwayat_perbaikan[0][status]" class="form-control">' + options + '</select></div>' +
-                '</div>' +
                 '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-' + seq + '">Komentar Dosen</label>' +
-                '<input type="text" id="riwayat-komentar-' + seq + '" name="riwayat_perbaikan[0][komentar_dosen]" value="' + escapeAttr(data.komentar_dosen || '') + '" placeholder="Komentar yang diperbaiki" class="form-control"></div>' +
-                '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-perbaikan-' + seq + '">Perbaikan yang Dilakukan</label>' +
-                '<textarea id="riwayat-perbaikan-' + seq + '" name="riwayat_perbaikan[0][perbaikan]" rows="3" placeholder="Jelaskan perbaikan yang Anda lakukan" class="form-control">' + escapeHtml(data.perbaikan || '') + '</textarea></div>' +
+                '<select id="riwayat-komentar-' + seq + '" data-komentar-select name="riwayat_perbaikan[0][komentar_dosen]" class="form-control">' + komentarOptionsHTML() + '</select>' +
+                '<input type="text" data-komentar-manual placeholder="Tulis komentar dosen…" class="form-control mt-2 hidden"></div>' +
+                '<div class="flex gap-3">' +
+                '<div class="w-[110px] shrink-0"><label class="mb-1 block text-xs text-text-secondary" for="riwayat-halaman-' + seq + '">Halaman</label>' +
+                '<input type="text" id="riwayat-halaman-' + seq + '" name="riwayat_perbaikan[0][halaman]" value="' + escapeAttr(data.halaman || '') + '" placeholder="mis. Hal. 5" class="form-control"></div>' +
+                '<div class="min-w-0 flex-1"><label class="mb-1 block text-xs text-text-secondary" for="riwayat-perbaikan-' + seq + '">Perbaikan yang Dilakukan</label>' +
+                '<textarea id="riwayat-perbaikan-' + seq + '" name="riwayat_perbaikan[0][perbaikan]" rows="3" placeholder="mis. Menambah penjelasan metode di Hal. 5 paragraf 2" class="form-control">' + escapeHtml(data.perbaikan || '') + '</textarea></div>' +
+                '</div>' +
+                '<div class="flex items-center justify-between gap-2 pt-1">' +
+                    '<p class="text-[11px] text-text-secondary">Status diisi terakhir setelah perbaikan jelas.</p>' +
+                    '<button type="button" class="hapus-kartu inline-flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-status-danger hover:bg-status-danger/10">' +
+                        '<span class="material-symbols-outlined icon-sm" aria-hidden="true">delete</span> Hapus kartu ini' +
+                    '</button>' +
+                '</div>' +
+                '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-status-' + seq + '">Status</label>' +
+                '<select id="riwayat-status-' + seq + '" name="riwayat_perbaikan[0][status]" data-card-status class="form-control">' + options + '</select></div>' +
             '</div>';
     }
 
-    function addKartu(data) {
+    // ===== Komentar dosen: pilih dari daftar (prefill status) atau tulis manual =====
+    function radioFor(commentId) {
+        if (commentId == null || commentId === '') return null;
+        return form.querySelector('input[name="addressed_comment_status[' + commentId + ']"]:checked');
+    }
+
+    function setKomentarMode(card, mode) {
+        var sel = card.querySelector('[data-komentar-select]');
+        var manual = card.querySelector('[data-komentar-manual]');
+        if (!sel || !manual) return;
+        if (mode === 'manual') {
+            if (sel.name) { manual.name = sel.name; sel.removeAttribute('name'); }
+            manual.classList.remove('hidden');
+        } else {
+            if (manual.name) { sel.name = manual.name; manual.removeAttribute('name'); }
+            manual.classList.add('hidden');
+        }
+    }
+
+    function applyCommentStatus(card, commentId) {
+        var statusEl = card.querySelector('[data-card-status]');
+        if (!statusEl) return;
+        var radio = radioFor(commentId);
+        if (radio && radio.value) statusEl.value = radio.value;
+    }
+
+    function applyCardKomentar(card, data) {
+        var sel = card.querySelector('[data-komentar-select]');
+        var manual = card.querySelector('[data-komentar-manual]');
+        if (!sel || !manual) return;
+        var text = data.komentar_dosen || '';
+        var targetId = data.komentar_comment_id != null ? String(data.komentar_comment_id) : null;
+        var matched = null;
+        if (targetId) {
+            matched = Array.prototype.find.call(sel.options, function (o) { return o.dataset.commentId === targetId; });
+        }
+        if (!matched && text) {
+            matched = Array.prototype.find.call(sel.options, function (o) { return o.value !== '' && o.value !== '__manual' && o.value === text; });
+        }
+        if (data.komentar_mode === 'manual' || (text && !matched)) {
+            sel.value = '__manual';
+            setKomentarMode(card, 'manual');
+            manual.value = text;
+        } else if (matched) {
+            sel.value = matched.value;
+            setKomentarMode(card, 'select');
+        } else {
+            sel.value = '';
+            setKomentarMode(card, 'select');
+        }
+    }
+
+    function wireKomentar(card) {
+        var sel = card.querySelector('[data-komentar-select]');
+        if (!sel || sel.dataset.wired) return;
+        sel.dataset.wired = '1';
+        sel.addEventListener('change', function () {
+            if (sel.value === '__manual') {
+                setKomentarMode(card, 'manual');
+                var manual = card.querySelector('[data-komentar-manual]');
+                if (manual) manual.focus();
+            } else {
+                setKomentarMode(card, 'select');
+                var opt = sel.selectedOptions[0];
+                if (opt && opt.dataset.commentId) applyCommentStatus(card, opt.dataset.commentId);
+            }
+            updateCardSummary(card);
+            updateProgress();
+            updateUploadGate();
+            updateReview();
+            syncSummaryPanel();
+        });
+    }
+
+    function addKartu(data, options) {
         data = data || {};
+        options = options || {};
         var card = document.createElement('div');
         card.className = 'perbaikan-card';
         card.dataset.collapsed = '0';
         card.innerHTML = cardMarkup(data, ++cardSeq);
         kartuContainer.appendChild(card);
+        applyCardKomentar(card, data);
+        if (data.status && cardStatusOptions.indexOf(data.status) !== -1) {
+            var statusEl = card.querySelector('[data-card-status]');
+            if (statusEl) statusEl.value = data.status;
+        }
+        wireKomentar(card);
         reindex();
-        var firstInput = card.querySelector('input');
-        if (firstInput) firstInput.focus();
+        updateCardSummary(card);
+        updateProgress();
+        updateUploadGate();
+        updateReview();
+        syncSummaryPanel();
+        if (!options.silentFocus) {
+            var firstInput = card.querySelector('input');
+            if (firstInput) firstInput.focus();
+        }
         renderSteps();
     }
 
@@ -709,7 +1235,10 @@
                 return;
             }
             var hapus = event.target.closest('.hapus-kartu');
-            if (hapus && cards().length > 1) {
+            if (hapus) {
+                if (cards().length <= 1) { alert('Minimal 1 kartu perbaikan harus ada.'); return; }
+                var num = hapus.closest('.perbaikan-card').querySelector('[data-card-number]');
+                if (!confirm('Hapus ' + (num ? num.textContent : 'kartu') + '? Tindakan tidak dapat dibatalkan.')) return;
                 hapus.closest('.perbaikan-card').remove();
                 reindex();
                 renderSteps();
@@ -721,6 +1250,8 @@
             if (!card) return;
             updateCardSummary(card);
             updateProgress();
+            updateUploadGate();
+            updateReview();
         });
 
         kartuContainer.addEventListener('change', function (event) {
@@ -728,18 +1259,46 @@
             if (!card) return;
             updateCardSummary(card);
             updateProgress();
+            updateUploadGate();
+            updateReview();
         });
     }
 
-    // ===== Upload wajib sebelum Review & Kirim =====
+    // ===== Gerbang kirim: file valid + semua kartu lengkap + status bukan Draf =====
     function updateUploadGate() {
-        var ok = fileValid();
-        var lanjut = document.getElementById('lanjut-upload');
-        if (lanjut) lanjut.classList.toggle('opacity-60', !ok);
+        var fileOk = fileValid();
+        var cardsOk = allCardsComplete();
+        var lanjut = document.getElementById('lanjut-anotasi');
+        if (lanjut) lanjut.classList.toggle('opacity-60', !fileOk);
         var kirim = document.getElementById('btn-kirim');
+        var hint = document.getElementById('kirim-hint');
+        var reasons = [];
+        if (!fileOk) reasons.push('unggah file revisi');
+        if (!cardsOk) {
+            var missing = incompleteCount();
+            if (missing > 0) {
+                var need = {};
+                cards().filter(cardNeedsAttention).forEach(function (card) {
+                    cardMissingFields(card).forEach(function (f) { need[f] = true; });
+                });
+                var needList = Object.keys(need).join(', ');
+                reasons.push('lengkapi ' + missing + ' kartu' + (needList ? ' (' + needList + ')' : ''));
+            } else {
+                reasons.push('isi kartu perbaikan');
+            }
+        }
         if (kirim) {
-            kirim.disabled = !ok;
-            kirim.classList.toggle('opacity-60', !ok);
+            kirim.disabled = reasons.length > 0;
+            kirim.classList.toggle('opacity-60', reasons.length > 0);
+        }
+        if (hint) {
+            if (reasons.length) {
+                hint.textContent = 'Belum bisa dikirim — ' + reasons.join(' + ') + '.';
+                hint.classList.remove('hidden');
+            } else {
+                hint.textContent = '';
+                hint.classList.add('hidden');
+            }
         }
     }
 
@@ -771,13 +1330,16 @@
             addKartu();
             return;
         }
+        // Kartu prefill menaut ke komentar induk + status radio langkah 1.
         comments.forEach(function (c) {
+            var radio = c.id != null ? radioFor(c.id) : null;
             addKartu({
                 halaman: c.page_number ? 'Hal. ' + c.page_number : '',
                 komentar_dosen: c.comment || '',
+                komentar_comment_id: c.id != null ? c.id : null,
                 perbaikan: c.reply || '',
-                status: statusOptions.length ? statusOptions[0] : ''
-            });
+                status: radio ? radio.value : ''
+            }, { silentFocus: true });
         });
     }
 
@@ -788,7 +1350,7 @@
         parentCards.forEach(function (card) {
             var active = card.dataset.parentFeedback === parentSelect.value;
             card.classList.toggle('hidden', !active);
-            card.querySelectorAll('input[name="addressed_comment_ids[]"]').forEach(function (input) {
+            card.querySelectorAll('input[name^="addressed_comment_status"]').forEach(function (input) {
                 input.disabled = !active;
             });
         });
@@ -807,7 +1369,11 @@
     }
 
     if (parentSelect) {
-        parentSelect.addEventListener('change', function () { syncParentFeedback(true); });
+        parentSelect.addEventListener('change', function () {
+            var warn = document.getElementById('step1-hint');
+            if (warn) warn.classList.add('hidden');
+            syncParentFeedback(true);
+        });
         syncParentFeedback(false);
         lastSyncedParent = parentSelect.value;
     }
@@ -823,7 +1389,45 @@
             }
         });
     }
-    if (recipientSelect) recipientSelect.addEventListener('change', function () { renderSteps(); });
+    if (recipientSelect) recipientSelect.addEventListener('change', function () {
+        var warn = document.getElementById('step1-hint');
+        if (warn) warn.classList.add('hidden');
+        renderSteps();
+    });
+
+    // Perubahan radio status langkah 1 mengisi kartu yang statusnya masih kosong.
+    if (form) form.addEventListener('change', function (e) {
+        var m = e.target && e.target.name ? e.target.name.match(/^addressed_comment_status\[(\d+)\]$/) : null;
+        if (!m) return;
+        cards().forEach(function (card) {
+            var sel = card.querySelector('[data-komentar-select]');
+            var statusEl = card.querySelector('[data-card-status]');
+            if (!sel || !statusEl || statusEl.value) return;
+            var opt = sel.selectedOptions[0];
+            if (opt && opt.dataset.commentId === m[1]) {
+                statusEl.value = e.target.value;
+                updateCardSummary(card);
+            }
+        });
+        updateProgress();
+        updateUploadGate();
+        updateReview();
+        syncSummaryPanel();
+    });
+
+    // Kembali dari tab viewer PDF (?from=create-revisi): tab viewer menutup
+    // diri setelah menulis localStorage; tab wizard ini lompat ke langkah 3
+    // dan otomatis menarik anotasi (satu klik "Kembali & isi otomatis").
+    window.addEventListener('storage', function (e) {
+        if (!draftEntryId || !e.key || e.key !== 'lbta-revisi-autopull:' + draftEntryId) return;
+        try { localStorage.removeItem(e.key); } catch (err) {}
+        showStep(3);
+    });
+    var ubahPesan = document.querySelector('[data-ubah-pesan]');
+    if (ubahPesan) ubahPesan.addEventListener('click', function () {
+        showStep(3);
+        setTimeout(function () { if (pesanInput) pesanInput.focus({ preventScroll: true }); }, 150);
+    });
 
     // ===== Ringkasan revisi (panel konteks) =====
     function setText(selector, value) {
@@ -846,14 +1450,19 @@
     }
 
     function fileLabel() {
-        if (!hasFile()) return 'Belum diunggah';
-        return fileValid() ? fileInputEl.files[0].name : 'File tidak valid: ' + fileInputEl.files[0].name;
+        if (hasFile()) return fileValid() ? fileInputEl.files[0].name : 'File tidak valid: ' + fileInputEl.files[0].name;
+        if (hasExistingFile) return (draftBoot.file_name || 'File draf') + ' (sudah diunggah)';
+        return 'Belum diunggah';
     }
 
     function syncSummaryPanel() {
         setText('[data-revisi-parent]', parentLabel());
         setText('[data-revisi-penerima]', recipientLabel());
-        setText('[data-revisi-kartu]', cards().length + ' kartu');
+        // R13: panel konteks menampilkan kesiapan, bukan sekadar jumlah.
+        var total = cards().length;
+        var missing = incompleteCount();
+        var ready = total - missing;
+        setText('[data-revisi-kartu]', total === 0 ? '0 kartu' : ready + ' siap · ' + missing + ' perlu dilengkapi');
         setText('[data-revisi-file]', fileLabel());
         setText('[data-revisi-tanggal]', formatDate(tanggalEl ? tanggalEl.value : ''));
     }
@@ -877,7 +1486,12 @@
         setText('#review-penerima', recipientLabel());
 
         var list = cards();
-        setText('#review-jumlah', list.length + ' kartu');
+        // R12: review menampilkan kesiapan tiap kartu, bukan sekadar jumlah.
+        var missingR = list.filter(cardNeedsAttention).length;
+        var readyR = list.length - missingR;
+        setText('#review-jumlah', list.length === 0 ? '0 kartu' : readyR + ' siap · ' + missingR + ' perlu dilengkapi');
+        // R10: daftar review menjadi pengingat kondisional agar tidak menumpuk pesan kosong.
+        setText('#review-kartu-empty', list.length === 0 ? 'Belum ada kartu — tambahkan lewat langkah Hasil Penandaan.' : '');
         var listEl = document.getElementById('review-kartu-list');
         if (listEl) listEl.innerHTML = list.map(reviewCardRow).join('');
         var emptyEl = document.getElementById('review-kartu-empty');
@@ -896,7 +1510,7 @@
     // ===== Auto-save draft ke localStorage =====
     (function () {
         var PANEL = 'lb-revisi';
-        var KEY = 'lbta-draft-{{ auth()->id() }}-{{ $ta->id ?? 0 }}-revisi';
+        var KEY = 'lbta-draft-{{ auth()->id() }}-{{ $ta->id ?? 0 }}-revisi' + '{{ $draft?->id ? '-d'.$draft->id : '' }}';
 
         function timeLabel(ts) {
             return new Date(ts || Date.now()).toLocaleTimeString();
@@ -916,7 +1530,13 @@
                     var m = el.name.match(/riwayat_perbaikan\[\d+\]\[(\w+)\]/);
                     if (m) row[m[1]] = el.value;
                 });
+                row.komentar_mode = card.querySelector('[data-komentar-manual][name]') ? 'manual' : 'select';
                 data.riwayat.push(row);
+            });
+            data.comment_status = {};
+            form.querySelectorAll('input[name^="addressed_comment_status"][type="radio"]:checked').forEach(function (r) {
+                var m = r.name.match(/^addressed_comment_status\[(\d+)\]$/);
+                if (m) data.comment_status[m[1]] = r.value;
             });
             return data;
         }
@@ -935,6 +1555,12 @@
             if (saved.tanggal_pengiriman && tanggalEl) tanggalEl.value = saved.tanggal_pengiriman;
             if (saved.parent_entry_id && parentSelect) parentSelect.value = saved.parent_entry_id;
             if (saved.addressed_dosen_id && recipientSelect) recipientSelect.value = saved.addressed_dosen_id;
+            if (saved.comment_status) {
+                Object.keys(saved.comment_status).forEach(function (id) {
+                    var radio = form.querySelector('input[name="addressed_comment_status[' + id + ']"][value="' + saved.comment_status[id] + '"]');
+                    if (radio) radio.checked = true;
+                });
+            }
             if (pesanInput) pesanInput.value = saved.progres_kendala || '';
             if (saved.riwayat && saved.riwayat.length) {
                 kartuContainer.innerHTML = '';
@@ -1000,9 +1626,20 @@
         setInterval(save, 5000);
     })();
 
+    // FIX 1: halaman create belum punya draf tersimpan - CTA hanya informatif.
+    // Alur anotasi (buka PDF + isi otomatis) tersedia di halaman Edit
+    // setelah Simpan Draft. Tidak ada tombol disabled yang menipu.
+
     // ===== Inisialisasi =====
+    // FIX 5: gate kirim + badge dihitung sejak halaman dimuat (termasuk kartu
+    // prefill statis dari server), bukan menunggu ketikan pertama.
+    cards().forEach(updateCardSummary);
+    cards().forEach(wireKomentar);
     updateCounter();
+    updateProgress();
     updateUploadGate();
+    updateReview();
+    syncSummaryPanel();
     renderSteps();
     if (initialStep > 1) showStep(initialStep, { silent: true });
 </script>

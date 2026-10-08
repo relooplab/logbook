@@ -49,6 +49,15 @@
             <button type="submit" class="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Cari</button>
             <a href="{{ route('logbook.index', array_filter(['program' => request('program')])) }}" class="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border text-center">Reset</a>
         </div>
+        @if (auth()->user()->isMahasiswa())
+            <div class="w-full flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <button type="submit" form="bulk-delete-form" id="bulk-delete-btn" disabled
+                    class="px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                    Hapus terpilih (<span id="bulk-delete-count">0</span>)
+                </button>
+                <span class="text-xs text-text-secondary">Hanya draf / revisi sedang dikerjakan yang bisa dipilih.</span>
+            </div>
+        @endif
     </form>
 
     @if ($entries->isEmpty())
@@ -57,10 +66,19 @@
             <p>Belum ada entri yang cocok.</p>
         </div>
     @else
+        @php $bulkForm = auth()->user()->isMahasiswa(); @endphp
+        @if ($bulkForm)
+            <form id="bulk-delete-form" method="POST" action="{{ route('logbook.bulk-destroy') }}">
+                @csrf
+                @if (request('program')) <input type="hidden" name="program" value="{{ request('program') }}"> @endif
+        @endif
         <div class="card p-0 overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-text-secondary border-b border-border">
+                        @if ($bulkForm)
+                            <th class="py-3 px-4 w-10"><input type="checkbox" id="bulk-select-all" aria-label="Pilih semua yang bisa dihapus"></th>
+                        @endif
                         @if (!auth()->user()->isMahasiswa())
                             <th class="py-3 px-4">Mahasiswa</th>
                         @endif
@@ -76,63 +94,71 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($entries as $entry)
-                        @php
-                            $isMahasiswa = auth()->user()->isMahasiswa();
-                            $needsAction = $isMahasiswa && in_array($entry->status, ['draft', 'revisi', 'revision_in_progress']);
-                            $program = $entry->mahasiswaTa;
-                            $viewer = auth()->user();
-                            $canViewProgram = $program && (
-                                ($viewer->isAdmin() && ($viewer->isSystemAdmin() || $viewer->institution_id === null || $program->institution_id === $viewer->institution_id))
-                                || (!$viewer->isAdmin() && $viewer->isDosen() && ($program->isPembimbing($viewer) || $program->isPenguji($viewer)))
-                            );
-                        @endphp
-                        <tr class="border-b border-border last:border-0 hover:bg-bg-panel/50 {{ $needsAction ? 'bg-status-pending/5' : '' }}">
-                            @if (!$isMahasiswa)
-                                <td class="py-3 px-4">
-                                    @if ($canViewProgram && $program->mahasiswa)
-                                        <a href="{{ route($program->isKp() ? 'mahasiswa-kp.show' : 'mahasiswa-ta.show', $program) }}" class="text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">{{ $program->mahasiswa->name }}</a>
-                                    @else
-                                        {{ $program?->mahasiswa?->name }}
-                                    @endif
-                                    @if ($entry->mahasiswaTa)
-                                        <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded {{ $entry->mahasiswaTa->isKp() ? 'bg-brand/10 text-brand' : 'bg-bg-panel text-text-secondary' }}">{{ $entry->mahasiswaTa->jenisLabel() }}</span>
-                                    @endif
-                                </td>
-                            @endif
-                            <td class="py-3 px-4 font-mono">{{ $entry->jenis === 'revisi' ? '—' : $entry->sesi_ke }}</td>
-                            <td class="py-3 px-4 table-col-jenis">{{ ucfirst($entry->jenis) }}</td>
-                            <td class="py-3 px-4">
-                                {{ $entry->topik ?? 'Revisi' }}
-                                @if (!$isMahasiswa && $entry->dosen)
-                                    <span class="block text-[10px] text-text-secondary">
-                                        → {{ $entry->mahasiswaTa?->dosenRoleLabel($entry->dosen) ?? 'Dosen' }}: {{ $entry->dosen->name }}
-                                    </span>
-                                @endif
-                            </td>
-                            <td class="py-3 px-4 table-col-tanggal font-mono">{{ $entry->tanggal_tampil?->format('d M Y') ?? '—' }}</td>
-                            <td class="py-3 px-4">@include('partials.status-badge', ['status' => $entry->status, 'entry' => $entry])</td>
-                            @if ($isMahasiswa)
-                                <td class="py-3 px-4">
-                                    @if ($entry->review_opened_at)
-                                        <span class="inline-flex items-center gap-1 text-status-success text-xs" title="Dibuka dosen {{ $entry->review_opened_at->diffForHumans() }}">
-                                            <span class="material-symbols-outlined icon-sm text-status-info">visibility</span> Sudah
-                                        </span>
-                                    @else
-                                        <span class="inline-flex items-center gap-1 text-text-secondary text-xs">
-                                            <span class="material-symbols-outlined icon-sm text-status-info">visibility_off</span> Belum
-                                        </span>
-                                    @endif
-                                </td>
-                            @endif
-                            <td class="py-3 px-4">
-                                <a href="{{ route('logbook.show', $entry) }}" class="text-brand hover:underline">Detail</a>
-                            </td>
-                        </tr>
+                    @php
+                        // Thread induk-anak: jawaban revisi menempel di bawah induknya
+                        // agar hubungan keduanya kelihatan; anak yang induknya tak
+                        // sehalaman (filter/paginasi) tampil datar seperti biasa.
+                        $byId = $entries->keyBy('id');
+                        $threadChildren = [];
+                        $threadRoots = [];
+                        foreach ($entries as $e) {
+                            if ($e->parent_entry_id && $byId->has($e->parent_entry_id)) {
+                                $threadChildren[$e->parent_entry_id][] = $e;
+                            } else {
+                                $threadRoots[] = $e;
+                            }
+                        }
+                    @endphp
+                    @foreach ($threadRoots as $entry)
+                        @include('logbook.partials.student-history-row', ['entry' => $entry, 'bulkForm' => $bulkForm, 'threadChild' => false, 'childCount' => count($threadChildren[$entry->id] ?? [])])
+                        @foreach ($threadChildren[$entry->id] ?? [] as $child)
+                            @include('logbook.partials.student-history-row', ['entry' => $child, 'bulkForm' => $bulkForm, 'threadChild' => true, 'parentId' => $entry->id])
+                        @endforeach
                     @endforeach
                 </tbody>
             </table>
         </div>
+        @if ($bulkForm)
+            </form>
+        @endif
         <div class="px-2">{{ $entries->links() }}</div>
     @endif
 </div>
+@if (auth()->user()->isMahasiswa())
+    <script>
+        (function () {
+            var form = document.getElementById('bulk-delete-form');
+            if (!form) return;
+            var boxes = Array.from(form.querySelectorAll('.bulk-checkbox:not([disabled])'));
+            var countEl = document.getElementById('bulk-delete-count');
+            var btn = document.getElementById('bulk-delete-btn');
+            var selectAll = document.getElementById('bulk-select-all');
+
+            function refresh() {
+                var n = boxes.filter(function (b) { return b.checked; }).length;
+                if (countEl) countEl.textContent = n;
+                if (btn) btn.disabled = n === 0;
+                if (selectAll) {
+                    selectAll.checked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
+                    selectAll.indeterminate = n > 0 && n < boxes.length;
+                }
+            }
+
+            boxes.forEach(function (b) { b.addEventListener('change', refresh); });
+            if (selectAll) {
+                selectAll.addEventListener('change', function () {
+                    boxes.forEach(function (b) { b.checked = selectAll.checked; });
+                    refresh();
+                });
+            }
+            form.addEventListener('submit', function (e) {
+                var n = boxes.filter(function (b) { return b.checked; }).length;
+                if (n === 0) { e.preventDefault(); return; }
+                if (!confirm('Hapus ' + n + ' entri terpilih? Hanya draf / revisi sedang dikerjakan yang akan dihapus.')) {
+                    e.preventDefault();
+                }
+            });
+            refresh();
+        })();
+    </script>
+@endif

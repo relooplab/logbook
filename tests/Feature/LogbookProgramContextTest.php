@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Models\LogbookEntry;
 use App\Models\MahasiswaTa;
 use App\Models\User;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 
 class LogbookProgramContextTest extends AuditSmokeTest
 {
+    use DatabaseTransactions;
+
     private User $dosenKp;
     private MahasiswaTa $kp;
 

@@ -18,6 +18,7 @@
         .status-sudah { color: #15803d; font-weight: bold; }
         .status-sebagian { color: #b45309; font-weight: bold; }
         .status-belum { color: #b91c1c; font-weight: bold; }
+        .status-draf { color: #666; font-weight: bold; }
         .footer { margin-top: 20px; text-align: right; font-size: 10px; }
     </style>
 </head>
@@ -63,6 +64,7 @@
                             {{ $status === 'Sudah' ? 'status-sudah' : '' }}
                             {{ $status === 'Sebagian' ? 'status-sebagian' : '' }}
                             {{ $status === 'Belum' ? 'status-belum' : '' }}
+                            {{ $status === 'Draf' ? 'status-draf' : '' }}
                         ">{{ $status }}</span>
                     </td>
                 </tr>

@@ -22,6 +22,10 @@ class StoreRevisiRequest extends FormRequest
      * bukan upload file PDF. PDF catatan perbaikan dibuat otomatis oleh sistem.
      * Penerima revisi (addressed_dosen_id) boleh pembimbing ATAU dosen penguji
      * program; kosong = default pembimbing 1.
+     *
+     * Alur anotasi-dulu: tabel perbaikan boleh kosong saat simpan draf
+     * (tanpa `submit`) agar mahasiswa bisa upload file -> anotasi di PDF ->
+     * tarik otomatis ke tabel; tabel wajib lengkap hanya saat kirim ke dosen.
      */
     public function rules(): array
     {
@@ -31,6 +35,27 @@ class StoreRevisiRequest extends FormRequest
 
         $ta = ProgramContext::resolve($this->user(), $this);
         $allowedDosenIds = $ta ? $ta->allDosenIds() : [];
+        $isSubmit = $this->boolean('submit');
+        $cell = $isSubmit ? 'required' : 'nullable';
+
+        // Refresh-kehilangan-file: bila draf wizard yang belum dikirim sudah
+        // punya file, upload ulang tidak wajib (pakai file draf yang ada).
+        $hasDraftFile = false;
+        if ($ta && $this->filled('parent_entry_id')) {
+            $hasDraftFile = LogbookEntry::where('parent_entry_id', $this->input('parent_entry_id'))
+                ->where('mahasiswa_ta_id', $ta->id)
+                ->where('status', LogbookEntry::STATUS_REVISION_IN_PROGRESS)
+                ->whereNull('submitted_at')
+                ->whereNotNull('lampiran_path')
+                ->exists();
+        }
+        // Draf mandiri (tanpa induk) yang dilanjutkan: file miliknya sendiri.
+        if (! $hasDraftFile && $ta && $this->filled('draft_id')) {
+            $hasDraftFile = LogbookEntry::whereKey($this->input('draft_id'))
+                ->where('mahasiswa_ta_id', $ta->id)
+                ->whereNotNull('lampiran_path')
+                ->exists();
+        }
 
         return [
             'parent_entry_id' => [
@@ -41,17 +66,25 @@ class StoreRevisiRequest extends FormRequest
                         ->whereIn('status', ['revisi', 'revision_in_progress']);
                 }),
             ],
+            'draft_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('logbook_entries', 'id')->where(function ($query) use ($ta) {
+                    $query->where('mahasiswa_ta_id', $ta?->id)
+                        ->where('jenis', LogbookEntry::JENIS_REVISI);
+                }),
+            ],
             'addressed_dosen_id' => ['nullable', Rule::in($allowedDosenIds)],
-            'addressed_comment_ids' => ['nullable', 'array'],
-            'addressed_comment_ids.*' => ['integer', 'distinct'],
+            'addressed_comment_status' => ['nullable', 'array'],
+            'addressed_comment_status.*' => ['in:Sudah,Sebagian,Belum'],
             'tanggal_pengiriman' => ['required', 'date', 'before_or_equal:today'],
             'progres_kendala' => ['nullable', 'string', 'max:500'],
-            'riwayat_perbaikan' => ['required', 'array', 'min:1'],
-            'riwayat_perbaikan.*.halaman' => ['required', 'string', 'max:255'],
-            'riwayat_perbaikan.*.komentar_dosen' => ['required', 'string', 'max:1000'],
-            'riwayat_perbaikan.*.perbaikan' => ['required', 'string', 'max:2000'],
-            'riwayat_perbaikan.*.status' => ['required', 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)],
-            'lampiran' => ['required', 'file', 'mimes:'.$mimes, 'max:'.$maxKb],
+            'riwayat_perbaikan' => $isSubmit ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
+            'riwayat_perbaikan.*.halaman' => [$cell, 'string', 'max:255'],
+            'riwayat_perbaikan.*.komentar_dosen' => [$cell, 'string', 'max:1000'],
+            'riwayat_perbaikan.*.perbaikan' => [$cell, 'string', 'max:2000'],
+            'riwayat_perbaikan.*.status' => [$cell, 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)],
+            'lampiran' => [$hasDraftFile ? 'nullable' : 'required', 'file', 'mimes:'.$mimes, 'max:'.$maxKb],
         ];
     }
 

@@ -33,11 +33,27 @@
         @endif ,
         canReview: @json(auth()->user()->can('review', $logbook)),
         canDiscuss: @json($logbook->mahasiswaTa?->user_id === auth()->id() || auth()->user()->can('isReviewer', $logbook)),
+        isOwner: @json(auth()->user()->isMahasiswa() && $logbook->mahasiswaTa?->isMember(auth()->user())),
+        canAnnotate: @json(auth()->user()->can('view', $logbook)),
+        canPullAnnotations: @json(auth()->user()->can('update', $logbook)),
+        pullAnnotationsUrl: @json(route("logbook.annotations.pull", $logbook)),
+        entryStatus: @json($logbook->status),
+        entryKind: @json($logbook->jenis),
+        isDraftPdf: @json($isDraftPdf ?? true),
+        isCatatanPdf: @json($isCatatanPdf ?? true),
         returnUrl: @if(request()->boolean('quick_review') && auth()->user()->can('review', $logbook))
             @json(route('quick-review.index', ['item' => $logbook->id]))
+        @elseif(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
+            @json(route('logbook.edit', $logbook))
         @else
             @json(route('logbook.show', $logbook))
         @endif ,
+        returnLabel: @if(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
+            @json('Kembali & isi otomatis')
+        @else
+            @json('Kembali & lengkapi')
+        @endif ,
+        fromCreateRevisi: @json(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook)),
         quickReviewUrl: @json(route('quick-review.index', ['item' => $logbook->id])),
     };
 </script>
