@@ -62,7 +62,13 @@ class LogbookController extends Controller
             ->filter(fn (LogbookEntry $e) => $e->isEditable())
             ->values();
 
-        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId', 'deletableEntries'));
+        // Gerbang lunak: revisi yang masih menggantung + satu aksi lanjutan.
+        // Dipakai banner + checkbox konfirmasi agar jawaban revisi tidak
+        // dikirim diam-diam lewat sesi logbook baru.
+        $pendingRevisions = LogbookEntry::pendingRevisionsFor($ta);
+        $pendingRevisionAction = LogbookEntry::pendingRevisionActionFor($ta);
+
+        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId', 'deletableEntries', 'pendingRevisions', 'pendingRevisionAction'));
     }
 
     public function createRevisi(Request $request): View
@@ -72,6 +78,11 @@ class LogbookController extends Controller
 
         // Mode lanjutkan draf (?draft_id=): wizard memuat draf revisi yang
         // sudah ada (satu pintu editor). Draf harus milik user + editable.
+        // Kembali dari viewer (?step=3&autopull=1): wizard langsung buka
+        // langkah 3 dan menarik yang ditandai di PDF jadi isian form.
+        $requestedStep = (int) $request->query('step', 0);
+        $requestedStep = ($requestedStep >= 1 && $requestedStep <= 4) ? $requestedStep : 0;
+        $autoPullOnLoad = $request->boolean('autopull');
         $draft = null;
         $draftId = $request->query('draft_id');
         if ($draftId) {
@@ -182,7 +193,7 @@ class LogbookController extends Controller
 
         return view('logbook.create-revisi', compact(
             'ta', 'parents', 'selectedParentId', 'parentComments', 'dosenOptions', 'defaultRecipientId', 'activeRevision',
-            'draft', 'defaultTanggal', 'defaultPesan', 'draftLampiran', 'draftBoot'
+            'draft', 'defaultTanggal', 'defaultPesan', 'draftLampiran', 'draftBoot', 'requestedStep', 'autoPullOnLoad'
         ));
     }
 
@@ -450,7 +461,40 @@ class LogbookController extends Controller
                 abort_unless($explicit && $request->user()->can('update', $explicit), 404);
                 abort_unless($explicit->mahasiswaTa, 403);
 
+                // Penautan draf yatim: bila request membawa parent_entry_id dan
+                // draf belum punya induk, tempelkan dengan validasi yang sama
+                // seperti jalur buat-baru (milik program + eligible + ronde).
                 $parent = $explicit->parentEntry;
+                if (! $parent && ! empty($data['parent_entry_id'])) {
+                    $candidate = $ta->entries()
+                        ->whereKey($data['parent_entry_id'])
+                        ->whereIn('status', [LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+                        ->where('id', '!=', $explicit->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if (! $candidate) {
+                        throw ValidationException::withMessages([
+                            'parent_entry_id' => 'Entri yang dipilih tidak bisa dijawab (bukan milik program atau statusnya tidak meminta revisi).',
+                        ]);
+                    }
+                    if ($this->activeRevisionChild($candidate, $explicit->id)) {
+                        session()->flash('active_revision', $this->activeRevisionPayload($this->activeRevisionChild($candidate, $explicit->id)));
+                        throw ValidationException::withMessages([
+                            'parent_entry_id' => $this->activeRevisionMessage($candidate),
+                        ]);
+                    }
+                    if (($candidate->revision_round ?? 0) + 1 > LogbookEntry::MAX_REVISION_ROUND) {
+                        throw ValidationException::withMessages([
+                            'parent_entry_id' => 'Entri ini sudah mencapai batas maksimal '.LogbookEntry::MAX_REVISION_ROUND.' sesi revisi.',
+                        ]);
+                    }
+                    $explicit->update([
+                        'parent_entry_id' => $candidate->id,
+                        'revision_round' => ($candidate->revision_round ?? 0) + 1,
+                    ]);
+                    $parent = $candidate;
+                }
+
                 $entry = $explicit;
                 $entry->update([
                     'dosen_id' => $data['addressed_dosen_id']
@@ -704,7 +748,11 @@ class LogbookController extends Controller
         $entries = $query->with(['mahasiswaTa.mahasiswa.universities', 'dosen'])->withExists('revisionChildren')
             ->latest()->orderByDesc('id')->paginate((int) $request->query('per_page', 20))->withQueryString();
 
-        return view('logbook.index', compact('entries', 'filters', 'summary', 'students'));
+        // Banner daftar mahasiswa: revisi pending + satu aksi lanjutan.
+        $pendingRevisions = $user->isMahasiswa() ? LogbookEntry::pendingRevisionsFor($ta ?? null) : collect();
+        $pendingRevisionAction = $user->isMahasiswa() ? LogbookEntry::pendingRevisionActionFor($ta ?? null) : null;
+
+        return view('logbook.index', compact('entries', 'filters', 'summary', 'students', 'pendingRevisions', 'pendingRevisionAction'));
     }
 
     // ---------------------------------------------------------------- feedback page
@@ -914,7 +962,14 @@ class LogbookController extends Controller
             ->orderByDesc('id')
             ->value('feedback_dosen');
 
-        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf', 'templates', 'lastFeedback'));
+        // Konteks untuk reviewer: bila program masih punya revisi pending di
+        // thread lain, dosen diberi tahu agar tidak mereview duplikat —
+        // arahkan mahasiswa menjawab lewat jalur revisi.
+        $otherPendingRevisions = LogbookEntry::pendingRevisionsFor($logbook->mahasiswaTa)
+            ->reject(fn (LogbookEntry $e) => $e->id === $logbook->id || $e->parent_entry_id === $logbook->id)
+            ->values();
+
+        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf', 'templates', 'lastFeedback', 'otherPendingRevisions'));
     }
 
     // ---------------------------------------------------------------- edit
@@ -1745,7 +1800,30 @@ class LogbookController extends Controller
         $isDraftPdf = ! $logbook->lampiran_path || str_ends_with(strtolower($draftName), '.pdf');
         $isCatatanPdf = ! $logbook->catatan_perbaikan_path || str_ends_with(strtolower($catatanName), '.pdf');
 
-        return view('logbook.pdf-viewer', compact('logbook', 'isDraftPdf', 'isCatatanPdf'));
+        // Konteks kembali ke wizard create-revisi (?from=create-revisi):
+        // fallback tab-sama harus mendarat lagi di wizard langkah 3 dengan
+        // autopull, bukan di halaman edit (konteks wizard hilang).
+        $fromCreateRevisi = $request->query('from') === 'create-revisi' && $request->user()->can('update', $logbook);
+        $wizardParentId = null;
+        $wizardDraftId = null;
+        $wizardReturnUrl = null;
+        if ($fromCreateRevisi) {
+            if ($logbook->jenis === LogbookEntry::JENIS_REVISI && $logbook->parent_entry_id) {
+                $wizardParentId = $logbook->parent_entry_id;
+                $wizardDraftId = $logbook->id;
+            } else {
+                $wizardParentId = $logbook->id;
+            }
+            $wizardReturnUrl = route('logbook.create-revisi', array_filter([
+                'program' => $logbook->mahasiswaTa?->jenis,
+                'parent_entry_id' => $wizardParentId,
+                'draft_id' => $wizardDraftId,
+                'step' => 3,
+                'autopull' => 1,
+            ]));
+        }
+
+        return view('logbook.pdf-viewer', compact('logbook', 'isDraftPdf', 'isCatatanPdf', 'wizardParentId', 'wizardDraftId', 'wizardReturnUrl'));
     }
 
     public function comments(Request $request, LogbookEntry $logbook): JsonResponse
@@ -1889,10 +1967,14 @@ class LogbookController extends Controller
     {
         $this->authorize('update', $logbook);
 
-        $ownerId = $logbook->mahasiswaTa?->user_id;
+        // Anotasi seluruh anggota program (pemilik + anggota kelompok),
+        // bukan hanya pemilik utama.
+        $memberIds = $logbook->mahasiswaTa
+            ? $logbook->mahasiswaTa->allMembers()->pluck('id')->all()
+            : [$logbook->mahasiswaTa?->user_id];
         $comments = $logbook->comments()
             ->where('file_type', PdfComment::FILE_TYPE_DRAFT)
-            ->where('user_id', $ownerId)
+            ->whereIn('user_id', array_filter($memberIds))
             ->where('resolution_status', '!=', PdfComment::STATUS_RESOLVED)
             ->orderBy('page_number')->orderBy('id')
             ->get();

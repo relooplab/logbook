@@ -16,16 +16,17 @@ class StoreRevisiRequest extends FormRequest
     }
 
     /**
-     * Validasi entri revisi. Mahasiswa dapat membuat entri revisi tanpa harus
-     * ada logbook terlebih dahulu (parent_entry_id opsional).
+     * Validasi entri revisi. Revisi selalu menjawab satu entri (induk):
+     * draf boleh yatim agar alur anotasi-dulu tetap jalan (upload file ->
+     * anotasi di PDF -> tarik otomatis ke tabel), tapi saat dikirim ke dosen
+     * (`submit`) induk wajib dipilih agar thread tidak putus.
      * Catatan perbaikan diisi sebagai tabel terstruktur (riwayat_perbaikan),
      * bukan upload file PDF. PDF catatan perbaikan dibuat otomatis oleh sistem.
      * Penerima revisi (addressed_dosen_id) boleh pembimbing ATAU dosen penguji
      * program; kosong = default pembimbing 1.
      *
      * Alur anotasi-dulu: tabel perbaikan boleh kosong saat simpan draf
-     * (tanpa `submit`) agar mahasiswa bisa upload file -> anotasi di PDF ->
-     * tarik otomatis ke tabel; tabel wajib lengkap hanya saat kirim ke dosen.
+     * (tanpa `submit`); tabel wajib lengkap hanya saat kirim ke dosen.
      */
     public function rules(): array
     {
@@ -59,7 +60,7 @@ class StoreRevisiRequest extends FormRequest
 
         return [
             'parent_entry_id' => [
-                'nullable',
+                $isSubmit ? 'required' : 'nullable',
                 'integer',
                 Rule::exists('logbook_entries', 'id')->where(function ($query) use ($ta) {
                     $query->where('mahasiswa_ta_id', $ta?->id)
@@ -97,7 +98,7 @@ class StoreRevisiRequest extends FormRequest
         return [
             'tanggal_pengiriman.required' => 'Tanggal pengiriman revisi wajib diisi.',
             'tanggal_pengiriman.before_or_equal' => 'Tanggal tidak boleh di masa depan.',
-            'parent_entry_id.required' => 'Entri asal revisi wajib dipilih.',
+            'parent_entry_id.required' => 'Pilih dulu entri yang dijawab revisi ini — revisi harus menempel ke satu entri agar tidak terputus dari komentar dosen.',
             'addressed_dosen_id.in' => 'Penerima revisi harus pembimbing atau dosen penguji program Anda.',
             'progres_kendala.max' => 'Pesan untuk dosen maksimal 500 karakter.',
             'riwayat_perbaikan.required' => 'Tabel catatan perbaikan wajib diisi minimal 1 baris.',

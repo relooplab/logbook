@@ -51,6 +51,34 @@
     <div class="space-y-5">
 
         @include('logbook.partials.review.summary', ['logbook' => $logbook])
+        @if (($otherPendingRevisions ?? collect())->isNotEmpty())
+            @php $canReviewOther = auth()->user()->can('review', $logbook); @endphp
+            <div class="rounded-xl border border-status-pending/40 bg-status-pending/10 p-4 text-sm" role="alert">
+                @if ($canReviewOther)
+                    <p class="font-semibold text-text-primary">Mahasiswa masih punya revisi yang belum selesai di thread lain</p>
+                @else
+                    <p class="font-semibold text-text-primary">Selesaikan dulu revisi yang belum selesai</p>
+                @endif
+                <ul class="mt-2 space-y-1 text-text-secondary">
+                    @foreach ($otherPendingRevisions->take(3) as $pending)
+                        <li>
+                            <a href="{{ route('logbook.show', $pending) }}" class="text-brand hover:underline">
+                                @if ($pending->jenis === 'revisi')
+                                    Draf revisi #{{ $pending->id }}
+                                @else
+                                    Sesi {{ $pending->sesi_ke }} · {{ $pending->topik ?? 'Tanpa topik' }} — Revisi Diminta
+                                @endif
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+                @if ($canReviewOther)
+                    <p class="mt-2 text-text-secondary">Periksa thread tersebut sebelum mereview entri ini — minta mahasiswa menjawab lewat jalur revisi bila isinya jawaban revisi.</p>
+                @else
+                    <p class="mt-2 text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+                @endif
+            </div>
+        @endif
         @include('logbook.partials.review.thread', ['logbook' => $logbook])
         @include('logbook.partials.review.feedback', ['logbook' => $logbook])
         @include('logbook.partials.review.notes', ['logbook' => $logbook])

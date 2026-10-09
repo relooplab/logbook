@@ -233,6 +233,10 @@
                         <a href="{{ route('logbook.create-revisi', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.create-revisi') }}">
                             <span class="material-symbols-outlined icon-md">edit_note</span>
                             <span class="sidebar-label">Entri Revisi</span>
+                            @php $pendingCount = \App\Models\LogbookEntry::pendingRevisionsFor($p)->count(); @endphp
+                            @if ($pendingCount > 0)
+                                <span class="ml-auto rounded-full bg-status-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-status-danger" title="{{ $pendingCount }} revisi belum selesai">{{ $pendingCount }}</span>
+                            @endif
                         </a>
                         <a href="{{ route('logbook.feedback', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.feedback') }}">
                             <span class="material-symbols-outlined icon-md">forum</span>

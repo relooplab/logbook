@@ -279,6 +279,12 @@ Selain workspace mahasiswa, dosen juga memiliki **workspace pribadi** melalui me
    - **Kirim ke dosen** — langsung mengirim ke dosen untuk direview.
 6. Isian tersimpan otomatis (auto-save) setiap 5 detik; draf dipulihkan jika halaman tertutup.
 
+> ⚠️ **Masih ada revisi yang belum selesai?** Jawaban revisi harus dikirim
+> lewat jalur revisi (**Buat Revisi / Lanjutkan Revisi**) — bukan lewat sesi
+> logbook baru — agar tidak terputus dari komentar dosen. Bila halaman
+> menampilkan peringatan revisi, centang pernyataan "sesi bimbingan baru"
+> untuk melanjutkan; sesi baru tanpa centang akan ditolak.
+
 #### 4.1.3 Menanggapi Review Dosen
 
 1. Saat dosen meminta revisi, status entri menjadi **Revisi**.
@@ -286,6 +292,13 @@ Selain workspace mahasiswa, dosen juga memiliki **workspace pribadi** melalui me
 3. Isi tabel **catatan perbaikan** (halaman, komentar dosen, perbaikan yang dilakukan, status) dan unggah **file perbaikan**.
 4. Pada langkah pertama wizard, pilih **Kirim kepada**: dosen **pembimbing** atau dosen **penguji** (default: pembimbing 1 / penerima entri induk).
 5. Kirim → penerima menerima notifikasi (pembimbing ikut diberi tahu) dan mereview kembali.
+
+> 📌 **Revisi selalu menjawab satu entri.** Pada langkah 1 pilih **Entri
+> yang dijawab** — wajib diisi sebelum revisi dikirim ke dosen. Draf boleh
+> disimpan dulu sebagai *draf pribadi* (tanpa memilih entri) agar alur
+> tandai-di-PDF tetap jalan, tapi tidak bisa dikirim sampai ditautkan ke
+> satu entri. Draf pribadi yang belum bertuan bisa ditautkan belakangan
+> lewat **Lanjutkan Revisi** → pilih entri yang dijawab.
 
 #### 4.1.4 Mengelola Workspace
 

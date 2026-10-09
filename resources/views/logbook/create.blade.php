@@ -30,6 +30,29 @@
         </p>
     @endif
 
+    @if (($pendingRevisions ?? collect())->isNotEmpty())
+        <div class="mb-5 rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
+            <p class="font-semibold text-text-primary">Masih ada revisi yang belum selesai</p>
+            <ul class="mt-2 space-y-1 text-sm text-text-secondary">
+                @foreach (($pendingRevisions ?? collect())->take(3) as $pending)
+                    <li>
+                        @if ($pending->jenis === 'revisi')
+                            Draf revisi #{{ $pending->id }}{{ $pending->parent_entry_id ? ' (jawaban entri #'.$pending->parent_entry_id.')' : '' }}
+                        @else
+                            Sesi {{ $pending->sesi_ke }} · {{ $pending->topik ?? 'Tanpa topik' }} — diminta revisi{{ $pending->reviewed_at ? ' '.$pending->reviewed_at->format('d M Y') : '' }}
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+            <p class="mt-2 text-sm text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+            @if (!empty($pendingRevisionAction['url']))
+                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">
+                    {{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →
+                </a>
+            @endif
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('logbook.store') }}" enctype="multipart/form-data" id="logbook-form"
         class="form-workspace-grid">
         @csrf
@@ -202,12 +225,32 @@
                     <div class="ml-auto flex flex-wrap items-center gap-2">
                         <button type="submit" class="btn-secondary px-4 py-2 text-sm font-medium">Simpan Draft</button>
                         <button type="submit" name="submit" value="1"
-                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+                            class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium"
+                            @if (($pendingRevisions ?? collect())->isNotEmpty()) data-require-revision-confirm disabled @endif>
                             Kirim ke Dosen
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
                         </button>
                     </div>
                 </div>
+                @if (($pendingRevisions ?? collect())->isNotEmpty())
+                    <label class="mt-3 flex cursor-pointer items-start gap-2 rounded-xl border border-border bg-bg-panel p-3 text-sm">
+                        <input type="checkbox" name="confirm_new_despite_revision" value="1" class="mt-1" data-revision-confirm @checked(old('confirm_new_despite_revision'))>
+                        <span>Saya paham ini <strong>sesi bimbingan baru</strong>, bukan jawaban atas revisi yang diminta. Jawaban revisi tetap saya kirim lewat jalur revisi.</span>
+                    </label>
+                    @error('confirm_new_despite_revision')
+                        <p class="form-field-error mt-1">{{ $message }}</p>
+                    @enderror
+                    <script>
+                        (function () {
+                            var box = document.querySelector('[data-revision-confirm]');
+                            var btn = document.querySelector('[data-require-revision-confirm]');
+                            if (!box || !btn) return;
+                            function sync() { btn.disabled = !box.checked; }
+                            box.addEventListener('change', sync);
+                            sync();
+                        })();
+                    </script>
+                @endif
             </section>
 
             <x-autosave-status panel="lb-create" />

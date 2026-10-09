@@ -66,7 +66,7 @@ istilah teknis/enumerasi di kode (sering Inggris). Tujuannya: **satu konsep = sa
 | `draft` | Draf |
 | `submitted` | Menunggu Review |
 | `approved` | Disetujui |
-| `revisi` | Perlu Revisi |
+| `revisi` | Revisi Diminta |
 | `revision_in_progress` | Revisi Sedang Dikerjakan |
 
 ### Status afiliasi (`user_university.status`)

@@ -373,6 +373,9 @@ class DashboardController extends Controller
         // ---- Ringkasan "Aksi Saya" untuk mahasiswa ----
         $draftCount = $entries->where('status', LogbookEntry::STATUS_DRAFT)->count();
         $revisiCount = $entries->where('status', LogbookEntry::STATUS_REVISI)->count();
+        // Gerbang lunak: satu aksi revisi paling relevan agar jalur benar
+        // (Lanjutkan/Buat Revisi) selalu paling mudah dijangkau mahasiswa.
+        $pendingRevisionAction = LogbookEntry::pendingRevisionActionFor($ta);
         $unresolvedActionItems = $ta
             ? ActionItem::whereHas('entry', fn ($q) => $q->where('mahasiswa_ta_id', $ta->id))
                 ->where('is_done', false)
@@ -429,7 +432,7 @@ class DashboardController extends Controller
             'logbookHarian',
             'stats', 'timeline', 'heatmap', 'regularity', 'regularityTooltip',
             'unreadAnnouncements',
-            'draftCount', 'revisiCount', 'unresolvedActionItems',
+            'draftCount', 'revisiCount', 'unresolvedActionItems', 'pendingRevisionAction',
             'university', 'nilai', 'sidangs', 'agendaTerdekat', 'seminarSubmission',
             'mahasiswaStatus', 'pendingApproval', 'rejectedProgram', 'profileIncomplete'
         ));

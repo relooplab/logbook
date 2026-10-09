@@ -200,6 +200,82 @@ class LogbookEntry extends Model
     }
 
     /**
+     * Revisi yang masih menggantung untuk satu program: entri berstatus
+     * "revisi diminta" yang belum punya anak revisi aktif, ditambah draf
+     * revisi (draft / sedang dikerjakan, belum dikirim) milik mahasiswa.
+     * Satu definisi tunggal — dipakai gerbang logbook baru, dashboard,
+     * banner, dan test agar tidak ada tiga definisi berbeda.
+     *
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    public static function pendingRevisionsFor(?MahasiswaTa $ta): \Illuminate\Support\Collection
+    {
+        if (! $ta) {
+            return collect();
+        }
+
+        $activeChildStatuses = [self::STATUS_REVISION_IN_PROGRESS, self::STATUS_SUBMITTED];
+
+        // Induk yang diminta revisi tapi belum dijawab revisi aktif.
+        $requested = $ta->entries()
+            ->where('status', self::STATUS_REVISI)
+            ->whereDoesntHave('revisionChildren', function ($q) use ($activeChildStatuses) {
+                $q->whereIn('status', $activeChildStatuses);
+            })
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        // Draf revisi yang belum dikirim (termasuk mandiri tanpa induk).
+        $drafts = $ta->entries()
+            ->where('jenis', self::JENIS_REVISI)
+            ->whereIn('status', [self::STATUS_DRAFT, self::STATUS_REVISION_IN_PROGRESS])
+            ->whereNull('submitted_at')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (self $e) => $e->isEditable());
+
+        return $requested->concat($drafts)->unique('id')->values();
+    }
+
+    /**
+     * Satu aksi lanjutan paling relevan untuk revisi pending: lanjutkan draf
+     * bila ada, sonst buat revisi dari induk yang diminta revisi.
+     */
+    public static function pendingRevisionActionFor(?MahasiswaTa $ta): ?array
+    {
+        $pending = self::pendingRevisionsFor($ta);
+        if ($pending->isEmpty()) {
+            return null;
+        }
+
+        $draft = $pending->first(fn (self $e) => $e->jenis === self::JENIS_REVISI && $e->isEditable());
+        if ($draft) {
+            return [
+                'label' => 'Lanjutkan Revisi',
+                'url' => route('logbook.edit', $draft),
+                'entry' => $draft,
+                'kind' => 'draft',
+            ];
+        }
+
+        $parent = $pending->first(fn (self $e) => $e->status === self::STATUS_REVISI);
+        if ($parent) {
+            return [
+                'label' => 'Buat Revisi',
+                'url' => route('logbook.create-revisi', [
+                    'parent_entry_id' => $parent->id,
+                    'program' => $parent->mahasiswaTa?->jenis,
+                ]),
+                'entry' => $parent,
+                'kind' => 'parent',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Apakah entri ini sudah melewati batas sesi revisi yang wajar.
      */
     public function exceedsRevisionRoundLimit(): bool

@@ -18,12 +18,24 @@
     <x-page-header title="Dashboard Mahasiswa" :description="'Selamat datang, '.auth()->user()->name.'. Berikut ringkasan bimbingan '.($ta?->jenisLabel() ?? 'TA/KP').' Anda.'">
         <x-slot:actions>
             @if ($canCreate)
-                <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
-                <a href="{{ route('logbook.create-revisi', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Entri Revisi</a>
+                @if (!empty($pendingRevisionAction['url']))
+                    <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
+                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" title="Masih ada revisi yang belum selesai — sesi baru butuh konfirmasi" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
+                @else
+                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
+                    <a href="{{ route('logbook.create-revisi', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Entri Revisi</a>
+                @endif
             @endif
             <a href="{{ route('logbook.index') }}" class="btn-ghost flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Semua Entri</a>
         </x-slot:actions>
     </x-page-header>
+    @if (!empty($pendingRevisionAction['url']))
+        <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
+            <p class="font-semibold text-text-primary">Revisi perlu ditanggapi dulu</p>
+            <p class="mt-1 text-sm text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+            <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
+        </div>
+    @endif
     @include('partials.program-selector', ['ta' => $ta, 'route' => 'dashboard'])
 
     <section class="card min-w-0 p-4 sm:p-5" aria-labelledby="actions-heading">

@@ -111,6 +111,9 @@ class RevisiRecipientTest extends TestCase
             'topik' => 'Bimbingan dengan penerima pilihan',
             'progres_kendala' => 'Membahas progres dan kendala.',
             'submit' => $submit ? 1 : null,
+            // Setup memakai parent status revisi → gerbang lunak meminta
+            // pernyataan sesi baru agar thread revisi tidak putus diam-diam.
+            'confirm_new_despite_revision' => '1',
         ];
     }
 

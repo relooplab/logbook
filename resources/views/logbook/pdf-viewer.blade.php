@@ -44,16 +44,18 @@
         returnUrl: @if(request()->boolean('quick_review') && auth()->user()->can('review', $logbook))
             @json(route('quick-review.index', ['item' => $logbook->id]))
         @elseif(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
-            @json(route('logbook.edit', $logbook))
+            @json($wizardReturnUrl ?? route('logbook.create-revisi'))
         @else
             @json(route('logbook.show', $logbook))
         @endif ,
         returnLabel: @if(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
-            @json('Kembali & isi otomatis')
+            @json('Kembali & Lengkapi Form')
         @else
             @json('Kembali & lengkapi')
         @endif ,
         fromCreateRevisi: @json(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook)),
+        wizardParentId: @json($wizardParentId ?? null),
+        wizardDraftId: @json($wizardDraftId ?? null),
         quickReviewUrl: @json(route('quick-review.index', ['item' => $logbook->id])),
     };
 </script>

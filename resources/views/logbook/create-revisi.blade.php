@@ -51,11 +51,17 @@
     $steps = [
         1 => ['Pilih Umpan Balik', 'forum', 'Pilih umpan balik yang dijawab'],
         2 => ['Upload File', 'upload_file', 'Unggah file revisi'],
-        3 => ['Hasil Penandaan', 'build', 'Hasil anotasi PDF jadi kartu otomatis'],
+        3 => ['Hasil Tandaan', 'build', 'Yang ditandai di PDF jadi isian otomatis'],
         4 => ['Review & Kirim', 'send', 'Periksa ringkasan dan kirim'],
     ];
     // Baris kartu perbaikan: hasil old()/prefill komentar, atau satu kartu kosong.
     $cardRows = array_values($initialRows ?: [[]]);
+    // Kembali dari viewer (?step=3&autopull=1): buka langsung langkah yang
+    // diminta; validasi gagal tetap menang agar kesalahan terlihat.
+    $initialStep = $errorStep;
+    if (!empty($requestedStep) && $riwayatErrors->isEmpty() && !$errors->has('lampiran') && !$errors->has('tanggal_pengiriman') && !$errors->has('progres_kendala')) {
+        $initialStep = $requestedStep;
+    }
 @endphp
 <div class="form-workspace">
     <x-page-header title="Entri Revisi" description="Kirim revisi dan dokumentasikan perbaikan Anda" class="mb-5">
@@ -74,6 +80,13 @@
                 <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-status-pending/10 text-status-pending">Melanjutkan draf #{{ $draft->id }}</span>
             @endif
         </p>
+    @endif
+
+    @if ($draft && !$draft->parent_entry_id)
+        <div class="mb-5 rounded-xl border border-status-pending/40 bg-status-pending/10 p-4" role="alert">
+            <p class="font-semibold text-text-primary">Draf ini belum menjawab entri mana pun</p>
+            <p class="mt-1 text-sm text-text-secondary">Pilih entri yang dijawab di langkah 1 di bawah — revisi wajib menempel ke satu entri sebelum dikirim ke dosen.</p>
+        </div>
     @endif
 
     <div class="mb-5">
@@ -120,15 +133,15 @@
                     </span>
                     <div class="min-w-0">
                         <h2 class="font-heading font-semibold text-text-primary">1. Pilih Umpan Balik yang Dijawab</h2>
-                        <p class="text-caption text-text-secondary">Tentukan entri umpan balik dan penerima revisi.</p>
+                        <p class="text-caption text-text-secondary">Revisi menjawab komentar dosen pada satu entri — pilih entri yang dijawab, lalu tentukan penerima.</p>
                     </div>
                 </div>
 
                 <div class="form-field">
-                    <label class="form-field-label" for="parent_entry_id">Umpan Balik yang dijawab (opsional)</label>
+                    <label class="form-field-label" for="parent_entry_id">Entri yang dijawab</label>
                     <div class="form-field-body">
                         <select name="parent_entry_id" id="parent_entry_id" class="form-control">
-                            <option value="">Tidak ada — revisi mandiri</option>
+                            <option value="">Draf pribadi (belum dikirim ke dosen)</option>
                             @foreach ($parents as $parent)
                                 <option value="{{ $parent->id }}" data-dosen-id="{{ $parent->dosen_id }}"
                                     @selected(old('parent_entry_id', $selectedParentId) == $parent->id)>
@@ -136,7 +149,7 @@
                                 </option>
                             @endforeach
                         </select>
-                        <p class="form-field-hint">Kosongkan jika ingin membuat revisi tanpa menghubungkan ke entri logbook yang ada.</p>
+                        <p class="form-field-hint">Pilih entri yang dijawab — wajib diisi sebelum revisi dikirim ke dosen. Draf pribadi boleh disimpan dulu tanpa memilih.</p>
                         @error('parent_entry_id')
                             <p class="form-field-error">{{ $message }}</p>
                         @enderror
@@ -297,25 +310,25 @@
                         <span class="material-symbols-outlined icon-md text-brand">build</span>
                     </span>
                     <div class="min-w-0">
-                        <h2 class="font-heading font-semibold text-text-primary">3. Hasil Penandaan</h2>
-                        <p class="text-caption text-text-secondary">Hasil penandaan PDF tampil sebagai kartu di bawah — lengkapi yang bertanda perlu dilengkapi, atau tambah manual.</p>
+                        <h2 class="font-heading font-semibold text-text-primary">3. Hasil Tandaan</h2>
+                        <p class="text-caption text-text-secondary">Yang kamu tandai di PDF tampil sebagai isian di bawah — lengkapi yang masih kurang, atau tambah manual.</p>
                     </div>
                 </div>
 
                 <div class="mt-4 rounded-xl border border-dashed border-brand/40 bg-brand/5 p-4" data-anotasi-cta>
-                    <ol class="flex flex-wrap items-center gap-2 text-xs text-text-secondary" aria-label="Cara cepat anotasi">
+                    <ol class="flex flex-wrap items-center gap-2 text-xs text-text-secondary" aria-label="Cara cepat menandai">
                         <li><span class="font-semibold text-text-primary">1.</span> Tandai di PDF</li>
                         <li aria-hidden="true">→</li>
-                        <li><span class="font-semibold text-text-primary">2.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Isi otomatis ↓</a></li>
+                        <li><span class="font-semibold text-text-primary">2.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Masukkan ke form ↓</a></li>
                         <li aria-hidden="true">→</li>
-                        <li><span class="font-semibold text-text-primary">3.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Lengkapi kartu di bawah ↓</a></li>
+                        <li><span class="font-semibold text-text-primary">3.</span> <a href="#kartu-perbaikan" class="text-brand hover:underline">Lengkapi yang kurang ↓</a></li>
                     </ol>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                         <button type="button" class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50" data-anotasi-open disabled>
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">open_in_new</span> Buka PDF &amp; tandai
                         </button>
                         <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50" data-isi-otomatis disabled>
-                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Isi otomatis <span data-isi-count></span>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Masukkan yang ditandai <span data-isi-count></span>
                         </button>
                     </div>
                     <p class="mt-2 text-xs text-text-secondary" data-anotasi-hint>Draf tersimpan otomatis saat klik Lanjut — PDF terbuka di tab baru.</p>
@@ -369,10 +382,10 @@
                         <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah manual
                     </button>
                     <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium" data-isi-otomatis-bawah disabled>
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Isi otomatis dari anotasi <span data-isi-count-bawah></span>
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Masukkan yang ditandai <span data-isi-count-bawah></span>
                     </button>
                 </div>
-                <p class="mt-2 text-xs text-text-secondary">Alur utama: tandai di PDF → Isi otomatis → lengkapi kartu. Tambah manual hanya bila perlu baris tambahan.</p>
+                <p class="mt-2 text-xs text-text-secondary">Alur utama: tandai di PDF → Masukkan yang ditandai → lengkapi yang kurang. Tambah manual hanya bila perlu baris tambahan.</p>
 
                 <div class="mt-4 border-t border-border pt-5">
                     <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Pesan untuk Dosen</p>
@@ -403,7 +416,7 @@
                         <p id="kartu-hint" class="hidden text-xs text-status-pending" role="status">
                             <span data-kartu-count></span> atau lengkapi manual: halaman/bagian, komentar dosen, dan perbaikan pada setiap kartu.
                         </p>
-                        <p class="mt-2 text-xs text-text-secondary">Tips: unggah file pada langkah 2, tandai lewat anotasi PDF, lalu kartu terisi otomatis.</p>
+                        <p class="mt-2 text-xs text-text-secondary">Tips: unggah file pada langkah 2, tandai di PDF, lalu isian masuk otomatis ke form.</p>
                         <button type="button" class="wizard-next btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
                             Lanjut
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_forward</span>
@@ -601,7 +614,8 @@
     var defaultRecipientValue = '{{ $defaultRecipientId }}';
     var draftBoot = @json($draftBoot);
     var hasExistingFile = !!(draftBoot && draftBoot.has_file);
-    var initialStep = {{ $errorStep }};
+    var initialStep = {{ $initialStep ?? $errorStep }};
+    var autoPullOnLoad = @json(!empty($autoPullOnLoad));
     var cardSeq = 0;
 
     function hasFile() {
@@ -740,7 +754,7 @@
         if (!fileOk) {
             msg = 'Unggah file revisi pada langkah 2 — tanpa file, anotasi PDF tidak bisa dibuat.';
         } else if (total === 0) {
-            msg = 'Belum ada kartu — tandai di PDF lalu Isi otomatis, atau tambah manual.';
+            msg = 'Belum ada isian — tandai di PDF lalu Masukkan yang ditandai, atau tambah manual.';
         } else if (missing > 0) {
             msg = missing + ' dari ' + total + ' kartu perlu dilengkapi';
         } else {
@@ -795,19 +809,44 @@
 
     // Isi otomatis berjalan sendiri saat masuk langkah 3 (tanpa klik tombol)
     // bila kartu masih kosong — mahasiswa tinggal memilih komentar dosen.
-    // Tombol manual tetap tersedia sebagai cadangan.
-    var autoPulledFor = null;
+    // Kepulangan dari viewer selalu pull-merge paksa (server idempoten via flag).
     function cardsPristine() {
         return cards().length > 0 && cards().every(function (card) {
             var d = cardData(card);
             return !d.halaman.trim() && !d.komentar_dosen.trim() && !d.perbaikan.trim() && !d.status;
         });
     }
-    function maybeAutoPull() {
-        if (!draftPullUrl || autoPulledFor === draftPullUrl) return;
-        if (!cardsPristine()) return;
-        autoPulledFor = draftPullUrl;
+    function maybeAutoPull(force) {
+        if (!draftPullUrl) return;
+        if (!force && !cardsPristine()) return;
         isiOtomatisFrom(draftPullUrl, null);
+    }
+    // Sinyal kembali dari viewer bisa spesifik draf, spesifik induk, atau
+    // generik JSON — semuanya berarti: buka langkah 3 + gabungkan yang ditandai.
+    function handleViewerReturnSignal(key, rawValue) {
+        if (!key || key.indexOf('lbta-revisi-autopull') !== 0) return false;
+        if (key === 'lbta-revisi-autopull') {
+            try {
+                var payload = JSON.parse(rawValue || localStorage.getItem('lbta-revisi-autopull') || '{}');
+                var relevant = false;
+                if (draftEntryId && (String(payload.entryId) === String(draftEntryId) || String(payload.wizardDraftId) === String(draftEntryId))) relevant = true;
+                if (!relevant && payload.wizardParentId && String(payload.wizardParentId) === String(currentParentId())) relevant = true;
+                if (!relevant && payload.entryId && String(payload.entryId) === String(currentParentId())) relevant = true;
+                if (!relevant) return false;
+            } catch (e) { /* payload rusak = tetap lanjut */ }
+        } else if (draftEntryId && key === 'lbta-revisi-autopull:' + draftEntryId) {
+            // cocok draf aktif — lanjut
+        } else if (key.indexOf('lbta-revisi-autopull:parent:') === 0) {
+            var parentKey = key.substring('lbta-revisi-autopull:parent:'.length);
+            if (String(parentKey) !== String(currentParentId())) return false;
+        } else {
+            return false;
+        }
+        try { localStorage.removeItem(key); } catch (err) {}
+        if (key === 'lbta-revisi-autopull') { try { localStorage.removeItem('lbta-revisi-autopull'); } catch (err2) {} }
+        showStep(3);
+        maybeAutoPull(true);
+        return true;
     }
 
     // R9: nomor langkah di luar 1-4 diabaikan — tidak pernah render panel kosong.
@@ -837,6 +876,10 @@
     var draftViewerUrl = null;
     var draftPullUrl = null;
     var savingDraft = false;
+    // Handler gabung-pull didefinisikan di IIFE bawah tapi dipakai juga oleh
+    // maybeAutoPull()/storage handler di scope luar — tampung di var luar.
+    var mergePulledRows = null;
+    var isiOtomatisFrom = null;
     function setDraftHint(text) {
         if (!draftHint) return;
         if (!text) { draftHint.textContent = ''; draftHint.classList.add('hidden'); return; }
@@ -853,7 +896,7 @@
         if (isiBtn) { isiBtn.disabled = false; isiBtn.dataset.pullUrl = draftPullUrl; }
         syncIsiButtons();
         var hint = document.querySelector('[data-anotasi-hint]');
-        if (hint) hint.textContent = 'Draf #' + draftEntryId + ' tersimpan — PDF terbuka di tab baru. Selesai menandai? Klik Isi otomatis.';
+        if (hint) hint.textContent = 'Draf #' + draftEntryId + ' tersimpan — PDF terbuka di tab baru. Selesai menandai? Klik Masukkan yang ditandai.';
     }
     // Tandai URL viewer agar kembali ke alur revisi (dipakai saveDraftAndOpenPdf
     // di scope luar maupun handler di dalam IIFE di bawah).
@@ -937,7 +980,7 @@
     if (draftBoot && draftBoot.entry_id) {
         activateAnnotationStep(draftBoot);
         var draftHintEl = document.querySelector('[data-anotasi-hint]');
-        if (draftHintEl) draftHintEl.textContent = 'Melanjutkan draf #' + draftBoot.entry_id + ' — PDF bisa dibuka & ditandai, lalu Isi otomatis.';
+        if (draftHintEl) draftHintEl.textContent = 'Melanjutkan draf #' + draftBoot.entry_id + ' — PDF bisa dibuka & ditandai, lalu Masukkan yang ditandai.';
     }
     // Isi otomatis di langkah 3 memakai endpoint pull draf yang tersimpan.
     // F5: tombol atas (CTA) dan tombol bawah (daftar kartu) berbagi handler isiOtomatisFrom.
@@ -964,8 +1007,50 @@
         });
         if (isiBtn) isiBtn.addEventListener('click', function () { isiOtomatisFrom(isiBtn.dataset.pullUrl, isiBtn); });
         if (isiBawah) isiBawah.addEventListener('click', function () { isiOtomatisFrom(isiBawah.dataset.pullUrl || draftPullUrl, isiBawah); });
-        function isiOtomatisFrom(url, btn) {
+        // Gabungkan baris pull ke kartu: lewati yang sudah ada, isi kartu
+        // kosong dulu (hanya field kosong, tak menimpa), sisa jadi kartu baru.
+        // Tak pernah menghapus isian mahasiswa.
+        // Diekspos ke var luar (bukan function lokal) agar maybeAutoPull +
+        // storage handler di scope luar bisa memanggilnya.
+        function rowKey(r) {
+            return [(r.halaman || '').trim(), (r.komentar_dosen || '').trim(), (r.perbaikan || '').trim()].join('￨');
+        }
+        mergePulledRows = function (rows) {
+            var added = 0;
+            rows.forEach(function (r) {
+                var key = rowKey(r);
+                var exists = cards().some(function (card) {
+                    var d = cardData(card);
+                    return [(d.halaman || '').trim(), (d.komentar_dosen || '').trim(), (d.perbaikan || '').trim()].join('￨') === key;
+                });
+                if (exists) return;
+                var target = null;
+                cards().forEach(function (card) {
+                    if (target) return;
+                    if (!cardData(card).perbaikan.trim()) target = card;
+                });
+                if (target) {
+                    var d = cardData(target);
+                    var halEl = target.querySelector('[name$="[halaman]"]');
+                    var perEl = target.querySelector('[name$="[perbaikan]"]');
+                    if (halEl && !d.halaman.trim() && r.halaman) halEl.value = r.halaman;
+                    if (perEl) perEl.value = r.perbaikan || '';
+                    updateCardSummary(target);
+                    added++;
+                } else {
+                    addKartu({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', perbaikan: r.perbaikan || '', status: '' }, { silentFocus: true });
+                    added++;
+                }
+            });
+            updateProgress();
+            updateUploadGate();
+            updateReview();
+            syncSummaryPanel();
+            return added;
+        };
+        isiOtomatisFrom = function (url, btn) {
             if (!url) return;
+            if (typeof mergePulledRows !== 'function') return;
             if (btn && btn.disabled) return;
             if (btn) btn.disabled = true;
             fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value, 'Accept': 'application/json' }, credentials: 'same-origin' })
@@ -973,26 +1058,25 @@
                 .then(function (out) {
                     if (!out.ok) throw new Error('pull gagal');
                     var rows = (out.d && out.d.rows) || [];
-                    kartuContainer.innerHTML = '';
-                    if (!rows.length) addKartu();
-                    rows.forEach(function (r) { addKartu({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', perbaikan: r.perbaikan || '', status: '' }, { silentFocus: true }); });
-                    highlightNewCards(Math.max(out.d.pulled || 0, 0));
+                    var merged = mergePulledRows(rows);
+                    if (!rows.length && cards().length === 0) addKartu();
+                    if (merged > 0) highlightNewCards(merged);
                     var countEl = document.querySelector('[data-isi-count]');
                     if (countEl && out.d.pulled > 0) countEl.textContent = '(' + out.d.pulled + ')';
                     var countBawah = document.querySelector('[data-isi-count-bawah]');
                     if (countBawah && out.d.pulled > 0) countBawah.textContent = '(' + out.d.pulled + ')';
                     var parts = [];
-                    if (out.d.pulled > 0) parts.push(out.d.pulled + ' perbaikan terisi otomatis. Lengkapi kolom Komentar Dosen yang bertanda');
-                    if (out.d.skipped_empty > 0) parts.push(out.d.skipped_empty + ' anotasi kosong dilewati');
-                    setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada anotasi — tandai dulu di PDF, lalu klik lagi.', true);
+                    if (out.d.pulled > 0) parts.push(out.d.pulled + ' isian masuk dari yang ditandai. Lengkapi kolom yang masih kurang');
+                    if (out.d.skipped_empty > 0) parts.push(out.d.skipped_empty + ' tandaan kosong dilewati');
+                    setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada yang baru — tandai dulu di PDF, lalu klik lagi.', true);
                     updateUploadGate();
                 })
-                .catch(function () { setMsg('Gagal mengisi otomatis. Coba lagi.', false); })
+                .catch(function () { setMsg('Gagal memasukkan ke form. Coba lagi.', false); })
                 .finally(function () {
                 if (btn) btn.disabled = false;
                 syncIsiButtons();
             });
-        }
+        };
     })();
     document.querySelectorAll('.wizard-prev').forEach(function (btn) {
         btn.addEventListener('click', function () { showStep(currentStep - 1); });
@@ -1417,11 +1501,12 @@
 
     // Kembali dari tab viewer PDF (?from=create-revisi): tab viewer menutup
     // diri setelah menulis localStorage; tab wizard ini lompat ke langkah 3
-    // dan otomatis menarik anotasi (satu klik "Kembali & isi otomatis").
+    // dan menggabungkan yang ditandai. Terima semua bentuk sinyal viewer.
     window.addEventListener('storage', function (e) {
-        if (!draftEntryId || !e.key || e.key !== 'lbta-revisi-autopull:' + draftEntryId) return;
-        try { localStorage.removeItem(e.key); } catch (err) {}
-        showStep(3);
+        if (!e.key) return;
+        try {
+            handleViewerReturnSignal(e.key, e.newValue || e.url);
+        } catch (err) {}
     });
     var ubahPesan = document.querySelector('[data-ubah-pesan]');
     if (ubahPesan) ubahPesan.addEventListener('click', function () {
@@ -1642,5 +1727,10 @@
     syncSummaryPanel();
     renderSteps();
     if (initialStep > 1) showStep(initialStep, { silent: true });
+    // Kembali dari viewer tab-sama (?step=3&autopull=1): gabungkan yang
+    // ditandai jadi isian langkah 3 tanpa menunggu sinyal storage.
+    if (autoPullOnLoad && initialStep === 3 && draftPullUrl) {
+        maybeAutoPull(true);
+    }
 </script>
 @endsection

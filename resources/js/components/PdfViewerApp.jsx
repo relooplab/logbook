@@ -38,7 +38,7 @@ import {
  */
 
 const DATA = window.PDF_VIEWER_DATA || {};
-const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf } = DATA;
+const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, wizardParentId, wizardDraftId, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf } = DATA;
 
 const parseIdFromHash = () => {
   const m = (document.location.hash || '').match(/^#highlight-(.+)$/);
@@ -602,15 +602,15 @@ function PdfViewerApp() {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.message || ('HTTP ' + res.status));
-      var skipNote = d.skipped_empty > 0 ? ' ' + d.skipped_empty + ' anotasi kosong dilewati.' : '';
+      var skipNote = d.skipped_empty > 0 ? ' ' + d.skipped_empty + ' tandaan kosong dilewati.' : '';
       if (d.pulled > 0) {
         setPullCount(d.pulled);
-        setPullMessage(d.pulled + (entryKind === 'revisi' ? ' perbaikan terisi otomatis dari anotasi.' : ' poin terisi otomatis ke ringkasan.') + ' Kembali untuk melengkapi yang bertanda perlu dilengkapi.' + skipNote);
+        setPullMessage(d.pulled + (entryKind === 'revisi' ? ' isian sudah masuk dari PDF.' : ' poin sudah masuk ke ringkasan.') + ' Kembali untuk melengkapi yang kurang.' + skipNote);
       } else {
-        setPullMessage('Belum ada anotasi baru — tandai dulu di PDF, lalu klik lagi.' + skipNote);
+        setPullMessage('Belum ada yang baru — tandai dulu di PDF (blok teks / seret kotak), lalu klik lagi.' + skipNote);
       }
     } catch (e) {
-      setPullMessage('Gagal menarik anotasi.');
+      setPullMessage('Gagal memasukkan ke form. Coba lagi.');
     } finally {
       setPulling(false);
     }
@@ -631,8 +631,27 @@ function PdfViewerApp() {
   // Kembali ke wizard create-revisi: beri sinyal ke tab wizard agar auto-pull
   // lalu tutup tab ini (kembali fokus ke tab wizard). Bila tab viewer dibuka
   // manual (tanpa opener), fallback ke navigasi returnUrl seperti biasa.
+  // Sinyal ditulis dalam 3 bentuk agar wizard selalu cocok:
+  // spesifik entry, generik JSON, dan parent (kasus anotasi di induk).
+  function signalWizardReturn() {
+    try {
+      var now = String(Date.now());
+      localStorage.setItem('lbta-revisi-autopull:' + entryId, now);
+      if (wizardDraftId && String(wizardDraftId) !== String(entryId)) {
+        localStorage.setItem('lbta-revisi-autopull:' + wizardDraftId, now);
+      }
+      var parentKey = wizardParentId || (entryKind !== 'revisi' ? entryId : null);
+      if (parentKey) {
+        localStorage.setItem('lbta-revisi-autopull:parent:' + parentKey, now);
+      }
+      localStorage.setItem('lbta-revisi-autopull', JSON.stringify({
+        entryId: entryId, wizardParentId: wizardParentId || null,
+        wizardDraftId: wizardDraftId || null, at: Date.now(),
+      }));
+    } catch (e) { /* abaikan */ }
+  }
   function goBackFromWizard() {
-    try { localStorage.setItem('lbta-revisi-autopull:' + entryId, String(Date.now())); } catch (e) { /* abaikan */ }
+    signalWizardReturn();
     if (window.opener) { window.close(); return; }
     if (returnUrl) window.location.href = returnUrl;
   }
@@ -672,9 +691,9 @@ function PdfViewerApp() {
       {/* Bar compact: kembali | judul | anotasi | outline | file | mode | zoom || aksi */}
       <div className="flex items-center gap-1.5 md:gap-2 rounded-lg border border-border bg-bg-surface px-2 py-1.5 overflow-x-auto shrink-0">
         {fromCreateRevisi ? (
-          <button onClick={goBackFromWizard} title="Kembali ke wizard"
+          <button onClick={goBackFromWizard} title="Kembali ke form revisi"
             className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-bg-panel hover:bg-bg-hover shrink-0">
-            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
+            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali ke Form</span>
           </button>
         ) : (
           <a href={returnUrl} title="Kembali ke detail"
@@ -811,9 +830,9 @@ function PdfViewerApp() {
             </button>
           )}
           {canPullAnnotations && (
-            <button onClick={pullToTable} disabled={pulling} title="Isi otomatis dari anotasi yang Anda tandai"
+            <button onClick={pullToTable} disabled={pulling} title="Pindahkan yang kamu tandai di PDF jadi isian di Langkah 3"
               className="flex min-h-11 items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand whitespace-nowrap disabled:opacity-50">
-              <ListTree className="h-3.5 w-3.5" /><span className="hidden md:inline">{pulling ? 'Mengisi…' : 'Isi otomatis dari anotasi' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span><span className="md:hidden">{pulling ? '…' : 'Isi otomatis' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span>
+              <ListTree className="h-3.5 w-3.5" /><span className="hidden md:inline">{pulling ? 'Lagi dimasukkan…' : 'Masukkan ke Form Revisi' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span><span className="md:hidden">{pulling ? '…' : 'Ke Form' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span>
             </button>
           )}
           {burnUrl && (

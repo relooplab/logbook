@@ -11,6 +11,16 @@
     <x-slot:actions>{!! $actionLinks !!}</x-slot:actions>
 </x-page-header>
 
+    @if (($pendingRevisions ?? collect())->isNotEmpty())
+        <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
+            <p class="font-semibold text-text-primary">Revisi perlu ditanggapi dulu</p>
+            <p class="mt-1 text-sm text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+            @if (!empty($pendingRevisionAction['url']))
+                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
+            @endif
+        </div>
+    @endif
+
     {{-- Filter kombinasi --}}
     <form method="GET" action="{{ route('logbook.index', array_filter(['program' => request('program')])) }}" class="card p-4 flex flex-wrap gap-3 items-end">
         <div class="w-full sm:w-auto">
