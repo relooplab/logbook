@@ -54,28 +54,18 @@
         @if (($otherPendingRevisions ?? collect())->isNotEmpty())
             @php $canReviewOther = auth()->user()->can('review', $logbook); @endphp
             <div class="rounded-xl border border-status-pending/40 bg-status-pending/10 p-4 text-sm" role="alert">
-                @if ($canReviewOther)
-                    <p class="font-semibold text-text-primary">Mahasiswa masih punya revisi yang belum selesai di thread lain</p>
-                @else
-                    <p class="font-semibold text-text-primary">Selesaikan dulu revisi yang belum selesai</p>
-                @endif
+                <p class="font-semibold text-text-primary">Ada {{ ($otherPendingRevisions ?? collect())->count() }} revisi lain yang belum beres</p>
                 <ul class="mt-2 space-y-1 text-text-secondary">
                     @foreach ($otherPendingRevisions->take(3) as $pending)
                         <li>
-                            <a href="{{ route('logbook.show', $pending) }}" class="text-brand hover:underline">
-                                @if ($pending->jenis === 'revisi')
-                                    Draf revisi #{{ $pending->id }}
-                                @else
-                                    Sesi {{ $pending->sesi_ke }} · {{ $pending->topik ?? 'Tanpa topik' }} — Revisi Diminta
-                                @endif
-                            </a>
+                            <a href="{{ route('logbook.show', $pending) }}" class="text-brand hover:underline">{{ $pending->shortTitle() }}</a>
                         </li>
                     @endforeach
                 </ul>
                 @if ($canReviewOther)
-                    <p class="mt-2 text-text-secondary">Periksa thread tersebut sebelum mereview entri ini — minta mahasiswa menjawab lewat jalur revisi bila isinya jawaban revisi.</p>
+                    <p class="mt-2 text-text-secondary">Lihat dulu sebelum menilai entri ini.</p>
                 @else
-                    <p class="mt-2 text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+                    <p class="mt-2 text-text-secondary">Jawab revisinya dulu lewat Jawab Revisi.</p>
                 @endif
             </div>
         @endif
@@ -98,7 +88,7 @@
                 <a href="{{ route('logbook.edit', $logbook) }}" class="block text-center px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Edit</a>
                 <form method="POST" action="{{ route('logbook.submit', $logbook) }}">
                     @csrf
-                    <button type="submit" class="w-full px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Kirim ke dosen</button>
+                    <button type="submit" class="w-full px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Kirim</button>
                 </form>
                 <form method="POST" action="{{ route('logbook.destroy', $logbook) }}"
                     onsubmit="return confirm('Hapus entri ini? Tindakan tidak dapat dibatalkan.');">
@@ -110,7 +100,7 @@
         @endif
 
         @if ($owner && $logbook->status === 'revisi' && !$logbook->isLockedByActiveRevision())
-            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id, 'program' => $logbook->mahasiswaTa?->jenis]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Buat Revisi dari Umpan Balik Ini</a>
+            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id, 'program' => $logbook->mahasiswaTa?->jenis]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Jawab Revisi</a>
         @endif
 
         @if ($logbook->status === \App\Models\LogbookEntry::STATUS_ARCHIVED)

@@ -3,6 +3,7 @@
 <div id="pdf-viewer-root" class="h-full"></div>
 @endsection @section("scripts")
 <script>
+    @php $fromWizard = in_array(request()->query('from'), ['create-revisi', 'create-logbook']) && auth()->user()->can('update', $logbook); @endphp
     window.PDF_VIEWER_DATA = {
         title: @json($logbook->jenis === "revisi" ? "Revisi" : "Sesi " . $logbook->sesi_ke),
         draftUrl: @if ($logbook->lampiran_path)
@@ -45,15 +46,19 @@
             @json(route('quick-review.index', ['item' => $logbook->id]))
         @elseif(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
             @json($wizardReturnUrl ?? route('logbook.create-revisi'))
+        @elseif(request()->query('from') === 'create-logbook' && auth()->user()->can('update', $logbook))
+            @json($wizardReturnUrl ?? route('logbook.create'))
         @else
             @json(route('logbook.show', $logbook))
         @endif ,
         returnLabel: @if(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook))
-            @json('Kembali & Lengkapi Form')
+            @json('Kembali & Lengkapi')
+        @elseif(request()->query('from') === 'create-logbook' && auth()->user()->can('update', $logbook))
+            @json('Kembali & Salin')
         @else
             @json('Kembali & lengkapi')
         @endif ,
-        fromCreateRevisi: @json(request()->query('from') === 'create-revisi' && auth()->user()->can('update', $logbook)),
+        fromCreateRevisi: @json($fromWizard),
         wizardParentId: @json($wizardParentId ?? null),
         wizardDraftId: @json($wizardDraftId ?? null),
         quickReviewUrl: @json(route('quick-review.index', ['item' => $logbook->id])),

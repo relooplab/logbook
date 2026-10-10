@@ -105,16 +105,25 @@ class RevisiRecipientTest extends TestCase
 
     private function logbookPayload(?int $recipientId, bool $submit = true): array
     {
-        return [
+        $payload = [
             'addressed_dosen_id' => $recipientId,
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Bimbingan dengan penerima pilihan',
             'progres_kendala' => 'Membahas progres dan kendala.',
+            'lampiran' => UploadedFile::fake()->create('logbook.pdf', 100, 'application/pdf'),
             'submit' => $submit ? 1 : null,
             // Setup memakai parent status revisi → gerbang lunak meminta
             // pernyataan sesi baru agar thread revisi tidak putus diam-diam.
             'confirm_new_despite_revision' => '1',
         ];
+        // Step 3 memakai kartu jawaban: kirim wajib minimal 1 kartu lengkap.
+        if ($submit) {
+            $payload['riwayat_perbaikan'] = [
+                ['halaman' => 'Hal. 1', 'komentar_dosen' => 'Perjelas metode', 'perbaikan' => 'Menambah penjelasan metode', 'status' => 'Sudah'],
+            ];
+        }
+
+        return $payload;
     }
 
     private function assertReviewEmail(User $recipient, LogbookEntry $entry, string $description): void
@@ -166,6 +175,10 @@ class RevisiRecipientTest extends TestCase
     public function test_draf_yang_dikirim_kemudian_email_review_menyebut_identitas_mahasiswa(): void
     {
         Notification::fake();
+
+        // Netralkan parent revisi agar gate submit-tunda tidak ikut menghalangi
+        // (fokus test ini notifikasi penerima, bukan gerbang revisi).
+        $this->parent->update(['status' => LogbookEntry::STATUS_APPROVED]);
 
         $this->actingAs($this->mahasiswa)->post(route('logbook.store'), $this->logbookPayload($this->penguji->id, false))
             ->assertRedirect();
@@ -219,6 +232,9 @@ class RevisiRecipientTest extends TestCase
 
     public function test_logbook_draft_menyimpan_penerima_untuk_dikirim_nanti(): void
     {
+        // Netralkan parent revisi (lihat test notifikasi draf di atas).
+        $this->parent->update(['status' => LogbookEntry::STATUS_APPROVED]);
+
         $this->actingAs($this->mahasiswa)->post(route('logbook.store'), $this->logbookPayload($this->penguji->id, false))
             ->assertRedirect(route('logbook.index'));
 

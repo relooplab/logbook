@@ -121,13 +121,13 @@
 
         // --------------------------------------------------------- autosave
         var AUTOSAVE_STATES = {
-            idle:      { icon: 'save',             tone: 'text-text-secondary', label: 'Belum ada perubahan',          mini: 'Belum disimpan',        variant: 'badge-neutral' },
-            pending:   { icon: 'edit_note',        tone: 'text-status-pending', label: 'Perubahan belum tersimpan',    mini: 'Belum tersimpan',       variant: 'badge-pending' },
+            idle:      { icon: 'save',             tone: 'text-text-secondary', label: 'Tersimpan otomatis di browser ini', mini: 'Di browser ini', variant: 'badge-neutral' },
+            pending:   { icon: 'edit_note',        tone: 'text-status-pending', label: 'Mengetik...',                      mini: 'Mengetik...',     variant: 'badge-pending' },
             saving:    { icon: 'progress_activity', tone: 'text-text-secondary', label: 'Menyimpan...',                mini: 'Menyimpan...',          variant: 'badge-info' },
-            saved:     { icon: 'cloud_done',       tone: 'text-status-success', label: 'Draf tersimpan',               mini: 'Tersimpan otomatis',    variant: 'badge-success' },
-            restored:  { icon: 'history',          tone: 'text-status-info',    label: 'Draf dipulihkan',              mini: 'Draf dipulihkan',       variant: 'badge-info' },
-            discarded: { icon: 'delete',           tone: 'text-text-secondary', label: 'Draf dibuang',                 mini: 'Draf dibuang',          variant: 'badge-neutral' },
-            error:     { icon: 'error',            tone: 'text-status-danger',  label: 'Gagal menyimpan otomatis',     mini: 'Gagal menyimpan',       variant: 'badge-danger' },
+            saved:     { icon: 'cloud_done',       tone: 'text-status-success', label: 'Tersimpan di browser ini',     mini: 'Di browser ini',       variant: 'badge-success' },
+            restored:  { icon: 'history',          tone: 'text-status-info',    label: 'Dipulihkan',                   mini: 'Dipulihkan',           variant: 'badge-info' },
+            discarded: { icon: 'delete',           tone: 'text-text-secondary', label: 'Dibuang',                      mini: 'Dibuang',              variant: 'badge-neutral' },
+            error:     { icon: 'error',            tone: 'text-status-danger',  label: 'Gagal menyimpan',              mini: 'Gagal menyimpan',       variant: 'badge-danger' },
         };
         var TONES = ['text-text-secondary', 'text-status-pending', 'text-status-success', 'text-status-info', 'text-status-danger'];
         var VARIANTS = ['badge-neutral', 'badge-pending', 'badge-info', 'badge-success', 'badge-danger'];

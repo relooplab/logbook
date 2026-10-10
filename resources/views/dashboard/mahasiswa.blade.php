@@ -19,11 +19,11 @@
         <x-slot:actions>
             @if ($canCreate)
                 @if (!empty($pendingRevisionAction['url']))
-                    <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
-                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" title="Masih ada revisi yang belum selesai — sesi baru butuh konfirmasi" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
+                    <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi →</a>
+                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
                 @else
                     <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
-                    <a href="{{ route('logbook.create-revisi', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Entri Revisi</a>
+                    <a href="{{ route('logbook.index', ['program' => $ta->jenis, 'status' => 'revisi']) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi</a>
                 @endif
             @endif
             <a href="{{ route('logbook.index') }}" class="btn-ghost flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Semua Entri</a>
@@ -31,9 +31,24 @@
     </x-page-header>
     @if (!empty($pendingRevisionAction['url']))
         <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
-            <p class="font-semibold text-text-primary">Revisi perlu ditanggapi dulu</p>
-            <p class="mt-1 text-sm text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
-            <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
+            <p class="font-semibold text-text-primary">
+                @if (($pendingRevisionThreads ?? collect())->count() > 1)
+                    {{ $pendingRevisionThreads->count() }} sesi menunggu jawabanmu
+                @else
+                    {{ $pendingRevisionAction['entry']->shortTitle() }} menunggu jawabanmu
+                @endif
+            </p>
+            <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">Jawab Revisi →</a>
+            @if (($pendingRevisionThreads ?? collect())->count() > 1)
+                <ul class="mt-3 space-y-1 text-sm">
+                    @foreach ($pendingRevisionThreads as $thread)
+                        <li>
+                            <a href="{{ route('logbook.show', $thread['root']) }}" class="text-brand hover:underline">{{ $thread['root']->shortTitle() }}</a>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+            <p class="mt-2 text-xs"><a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="text-text-secondary hover:text-text-primary hover:underline">Mau bimbingan topik baru? Buat logbook baru</a></p>
         </div>
     @endif
     @include('partials.program-selector', ['ta' => $ta, 'route' => 'dashboard'])

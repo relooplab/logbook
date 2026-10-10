@@ -50,7 +50,7 @@
         </dl>
         <div class="text-left lg:text-right">@include('partials.status-badge', ['status' => $logbook->status]) @if($logbook->revision_round)<p class="text-xs text-text-secondary mt-2">Revisi ke-{{ $logbook->revision_round }}</p>@endif</div>
     </div>
-    @if ($logbook->jenis === 'revisi')
+    @if (collect($logbook->riwayat_perbaikan ?? [])->isNotEmpty())
         <div class="mt-4">
             <h3 class="text-sm font-semibold text-text-secondary mb-1">Pesan untuk Dosen</h3>
             <div class="text-sm whitespace-pre-wrap">{{ $logbook->progres_kendala ?: '—' }}</div>

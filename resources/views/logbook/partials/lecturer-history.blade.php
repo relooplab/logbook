@@ -63,7 +63,7 @@
         </div>
         <input type="hidden" name="per_page" value="{{ $entries->perPage() }}">
         @if (request()->filled('program')) <input type="hidden" name="program" value="{{ request('program') }}"> @endif
-        <p class="text-xs text-text-secondary">Rentang tanggal mengikuti tanggal bimbingan. Tanggal pada entri revisi menampilkan tanggal pengiriman.</p>
+        <p class="text-xs text-text-secondary">Rentang tanggal mengikuti tanggal bimbingan (logbook) / tanggal pengiriman (revisi).</p>
     </form>
 
     <section class="card overflow-hidden" aria-label="Daftar riwayat">

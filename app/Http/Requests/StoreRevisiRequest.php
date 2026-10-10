@@ -96,20 +96,20 @@ class StoreRevisiRequest extends FormRequest
         $types = strtoupper(implode(', ', $inst->allowedFileTypes()));
 
         return [
-            'tanggal_pengiriman.required' => 'Tanggal pengiriman revisi wajib diisi.',
-            'tanggal_pengiriman.before_or_equal' => 'Tanggal tidak boleh di masa depan.',
-            'parent_entry_id.required' => 'Pilih dulu entri yang dijawab revisi ini — revisi harus menempel ke satu entri agar tidak terputus dari komentar dosen.',
-            'addressed_dosen_id.in' => 'Penerima revisi harus pembimbing atau dosen penguji program Anda.',
-            'progres_kendala.max' => 'Pesan untuk dosen maksimal 500 karakter.',
-            'riwayat_perbaikan.required' => 'Tabel catatan perbaikan wajib diisi minimal 1 baris.',
-            'riwayat_perbaikan.min' => 'Tabel catatan perbaikan wajib diisi minimal 1 baris.',
-            'riwayat_perbaikan.*.halaman.required' => 'Kolom Halaman/Bagian wajib diisi.',
-            'riwayat_perbaikan.*.komentar_dosen.required' => 'Kolom Komentar Dosen wajib diisi.',
-            'riwayat_perbaikan.*.perbaikan.required' => 'Kolom Perbaikan yang Dilakukan wajib diisi.',
-            'riwayat_perbaikan.*.status.required' => 'Kolom Status wajib dipilih.',
-            'lampiran.required' => 'File perbaikan wajib diunggah.',
-            'lampiran.mimes' => 'File perbaikan harus berupa file '.$types.'.',
-            'lampiran.max' => 'File perbaikan maksimal '.$maxMb.' MB.',
+            'tanggal_pengiriman.required' => 'Isi tanggal kirim.',
+            'tanggal_pengiriman.before_or_equal' => 'Tanggal jangan hari esok.',
+            'parent_entry_id.required' => 'Pilih sesi yang dijawab dulu.',
+            'addressed_dosen_id.in' => 'Pilih pembimbing atau penguji programmu.',
+            'progres_kendala.max' => 'Pesan maks. 500 huruf.',
+            'riwayat_perbaikan.required' => 'Isi min. 1 jawaban.',
+            'riwayat_perbaikan.min' => 'Isi min. 1 jawaban.',
+            'riwayat_perbaikan.*.halaman.required' => 'Isi halaman.',
+            'riwayat_perbaikan.*.komentar_dosen.required' => 'Isi komentar dosen.',
+            'riwayat_perbaikan.*.perbaikan.required' => 'Isi perbaikan Anda.',
+            'riwayat_perbaikan.*.status.required' => 'Pilih status.',
+            'lampiran.required' => 'Unggah file jawaban.',
+            'lampiran.mimes' => 'File harus '.$types.'.',
+            'lampiran.max' => 'File maks. '.$maxMb.' MB.',
         ];
     }
 }

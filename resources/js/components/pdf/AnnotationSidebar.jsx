@@ -245,10 +245,10 @@ export default function AnnotationSidebar({
             <MessageSquare className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold">Anotasi</h2>
+            <h2 className="text-sm font-semibold">Tandaan</h2>
             <p className="text-xs text-text-secondary">
               {annotations.length} komentar
-              {canReply && unrespondedCount > 0 && ` · ${unrespondedCount} belum ditanggapi`}
+              {canReply && unrespondedCount > 0 && ` · ${unrespondedCount} belum dibalas`}
             </p>
           </div>
         </div>
@@ -288,8 +288,8 @@ export default function AnnotationSidebar({
         <div className="flex flex-wrap gap-1">
           {[
             ['all', 'Semua status'],
-            ['open', 'Open'],
-            ['addressed', 'Diperbaiki'],
+            ['open', 'Baru'],
+            ['addressed', 'Dibalas'],
             ['resolved', 'Selesai'],
           ].map(([v, label]) => (
             <button key={v} type="button" onClick={() => setStatusFilter(v)} className={chip(statusFilter === v)}>
@@ -298,7 +298,7 @@ export default function AnnotationSidebar({
           ))}
           {canReply && (
             <button type="button" onClick={() => setStatusFilter('unresponded')} className={chip(statusFilter === 'unresponded')}>
-              Belum ditanggapi
+              Belum dibalas
             </button>
           )}
         </div>
@@ -311,11 +311,11 @@ export default function AnnotationSidebar({
             <div className="flex flex-col items-center justify-center py-8 text-center px-4">
               <MessageSquare className="mb-2 h-10 w-10 text-text-secondary/50" />
               <p className="text-sm text-text-secondary">
-                {annotations.length === 0 ? 'Belum ada anotasi' : 'Tidak ada anotasi yang cocok'}
+                {annotations.length === 0 ? 'Belum ada yang ditandai' : 'Tidak ada yang cocok'}
               </p>
               <p className="mt-1 text-xs text-text-secondary">
                 {annotations.length === 0
-                  ? 'Seret area atau blok teks pada PDF untuk memberi komentar'
+                  ? 'Blok tulisan atau seret kotak di PDF untuk menandai'
                   : 'Coba ubah kata kunci atau filter'}
               </p>
             </div>

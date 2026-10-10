@@ -297,6 +297,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::get('/revisi/create', [LogbookController::class, 'createRevisi'])->name('revisi.create');
     Route::post('/logbook/revisi', [LogbookController::class, 'storeRevisi'])->name('logbook.store-revisi');
     Route::post('/logbook/revisi/draft', [LogbookController::class, 'storeRevisiDraft'])->name('logbook.store-revisi-draft');
+    Route::post('/logbook/draft', [LogbookController::class, 'storeLogbookDraft'])->name('logbook.store-draft');
     Route::get('/logbook/feedback', [LogbookController::class, 'feedback'])->name('logbook.feedback');
     Route::put('/logbook/{logbook}/feedback-note', [LogbookController::class, 'updateFeedbackNote'])->name('logbook.feedback-note');
     Route::post('/logbook/bulk-destroy', [LogbookController::class, 'bulkDestroy'])->name('logbook.bulk-destroy');

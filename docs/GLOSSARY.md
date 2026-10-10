@@ -20,8 +20,8 @@ istilah teknis/enumerasi di kode (sering Inggris). Tujuannya: **satu konsep = sa
 | **Institusi** | `institution` | Konfigurasi aplikasi (brand, mail), “Workspace Institusi” | Bedakan dari Universitas. |
 | **Workspace** | `workspace` | Keluarga modul file | Pecah: **Workspace Pribadi** (dosen), **Workspace Mahasiswa** (program), **Workspace Institusi**. Ganti “Penyimpanan Saya”. |
 | **Penjaga** **Persetujuan** | `approval` | Permintaan mahasiswa→dosen & persetujuannya | Halaman = **Persetujuan**; tombol = **Setujui**; status = **Disetujui**. Hindari “Approve/Approval”. |
-| **Umpan Balik** | `feedback` | Respon/feedback dosen atas entri | Pilih satu: **Umpan Balik** (atau pertahankan “Feedback”). Bedakan dari **Komentar**. |
-| **Komentar** | `PdfComment` | Anotasi PDF | Konsep berbeda dari Umpan Balik; jangan disatukan. |
+| **Umpan Balik** | `feedback` | Pesan dosen untuk mahasiswa | Di UI tulis **Pesan Dosen**. Bedakan dari **Komentar**. |
+| **Komentar** | `PdfComment` | Yang ditandai di PDF | Di UI tulis **Komentar**. Bedakan dari Pesan Dosen. |
 | **Fase / Tahapan** | `fase` | Tahap bimbingan (proposal, sidang, dst.) | Judul UI → **Perjalanan Fase** / **Tahapan**. Ganti “Milestone Journey”. |
 | **Pencapaian** | `Achievement` | Badge/pencapaian mahasiswa | Pilih satu: **Pencapaian**. Hindari campur “Badge”. |
 | **Anggota** | `member` | Keanggotaan grup/kelompok | Pakai **Anggota** (Indonesia). |
@@ -29,17 +29,20 @@ istilah teknis/enumerasi di kode (sering Inggris). Tujuannya: **satu konsep = sa
 | **Kelompok** | (KP) | **Kelompok KP** mahasiswa | Konsep berbeda dari Grup Dosen. |
 | **Pengumuman** | `announcement` | Blast pengumuman | Pakai **Pengumuman**. |
 | **Antrean** | `queue` / “Antrean Review” | Daftar menunggu review | Pakai **Antrean**. |
-| **Entri** | `LogbookEntry` | Entri logbook (Entri #N) | Bedakan dari **Catatan**. |
-| **Catatan** | — | Catatan perbaikan & logbook harian KP | Bedakan dari **Entri**. |
-| **Revisi** | `revisi` (jenis) | Proses/entri revisi | Untuk entri & permintaan revisi. |
-| **Catatan Perbaikan** | `catatan_perbaikan` | Dokumen PDF perbaikan (auto) | Konsep berbeda dari Revisi (jangan digabung). |
-| **Sesi** | `sesi_ke` | Nomor sesi bimbingan | Konsisten. |
+| **Entri** | `LogbookEntry` | Satu kiriman (sesi / jawaban) | Bedakan dari **Catatan**. |
+| **Catatan** | — | Logbook harian KP | Bedakan dari **Entri**. |
+| **Revisi** | `revisi` (jenis) | Jawaban atas sesi | Di UI tombol tulis **Jawab Revisi**. |
+| **Jawaban** | `riwayat_perbaikan` | Isi jawaban (komentar + yang dibetulkan) | Satu jawaban = satu baris. |
+| **Utas** | rantai `parent_entry_id` | Satu sesi + seluruh jawabannya | Badge dihitung per-utas, bukan per-baris. |
+| **Sesi** | `sesi_ke` | Nomor bimbingan | Konsisten. |
 | **Seminar** | `seminar_*` | Seminar proposal/hasil/SKP | Berbeda dari Sidang. |
 | **Sidang** | `sidang` | Sidang akhir | Berbeda dari Seminar. |
 | **Mahasiswa** | `mahasiswa` | Akun mahasiswa | Hindari “Mhs”/“Siswa”. |
 | **Dosen** | `dosen` | Akun dosen | Role. |
 | **Permintaan Bimbingan** | `attachment` | Mahasiswa memilih dosen | Ganti “Attachment” di label UI. Label: **Memilih Dosen**. |
 | **Masuk** | `login` | Login | Pakai **Masuk**. |
+| **Draf Browser** | `localStorage` | Ketikan di perangkat ini saja (tanpa file) | Hilang bila ganti HP/browser. |
+| **Draf Server** | `draft` | Tersimpan di akun + file | Lanjut di HP lain. Kirim kapan saja dari daftar. |
 | **Daftar** | `register` | Registrasi akun | Pakai **Daftar**. |
 
 ---
@@ -80,7 +83,8 @@ istilah teknis/enumerasi di kode (sering Inggris). Tujuannya: **satu konsep = sa
 
 ## Istilah yang Tampak Ganda tapi SEBENARNYA Berbeda
 Jangan disatukan — pertegas konteks:
-- **Revisi** (proses/entri) vs **Catatan Perbaikan** (dokumen).
+- **Revisi** (jawaban atas sesi) vs **Jawaban** (isi jawaban per baris).
+- **Pesan Dosen** (keputusan tertulis) vs **Komentar** (yang ditandai di PDF).
 - **Grup** (dosen) vs **Kelompok** (KP).
 - **Seminar** vs **Sidang**.
 - **Entri** (logbook) vs **Catatan** (harian/perbaikan).
@@ -107,5 +111,8 @@ Jangan disatukan — pertegas konteks:
 ---
 
 ## Paket Naming (inti)
-- Utamakan **kata baku** di atas pada: label tombol, judul halaman, judul kartu, notifikasi, menu/sidebar, pesan sukses/error.
-- Saat menambahkan fitur baru, periksa kamus ini dulu untuk memakai istilah yang sama.
+- Tombol maks. **3 kata**. Banner maks. **2 baris** (fakta + aksi).
+- Kata yang tidak dipakai di UI: anotasi, otomatis, thread, induk, yatim, pending, kartu, kompilasi, prefill. Ganti: tandai, salin, jawaban, sesi, menunggu, dipilih.
+- Tidak ada tooltip yang mengulang label. Tooltip hanya untuk ikon tanpa teks.
+- Satu aksi = satu nama di semua layar: **Jawab Revisi** (menjawab), **Setujui / Minta Revisi / Arsipkan** (menilai), **Pesan Dosen** (keputusan tertulis), **Komentar** (yang ditandai di PDF).
+- Tawarkan jalan benar dulu, jalan lain kecil di bawah. Tanpa kalimat larangan.

@@ -39,7 +39,7 @@
 
         // Pengaman navigasi antrean quick-review.
         document.querySelectorAll('.quick-review-navigation').forEach(link => link.addEventListener('click', event => {
-            if (((feedback && feedback.value !== initialFeedback) || (archiveReason && archiveReason.value !== initialArchiveReason) || decision() !== initialDecision) && !window.confirm('Keputusan atau feedback belum disimpan. Pindah item tanpa menyimpan?')) event.preventDefault();
+            if (((feedback && feedback.value !== initialFeedback) || (archiveReason && archiveReason.value !== initialArchiveReason) || decision() !== initialDecision) && !window.confirm('Belum disimpan. Pindah tanpa menyimpan?')) event.preventDefault();
         }));
 
         function fillFeedback(text) {
@@ -68,7 +68,7 @@
             if (decision() === 'revisi' && feedback && feedback.value.trim().length < 20) {
                 event.preventDefault(); if (error) error.classList.remove('hidden'); feedback.focus(); return;
             }
-            if (form.dataset.pdfOpened !== '1' && !window.confirm('Lampiran PDF belum tercatat dibuka. Tetap ' + (decision() === 'revisi' ? 'minta revisi' : (decision() === 'archive' ? 'arsipkan' : 'setujui')) + '?')) {
+            if (form.dataset.pdfOpened !== '1' && !window.confirm('PDF belum dibuka. Tetap ' + (decision() === 'revisi' ? 'minta revisi' : (decision() === 'archive' ? 'arsipkan' : 'setujui')) + '?')) {
                 event.preventDefault(); return;
             }
             if (decision() === 'archive' && !window.confirm('Arsipkan entri ini tanpa menyetujui atau meminta revisi?')) {
@@ -86,9 +86,9 @@
                 const response = await fetch(buildBtn.dataset.buildUrl, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, credentials: 'same-origin'});
                 if (!response.ok) throw new Error();
                 const result = await response.json();
-                if (!result.feedback) { window.alert('Tidak ada komentar PDF yang belum diselesaikan.'); return; }
+                if (!result.feedback) { window.alert('Tidak ada anotasi yang belum beres.'); return; }
                 fillFeedback(result.feedback);
-            } catch (e) { window.alert('Gagal memuat komentar PDF.'); }
+            } catch (e) { window.alert('Gagal memuat anotasi.'); }
             finally { this.disabled = false; }
         });
 
@@ -103,7 +103,7 @@
             document.getElementById('tpl-cancel')?.addEventListener('click', closeModal);
             modal.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
             document.getElementById('tpl-save')?.addEventListener('click', async function () {
-                if (!body.value.trim()) { templateError.textContent = 'Isi template wajib diisi.'; templateError.classList.remove('hidden'); body.focus(); return; }
+                if (!body.value.trim()) { templateError.textContent = 'Isi pesannya dulu.'; templateError.classList.remove('hidden'); body.focus(); return; }
                 this.disabled = true;
                 try {
                     const response = await fetch(storeUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({title: title.value.trim(), body: body.value.trim()})});
@@ -115,7 +115,7 @@
                     select.add(option); select.value = String(template.id);
                     select.options[0].textContent = 'Pilih template...';
                     closeModal();
-                } catch (e) { templateError.textContent = 'Gagal menyimpan template. Coba lagi.'; templateError.classList.remove('hidden'); }
+                } catch (e) { templateError.textContent = 'Gagal menyimpan. Coba lagi.'; templateError.classList.remove('hidden'); }
                 finally { this.disabled = false; }
             });
         }

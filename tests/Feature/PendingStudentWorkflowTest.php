@@ -79,6 +79,10 @@ class PendingStudentWorkflowTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->format('Y-m-d'),
             'topik' => 'Topik bimbingan',
             'progres_kendala' => 'Progres & kendala',
+            'riwayat_perbaikan' => [
+                ['halaman' => 'Hal. 1', 'komentar_dosen' => 'Perjelas metode', 'perbaikan' => 'Menambah penjelasan metode', 'status' => 'Sudah'],
+            ],
+            'lampiran' => \Illuminate\Http\UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
             'submit' => '1',
         ])->assertRedirect();
 

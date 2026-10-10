@@ -230,17 +230,22 @@
                             <span class="material-symbols-outlined icon-md">add</span>
                             <span class="sidebar-label">Tambah Logbook</span>
                         </a>
-                        <a href="{{ route('logbook.create-revisi', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.create-revisi') }}">
+                        @php
+                            $__jawabActive = (request()->routeIs('logbook.create-revisi') && $__onProgram)
+                                || (request()->routeIs('logbook.index') && (request('status') === 'revisi') && $__onProgram);
+                            $__jawabCls = $__jawabActive ? 'bg-brand/10 text-brand font-semibold before:content-[""] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-full before:bg-brand' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary';
+                        @endphp
+                        <a href="{{ route('logbook.index', array_filter(['program' => $p->jenis, 'status' => 'revisi'])) }}" class="{{ $navLink }} {{ $__jawabCls }}">
                             <span class="material-symbols-outlined icon-md">edit_note</span>
-                            <span class="sidebar-label">Entri Revisi</span>
-                            @php $pendingCount = \App\Models\LogbookEntry::pendingRevisionsFor($p)->count(); @endphp
-                            @if ($pendingCount > 0)
-                                <span class="ml-auto rounded-full bg-status-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-status-danger" title="{{ $pendingCount }} revisi belum selesai">{{ $pendingCount }}</span>
+                            <span class="sidebar-label">Jawab Revisi</span>
+                            @php $pendingThreads = \App\Models\LogbookEntry::pendingRevisionThreadsFor($p); @endphp
+                            @if ($pendingThreads->isNotEmpty())
+                                <span class="ml-auto rounded-full bg-status-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-status-danger">{{ $pendingThreads->count() }}</span>
                             @endif
                         </a>
                         <a href="{{ route('logbook.feedback', ['program' => $p->jenis]) }}" class="{{ $navLink }} {{ $pActive('logbook.feedback') }}">
                             <span class="material-symbols-outlined icon-md">forum</span>
-                            <span class="sidebar-label">Riwayat Umpan Balik</span>
+                            <span class="sidebar-label">Pesan Dosen</span>
                         </a>
                         @if ($p->isKp())
                             <a href="{{ route('logbook-harian.index', $p) }}" class="{{ $navLink }} {{ $pActive('logbook-harian.*') }}">

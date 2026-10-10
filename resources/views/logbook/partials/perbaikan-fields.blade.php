@@ -9,7 +9,7 @@
         $komentarManual = $komentarText !== '' && ! collect($commentOptions)->contains('text', $komentarText);
     @endphp
     <div>
-        <label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-{{ $i }}">Komentar Dosen</label>
+        <label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-{{ $i }}">Komentar dosen</label>
         <select id="riwayat-komentar-{{ $i }}" data-komentar-select @if (! $komentarManual) name="riwayat_perbaikan[{{ $i }}][komentar_dosen]" @endif class="form-control">
             <option value="">— Pilih komentar —</option>
             @foreach ($commentOptions as $c)
@@ -18,14 +18,14 @@
             <option value="__manual" @selected($komentarManual)>Tulis manual…</option>
         </select>
         <input type="text" data-komentar-manual @if ($komentarManual) name="riwayat_perbaikan[{{ $i }}][komentar_dosen]" value="{{ $komentarText }}" @endif
-            placeholder="Tulis komentar dosen…" class="form-control mt-2 @if (! $komentarManual) hidden @endif">
+            placeholder="Tulis komentar dosen (dari PDF, tatap muka, atau pesan)…" class="form-control mt-2 @if (! $komentarManual) hidden @endif">
         @error("riwayat_perbaikan.{$i}.komentar_dosen")
             <p class="form-field-error">{{ $message }}</p>
         @enderror
     </div>
 @else
 <div>
-    <label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-{{ $i }}">Komentar Dosen <span class="text-status-pending">(wajib diisi bila dari isi-otomatis)</span></label>
+    <label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-{{ $i }}">Komentar dosen <span class="text-status-pending">(wajib bila dari salinan)</span></label>
     <input type="text" id="riwayat-komentar-{{ $i }}" name="riwayat_perbaikan[{{ $i }}][komentar_dosen]"
         value="{{ $row['komentar_dosen'] ?? '' }}" placeholder="mis. Jelaskan dasar pemilihan metode" class="form-control">
     @error("riwayat_perbaikan.{$i}.komentar_dosen")
@@ -43,7 +43,7 @@
         @enderror
     </div>
     <div class="min-w-0 flex-1">
-        <label class="mb-1 block text-xs text-text-secondary" for="riwayat-perbaikan-{{ $i }}">Perbaikan yang Dilakukan</label>
+        <label class="mb-1 block text-xs text-text-secondary" for="riwayat-perbaikan-{{ $i }}">Perbaikan Anda</label>
         <textarea id="riwayat-perbaikan-{{ $i }}" name="riwayat_perbaikan[{{ $i }}][perbaikan]" rows="3"
             placeholder="mis. Menambah penjelasan metode di Hal. 5 paragraf 2" class="form-control">{{ $row['perbaikan'] ?? '' }}</textarea>
         @error("riwayat_perbaikan.{$i}.perbaikan")

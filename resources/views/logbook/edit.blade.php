@@ -48,29 +48,28 @@
             </div>
         @endif
 
-        @if ($isRevisi)
-            {{-- ===== Catatan Perbaikan (tabel terstruktur) ===== --}}
+        {{-- ===== Jawaban (tabel terstruktur; revisi maupun logbook induk) ===== --}}
             <div>
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <label class="block text-sm font-medium">Catatan Perbaikan <span class="font-normal text-text-secondary">(urutan: Halaman → Komentar → Perbaikan → Status)</span></label>
+                    <label class="block text-sm font-medium">Jawaban <span class="font-normal text-text-secondary">(urutan: Halaman → Komentar → Perbaikan → Status)</span></label>
                     <div class="flex flex-wrap items-center gap-2">
                         @if ($logbook->lampiran_path)
-                            <a href="{{ route('logbook.pdf-viewer', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-brand/40 bg-brand/10 text-brand text-xs font-semibold hover:bg-brand/20">Buka PDF &amp; Anotasi</a>
+                            <a href="{{ route('logbook.pdf-viewer', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-brand/40 bg-brand/10 text-brand text-xs font-semibold hover:bg-brand/20">Buka PDF</a>
                         @endif
-                        <button type="button" id="tarik-anotasi" data-url="{{ route('logbook.annotations.pull', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-border text-xs font-semibold hover:bg-bg-hover disabled:opacity-50 min-h-11">Isi otomatis dari anotasi <span data-isi-count></span></button>
+                        <button type="button" id="tarik-anotasi" data-url="{{ route('logbook.annotations.pull', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-border text-xs font-semibold hover:bg-bg-hover disabled:opacity-50 min-h-11">Salin ke Jawaban <span data-isi-count></span></button>
                         <button type="button" id="tambah-baris" class="px-3 py-1.5 rounded-xl border border-border bg-bg-panel text-xs font-medium hover:bg-bg-hover min-h-11">+ Tambah Baris</button>
                     </div>
                 </div>
-                <p class="text-xs text-text-secondary mb-2">1. Buka PDF &amp; tandai perbaikan → 2. klik Isi otomatis → 3. lengkapi baris yang kosong. PDF catatan perbaikan dibuat otomatis oleh sistem dari tabel ini.</p>
+                <p class="text-xs text-text-secondary mb-2">1. Buka PDF dan tandai → 2. klik Salin → 3. lengkapi yang kosong.</p>
                 <p id="tarik-anotasi-msg" class="hidden text-xs mb-2" role="status" aria-live="polite"></p>
-                <p class="text-[11px] text-text-secondary">Menarik anotasi hanya menambah yang baru — isian yang sudah ada tidak ditimpa. Baris kosong diabaikan saat disimpan.</p>
+                <p class="text-[11px] text-text-secondary">Yang disalin hanya yang baru. Yang sudah ada tidak berubah.</p>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm border border-border" id="tabel-perbaikan">
                         <thead>
                             <tr class="bg-bg-panel text-left text-text-secondary">
-                                <th class="py-2 px-2 border-b border-border w-[30%]">Komentar Dosen</th>
+                                <th class="py-2 px-2 border-b border-border w-[30%]">Komentar dosen</th>
                                 <th class="py-2 px-2 border-b border-border w-[110px]">Halaman</th>
-                                <th class="py-2 px-2 border-b border-border">Perbaikan yang Dilakukan</th>
+                                <th class="py-2 px-2 border-b border-border">Perbaikan Anda</th>
                                 <th class="py-2 px-2 border-b border-border w-[15%]">Status</th>
                                 <th class="py-2 px-2 border-b border-border w-[8%]"></th>
                             </tr>
@@ -114,33 +113,22 @@
                     <p class="text-status-danger text-xs mt-1">{{ $message }}</p>
                 @enderror
             </div>
-        @endif
 
-        {{-- ===== Pesan untuk Dosen (revisi) / Ringkasan (logbook) ===== --}}
+        {{-- ===== Pesan untuk Dosen (opsional; revisi maupun logbook induk) ===== --}}
         <div>
-            <label class="block text-xs text-text-secondary mb-1" for="progres_kendala">{{ $isRevisi ? 'Pesan untuk Dosen (opsional)' : 'Ringkasan Perbaikan' }}</label>
-            <textarea name="progres_kendala" id="progres_kendala" rows="6" {{ $isRevisi ? 'maxlength="500"' : 'required' }}
-                placeholder="{{ $isRevisi ? 'Contoh: Mohon maaf atas keterlambatan pengumpulan revisi, saya terkendala ... / Ada satu poin yang masih saya tandai "Sebagian" karena ... / Mohon arahan untuk bagian ...' : '' }}"
+            <label class="block text-xs text-text-secondary mb-1" for="progres_kendala">Pesan untuk Dosen (opsional)</label>
+            <textarea name="progres_kendala" id="progres_kendala" rows="6" maxlength="500"
+                placeholder="Contoh: Mohon maaf atas keterlambatan pengumpulan, saya terkendala ... / Ada satu poin yang masih saya tandai &quot;Sebagian&quot; karena ... / Mohon arahan untuk bagian ..."
                 class="w-full rounded-xl border border-border bg-bg-surface px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40">{{ old('progres_kendala', $logbook->progres_kendala) }}</textarea>
-            @if ($isRevisi)
-                <div class="flex flex-wrap items-center justify-between gap-2 mt-1">
-                    <p class="text-xs text-text-secondary">Gunakan untuk konteks yang tidak tertampung di tabel (kendala, alasan, pertanyaan). Pesan ini tampil di atas PDF yang diterima dosen.</p>
-                    <span class="text-xs text-text-secondary" id="pesan-counter">0/500</span>
-                </div>
-            @endif
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-1">
+                <p class="text-xs text-text-secondary">Gunakan untuk konteks yang tidak tertampung di tabel (kendala, alasan, pertanyaan). Pesan ini tampil di atas PDF yang diterima dosen.</p>
+                <span class="text-xs text-text-secondary" id="pesan-counter">0/500</span>
+            </div>
             @error('progres_kendala')
                 <p class="text-status-danger text-xs mt-1">{{ $message }}</p>
             @enderror
         </div>
 
-        @if (! $isRevisi && $logbook->lampiran_path)
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ route('logbook.pdf-viewer', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-brand/40 bg-brand/10 text-brand text-xs font-semibold hover:bg-brand/20">Buka PDF &amp; Anotasi</a>
-                <button type="button" id="tarik-anotasi" data-url="{{ route('logbook.annotations.pull', $logbook) }}" class="px-3 py-1.5 rounded-xl border border-border text-xs font-semibold hover:bg-bg-hover disabled:opacity-50">Tarik dari Anotasi</button>
-            </div>
-            <p id="tarik-anotasi-msg" class="hidden text-xs" role="status"></p>
-            <p class="text-xs text-text-secondary">Upload lampiran, tandai perbaikan lewat anotasi PDF, lalu tarik otomatis ke ringkasan di bawah tanpa tulis manual.</p>
-        @endif
         {{-- Lampiran draft --}} <div> <label class="block text-sm font-medium mb-1">Lampiran Draft
                 ({{ $typesLabel }})</label>
             @if ($logbook->lampiran_path)
@@ -197,7 +185,7 @@
     function updateCounter() {
         if (pesanCounter) pesanCounter.textContent = pesanInput.value.length + '/500';
     }
-    if (pesanInput && isRevisi) pesanInput.addEventListener('input', updateCounter);
+    if (pesanInput) pesanInput.addEventListener('input', updateCounter);
 
     // Tabel perbaikan dinamis (revisi).
     var tabel = document.getElementById('tabel-perbaikan');
@@ -241,21 +229,12 @@
     function escapeHtml(v) {
         return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-    if (tarikBtn && (tbody || !isRevisi)) tarikBtn.addEventListener('click', function () {
+    if (tarikBtn && tbody) tarikBtn.addEventListener('click', function () {
         tarikBtn.disabled = true;
         fetch(tarikBtn.dataset.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value, 'Accept': 'application/json' }, credentials: 'same-origin' })
             .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
             .then(function (out) {
                 if (!out.ok) throw new Error((out.d && out.d.message) || 'Gagal');
-                if (!isRevisi) {
-                    var summary = (out.d && out.d.summary) || '';
-                    var ringkasan = document.getElementById('progres_kendala');
-                    if (ringkasan && summary) ringkasan.value = summary;
-                    var skipN = out.d.skipped_empty || 0;
-                    var skipT = skipN > 0 ? ' ' + skipN + ' anotasi kosong dilewati.' : '';
-showTarikMsg(out.d.pulled > 0 ? out.d.pulled + ' perbaikan terisi otomatis ke ringkasan.' + skipT : 'Belum ada anotasi baru — tandai dulu di PDF, lalu klik lagi.' + skipT, true);
-                    return;
-                }
                 var rows = (out.d && out.d.rows) || [];
                 tbody.innerHTML = '';
                 if (!rows.length) addRow();
@@ -263,13 +242,13 @@ showTarikMsg(out.d.pulled > 0 ? out.d.pulled + ' perbaikan terisi otomatis ke ri
                 var countEl = tarikBtn.querySelector('[data-isi-count]');
                 if (countEl && out.d.pulled > 0) countEl.textContent = '(' + out.d.pulled + ')';
                 var skipM = out.d.skipped_empty || 0;
-                var skipU = skipM > 0 ? ' ' + skipM + ' anotasi kosong dilewati.' : '';
+                var skipU = skipM > 0 ? ' ' + skipM + ' yang kosong dilewati.' : '';
                 var msg = out.d.pulled > 0
-                    ? out.d.pulled + ' perbaikan terisi otomatis. Lengkapi kolom Komentar Dosen yang bertanda.' + skipU
-                    : 'Belum ada anotasi — tandai dulu di PDF, lalu klik lagi.' + skipU;
+                    ? out.d.pulled + ' jawaban tersalin. Lengkapi yang kurang.' + skipU
+                    : 'Belum ada yang baru. Tandai dulu, lalu klik lagi.' + skipU;
                 showTarikMsg(msg, true);
             })
-            .catch(function () { showTarikMsg('Gagal menarik anotasi. Coba lagi.', false); })
+            .catch(function () { showTarikMsg('Gagal. Coba lagi.', false); })
             .finally(function () { tarikBtn.disabled = false; });
     });
 

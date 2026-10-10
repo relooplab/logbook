@@ -102,8 +102,10 @@ class LogbookHistoryRedesignTest extends TestCase
                 ->assertOk()->assertViewHas('entries', fn ($entries) => $entries->pluck('id')->all() === [$match->id])
                 ->assertSee('30 Sep 2026');
         }
+        // Filter tanggal memakai tanggal tampil: revisi ikut terfilter lewat
+        // tanggal_pengiriman (30 Sep), bukan hilang seperti filter kolom tunggal.
         $this->get(route('logbook.index', ['date_from' => '2026-09-30']))
-            ->assertOk()->assertViewHas('entries', fn ($entries) => $entries->total() === 0);
+            ->assertOk()->assertViewHas('entries', fn ($entries) => $entries->pluck('id')->all() === [$match->id]);
     }
 
     public function test_pagination_tabs_and_empty_states_preserve_query_state(): void

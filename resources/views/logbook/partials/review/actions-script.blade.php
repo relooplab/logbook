@@ -45,7 +45,7 @@
                 fetch('/logbook/' + logbookId + '/action-items/' + id + '/toggle', {
                     method: 'POST',
                     headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json'},
-                }).then(r => { if (!r.ok) throw new Error('Gagal memperbarui action item.'); return r.json(); }).then(data => {
+                }).then(r => { if (!r.ok) throw new Error('Gagal menyimpan.'); return r.json(); }).then(data => {
                     e.target.checked = data.is_done;
                     var textEl = row.querySelector('span');
                     textEl.classList.toggle('line-through', data.is_done);
@@ -58,14 +58,14 @@
             if (e.target.classList.contains('action-item-delete')) {
                 var row = e.target.closest('.action-item-row');
                 var id = row.dataset.itemId;
-                if (!confirm('Hapus action item ini?')) return;
+                if (!confirm('Hapus ini?')) return;
                 fetch('/logbook/' + logbookId + '/action-items/' + id, {
                     method: 'DELETE',
                     headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json'},
-                }).then(r => { if (!r.ok) throw new Error('Gagal menghapus action item.'); return r.json(); }).then(() => {
+                }).then(r => { if (!r.ok) throw new Error('Gagal menghapus.'); return r.json(); }).then(() => {
                     row.remove();
                     if (!actionList.querySelector('.action-item-row')) {
-                        actionList.innerHTML = '<p class="text-sm text-text-secondary">Belum ada action item.</p>';
+                        actionList.innerHTML = '<p class="text-sm text-text-secondary">Belum ada.</p>';
                     }
                 }).catch(() => window.alert('Action item belum terhapus. Coba lagi.'));
             }
@@ -94,7 +94,7 @@
                 method: 'POST',
                 headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Content-Type': 'application/json', 'Accept': 'application/json'},
                 body: JSON.stringify({text: val}),
-            }).then(r => { if (!r.ok) throw new Error('Gagal menambah action item.'); return r.json(); }).then(item => {
+            }).then(r => { if (!r.ok) throw new Error('Gagal menambah.'); return r.json(); }).then(item => {
                 input.value = '';
                 var empty = actionList.querySelector('p');
                 if (empty) empty.remove();

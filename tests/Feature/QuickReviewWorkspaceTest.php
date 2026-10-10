@@ -149,12 +149,12 @@ class QuickReviewWorkspaceTest extends AuditSmokeTest
         $html = $this->actingAs($this->dosen)->get(route('quick-review.index', ['item' => $revision->id]))
             ->assertOk()->getContent();
 
-        foreach (['Umpan Balik Dosen', 'Catatan Perbaikan', 'Komentar Sebelumnya', 'Keputusan Review'] as $heading) {
+        foreach (['Pesan Dosen', 'Jawaban Mahasiswa', 'Komentar Lalu', 'Keputusan Review'] as $heading) {
             $this->assertStringContainsString($heading, $html);
         }
-        $this->assertTrue(strpos($html, 'Umpan Balik Dosen') < strpos($html, 'Catatan Perbaikan'));
-        $this->assertTrue(strpos($html, 'Catatan Perbaikan') < strpos($html, 'Keputusan Review'));
-        $this->assertStringContainsString('Belum ditindaklanjuti', $html);
+        $this->assertTrue(strpos($html, 'Pesan Dosen') < strpos($html, '>Jawaban Mahasiswa</h2>'));
+        $this->assertTrue(strpos($html, '>Jawaban Mahasiswa</h2>') < strpos($html, 'Keputusan Review'));
+        $this->assertStringContainsString('Perlu tindak lanjut', $html);
         $this->assertStringNotContainsString('(open)</span>', $html);
         $this->assertStringContainsString('Berikutnya dalam antrean', $html);
         $this->assertStringContainsString(route('quick-review.index', ['item' => $next->id]), $html);
@@ -190,7 +190,7 @@ class QuickReviewWorkspaceTest extends AuditSmokeTest
 
         $this->assertStringContainsString('Komentar kakek unik.', $html);
         $this->assertStringContainsString('Entri #'.$this->entrySubmitted->id, $html);
-        $this->assertStringContainsString('Komentar Sebelumnya', $html);
+        $this->assertStringContainsString('Komentar Lalu', $html);
     }
 
     public function test_pdf_viewer_returns_to_authorized_quick_review_item(): void

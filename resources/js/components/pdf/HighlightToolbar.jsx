@@ -11,15 +11,15 @@ import AnnotationConversation from './AnnotationConversation.jsx';
  */
 
 export const STATUS_META = {
-  open: { label: 'Open', bg: '#C9A97E' },
-  addressed: { label: 'Diperbaiki', bg: '#D97706' },
+  open: { label: 'Baru', bg: '#C9A97E' },
+  addressed: { label: 'Dibalas', bg: '#D97706' },
   resolved: { label: 'Selesai', bg: '#7C9473' },
 };
 
 export function resolveButtonLabel(meta, canReview) {
-  if (!meta) return 'Tandai Selesai';
+  if (!meta) return 'Selesai';
   if (meta.resolutionStatus === 'resolved' || meta.resolutionStatus === 'addressed') return 'Buka kembali';
-  return canReview ? 'Tandai Selesai' : 'Tandai Sudah Diperbaiki';
+  return canReview ? 'Selesai' : 'Sudah dibetulkan';
 }
 
 export function useAnnotationControls(highlight, meta, { canReview, canReply, canDiscuss, currentUserId, onReply, onToggleResolve, onDelete, onSkipNext, hasNext }) {
@@ -59,8 +59,8 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
   const button = (
     <button
       type="button"
-      aria-label="Komentar anotasi"
-      title="Komentar anotasi"
+      aria-label="Komentar"
+      
       onClick={(e) => {
         e.stopPropagation();
         setOpen((v) => !v);
@@ -81,7 +81,7 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-text-primary">
-          Anotasi #{meta.id} · Hal. {meta.page}
+          Tandaan #{meta.id} · Hal. {meta.page}
         </span>
         <span className="text-[10px] px-1.5 py-0.5 rounded text-white shrink-0" style={{ backgroundColor: status.bg }}>
           {status.label}

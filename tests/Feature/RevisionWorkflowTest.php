@@ -15,10 +15,15 @@ class RevisionWorkflowTest extends AuditSmokeTest
     {
         $logbook = $this->actingAs($this->mhs)->get(route('logbook.create'));
         $logbook->assertOk()
-            ->assertSee('Form Entri Logbook')
+            ->assertSee('Tambah Entri Logbook')
             ->assertSee('Ringkasan Entri')
+            ->assertSee('Info Bimbingan')
+            ->assertSee('Hasil Tandaan')
+            ->assertSee('lanjut-tanpa-anotasi', false)
             ->assertSee('data-autosave-panel="lb-create"', false);
 
+        // Wizard revisi butuh target: buat induk yang diminta revisi dulu.
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
         $revisi = $this->actingAs($this->mhs)->get(route('revisi.create'));
         $revisi->assertOk()
             ->assertSee('Ringkasan Revisi')
@@ -28,6 +33,92 @@ class RevisionWorkflowTest extends AuditSmokeTest
         foreach ([$logbook, $revisi] as $response) {
             $this->assertSame(1, preg_match_all('/<input\s+type="file"(?=\s|>)/', $response->getContent()));
         }
+    }
+
+    public function test_create_revisi_shows_empty_state_when_nothing_to_answer(): void
+    {
+        // Isolasi penuh: program baru tanpa entri revisi/draf apa pun.
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Kosong', 'email' => 'isolasi-kosong@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI007',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Kosong',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+
+        $this->actingAs($freshMhs)->get(route('logbook.create-revisi'))
+            ->assertOk()
+            ->assertSee('Tidak ada yang perlu direvisi', false)
+            ->assertSee('+ Logbook', false)
+            ->assertSee('Lihat semua entri', false)
+            ->assertDontSee('id="revisi-form"', false);
+    }
+
+    public function test_create_wizard_requires_upload_and_resumes_draft(): void
+    {
+        // Tanpa file: ditolak dengan pesan wajib unggah.
+        $this->actingAs($this->mhs)->post(route('logbook.store'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Topik tanpa file',
+            'progres_kendala' => 'Ringkasan.',
+        ])->assertSessionHasErrors('lampiran');
+
+        // Alur draf-cepat: simpan draf berfile, lanjutkan di wizard.
+        $draftResponse = $this->actingAs($this->mhs)->postJson(route('logbook.store-draft'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Topik draf wizard',
+            'progres_kendala' => 'Ringkasan draf.',
+            'confirm_new_despite_revision' => '1',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
+        ]);
+        $draftResponse->assertStatus(201);
+        $draftId = $draftResponse->json('entry_id');
+
+        $this->actingAs($this->mhs)
+            ->get(route('logbook.create', ['draft_id' => $draftId]))
+            ->assertOk()
+            ->assertSee('Melanjutkan draf #'.$draftId, false)
+            ->assertSee('name="draft_id" value="'.$draftId.'"', false)
+            ->assertSee('Sudah diunggah', false);
+
+        // Kirim tanpa upload ulang: file draf dipakai, tanpa baris baru.
+        // Step 3 memakai kartu jawaban: kirim wajib minimal 1 kartu lengkap.
+        $before = LogbookEntry::where('mahasiswa_ta_id', LogbookEntry::findOrFail($draftId)->mahasiswa_ta_id)->count();
+        $this->actingAs($this->mhs)->post(route('logbook.store'), [
+            'draft_id' => $draftId,
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Topik draf wizard',
+            'progres_kendala' => 'Ringkasan final.',
+            'riwayat_perbaikan' => [
+                ['halaman' => 'Hal. 1', 'komentar_dosen' => 'Perjelas metode', 'perbaikan' => 'Menambah penjelasan metode', 'status' => 'Sudah'],
+            ],
+            'confirm_new_despite_revision' => '1',
+            'submit' => '1',
+        ])->assertRedirect(route('logbook.index'));
+        $this->assertSame($before, LogbookEntry::where('mahasiswa_ta_id', LogbookEntry::findOrFail($draftId)->mahasiswa_ta_id)->count());
+        $this->assertDatabaseHas('logbook_entries', [
+            'id' => $draftId,
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+        ]);
+
+        // Viewer dari wizard create kembali ke langkah 3 dengan autopull.
+        $this->actingAs($this->mhs)->post(route('logbook.store'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Topik viewer',
+            'progres_kendala' => 'Ringkasan viewer.',
+            'confirm_new_despite_revision' => '1',
+            'lampiran' => UploadedFile::fake()->create('v.pdf', 100, 'application/pdf'),
+        ])->assertRedirect();
+        $fresh = LogbookEntry::where('topik', 'Topik viewer')->firstOrFail();
+        $viewerUrl = route('logbook.pdf-viewer', ['logbook' => $fresh->id, 'from' => 'create-logbook']);
+        $this->actingAs($this->mhs)->get($viewerUrl)->assertOk()
+            ->assertSee('step', false)
+            ->assertSee('autopull', false);
     }
 
     public function test_revision_is_linked_to_parent_and_copies_review_assignment(): void
@@ -233,7 +324,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         // Induk pulih: tombol buat revisi muncul lagi.
         $this->actingAs($this->mhs)->get(route('logbook.show', $this->entrySubmitted->id))
             ->assertOk()
-            ->assertSee('Buat Revisi dari Umpan Balik Ini', false);
+            ->assertSee('Jawab Revisi', false);
     }
 
     public function test_bulk_delete_restores_stranded_parent(): void
@@ -379,6 +470,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Topik draf logbook',
             'progres_kendala' => 'Ringkasan awal.',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
             'program' => $draft->fresh()->mahasiswaTa->jenis,
         ])->assertRedirect();
         $logbookDraft = LogbookEntry::where('mahasiswa_ta_id', $this->entrySubmitted->mahasiswa_ta_id)
@@ -533,11 +625,12 @@ class RevisionWorkflowTest extends AuditSmokeTest
 
     public function test_step_two_offers_skip_annotation_button(): void
     {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
         $this->actingAs($this->mhs)
             ->get(route('logbook.create-revisi'))
             ->assertOk()
             ->assertSee('id="lanjut-tanpa-anotasi"', false)
-            ->assertSee('Lanjut tanpa anotasi', false);
+            ->assertSee('Lanjut tanpa menandai', false);
     }
 
     public function test_show_places_feedback_card_above_compact_revision_notes(): void
@@ -566,11 +659,11 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $html = $this->actingAs($this->mhs)->get(route('logbook.show', $this->entryRevisi))
             ->assertOk()->getContent();
 
-        $fb = strpos($html, 'Umpan Balik Dosen');
-        $ct = strpos($html, 'Catatan Perbaikan');
+        $fb = strpos($html, 'Pesan Dosen');
+        $ct = strpos($html, '>Jawaban</h2>');
         $this->assertNotFalse($fb);
         $this->assertNotFalse($ct);
-        $this->assertTrue($fb < $ct, 'Kartu umpan balik harus di atas catatan perbaikan.');
+        $this->assertTrue($fb < $ct, 'Pesan dosen harus di atas jawaban.');
         $this->assertStringContainsString('bg-status-pending/10', $html);
         $this->assertStringContainsString('Perbaiki Bab 3 dengan tajam dan rinci.', $html);
         // Daftar manual: tanpa Hal., plus balasan; anotasi berhalaman tidak ikut.
@@ -612,6 +705,73 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->assertCount(2, array_filter($draft->fresh()->riwayat_perbaikan ?? []));
     }
 
+    public function test_sidebar_badge_counts_threads_and_links_to_filtered_list(): void
+    {
+        // Isolasi penuh (DB test dipakai bersama).
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Thread', 'email' => 'isolasi-thread@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI006',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        $fresh = \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Thread',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+        $root = LogbookEntry::create([
+            'mahasiswa_ta_id' => $fresh->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'sesi_ke' => 1,
+            'dosen_id' => $this->dosen->id,
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Akar isolasi',
+            'progres_kendala' => 'Progres.',
+            'status' => LogbookEntry::STATUS_REVISI,
+            'reviewed_at' => now(),
+        ]);
+        // Rantai 2 tingkat: induk revisi + anak revisi = 1 thread, bukan 2.
+        $child = LogbookEntry::create([
+            'mahasiswa_ta_id' => $fresh->id,
+            'parent_entry_id' => $root->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'revision_round' => 1,
+            'status' => LogbookEntry::STATUS_REVISI,
+            'reviewed_at' => now(),
+            'tanggal_pengiriman' => now()->toDateString(),
+        ]);
+
+        $threads = LogbookEntry::pendingRevisionThreadsFor($fresh);
+        $this->assertSame(1, $threads->count());
+        $this->assertSame($root->id, $threads->first()['root']->id);
+        $this->assertTrue($threads->first()['items']->contains('id', $child->id));
+
+        // Sidebar: badge = jumlah thread + link ke daftar terfilter revisi.
+        $html = $this->actingAs($freshMhs)->get(route('dashboard'))->assertOk()->getContent();
+        $this->assertStringContainsString('status=revisi', $html);
+    }
+
+    public function test_wizard_dropdown_labels_revision_chain_by_session(): void
+    {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+        LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'parent_entry_id' => $this->entrySubmitted->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'revision_round' => 1,
+            'status' => LogbookEntry::STATUS_REVISI,
+            'reviewed_at' => now(),
+            'tanggal_pengiriman' => now()->toDateString(),
+        ]);
+
+        $html = $this->actingAs($this->mhs)
+            ->get(route('logbook.create-revisi', ['parent_entry_id' => $this->entrySubmitted->id]))
+            ->assertOk()->getContent();
+        // Anak revisi dilabeli sesi induknya agar bisa ditemukan.
+        $this->assertStringContainsString('Jawaban Sesi '.$this->entrySubmitted->sesi_ke, $html);
+    }
+
     public function test_new_logbook_is_rejected_while_revision_pending_without_confirmation(): void
     {
         // Dosen meminta revisi pada entri yang sudah dikirim.
@@ -623,24 +783,72 @@ class RevisionWorkflowTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Sesi baru penghindar revisi',
             'progres_kendala' => 'Isi revisi yang seharusnya lewat jalur revisi.',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
         ]);
         $response->assertSessionHasErrors('confirm_new_despite_revision');
 
         // Form create menampilkan banner + tombol Lanjutkan/Buat Revisi.
         $this->actingAs($this->mhs)->get(route('logbook.create'))
             ->assertOk()
-            ->assertSee('Masih ada revisi yang belum selesai', false)
+            ->assertSee('menunggu jawabanmu', false)
             ->assertSee('confirm_new_despite_revision', false);
 
         // Dashboard mengangkat CTA revisi jadi primer.
         $this->actingAs($this->mhs)->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Revisi perlu ditanggapi dulu', false);
+            ->assertSee('menunggu jawabanmu', false);
 
         // Daftar logbook menampilkan banner yang sama.
         $this->actingAs($this->mhs)->get(route('logbook.index'))
             ->assertOk()
-            ->assertSee('Revisi perlu ditanggapi dulu', false);
+            ->assertSee('menunggu jawabanmu', false);
+    }
+
+    public function test_draft_submit_is_blocked_while_revision_pending(): void
+    {
+        // Isolasi penuh: mahasiswa + program + induk baru (DB test dipakai bersama).
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Bypass', 'email' => 'isolasi-bypass@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI003',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        $fresh = \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Bypass',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+        $parent = LogbookEntry::create([
+            'mahasiswa_ta_id' => $fresh->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'sesi_ke' => 1,
+            'dosen_id' => $this->dosen->id,
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Induk isolasi',
+            'progres_kendala' => 'Progres.',
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now()->subDay(),
+        ]);
+
+        // Bypass: simpan draf dulu (tanpa submit), lalu kirim belakangan
+        // saat revisi lain belum dijawab — harus ditolak juga.
+        $store = $this->actingAs($freshMhs)->post(route('logbook.store'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Draf sesi baru',
+            'progres_kendala' => 'Progres sesi baru.',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
+        ]);
+        $store->assertRedirect();
+        $store->assertSessionHasNoErrors();
+        $draft = LogbookEntry::where('topik', 'Draf sesi baru')->firstOrFail();
+
+        $parent->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+
+        $this->actingAs($freshMhs)->post(route('logbook.submit', $draft))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+        $this->assertSame(LogbookEntry::STATUS_DRAFT, $draft->fresh()->status);
     }
 
     public function test_new_logbook_passes_with_explicit_new_session_confirmation(): void
@@ -653,6 +861,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Bimbingan bab baru yang sah',
             'progres_kendala' => 'Bimbingan baru, bukan jawaban revisi.',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
             'confirm_new_despite_revision' => '1',
         ])->assertRedirect();
 
@@ -680,6 +889,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Sesi normal',
             'progres_kendala' => 'Progres normal.',
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
         ]);
         $response->assertRedirect();
         $response->assertSessionHasNoErrors();
@@ -745,6 +955,78 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->get(route('logbook.create-revisi', ['draft_id' => $freshOrphan->id]))
             ->assertOk()
             ->assertSee('Draf ini belum menjawab entri mana pun', false);
+    }
+
+    public function test_approving_child_closes_parent_chain(): void
+    {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+        $this->actingAs($this->mhs)->post(route('logbook.store-revisi'), [
+            'parent_entry_id' => $this->entrySubmitted->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'progres_kendala' => 'Perbaikan sudah dikerjakan dengan ringkasan yang jelas.',
+            'riwayat_perbaikan' => [
+                [
+                    'halaman' => 'Bab 3',
+                    'komentar_dosen' => 'Perbaiki metodologi.',
+                    'perbaikan' => 'Metodologi sudah diperbaiki.',
+                    'status' => 'Sudah',
+                ],
+            ],
+            'lampiran' => UploadedFile::fake()->create('revisi.pdf', 100, 'application/pdf'),
+            'submit' => '1',
+        ])->assertRedirect();
+        $child = LogbookEntry::where('parent_entry_id', $this->entrySubmitted->id)->latest('id')->firstOrFail();
+        $this->assertSame(LogbookEntry::STATUS_SUBMITTED, $child->status);
+
+        $this->actingAs($this->dosen)->post(route('logbook.approve', $child), [
+            'feedback_dosen' => 'Sudah baik, lanjutkan.',
+        ])->assertRedirect();
+        $this->assertSame(LogbookEntry::STATUS_APPROVED, $child->fresh()->status);
+        $this->assertSame(LogbookEntry::STATUS_APPROVED, $this->entrySubmitted->fresh()->status);
+    }
+
+    public function test_repair_service_closes_completed_threads_and_clears_banner(): void
+    {
+        // Simulasi warisan 11/13: induk revisi + anak approved, tanpa rekonsiliasi.
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+        $child = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->entrySubmitted->mahasiswa_ta_id,
+            'dosen_id' => $this->dosen->id,
+            'parent_entry_id' => $this->entrySubmitted->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'revision_round' => 1,
+            'status' => LogbookEntry::STATUS_APPROVED,
+            'submitted_at' => now()->subDay(),
+            'reviewed_at' => now()->subDay(),
+            'tanggal_pengiriman' => now()->subDay()->toDateString(),
+        ]);
+
+        // Banner masih menuntut jawaban (false positive).
+        $this->assertTrue(LogbookEntry::pendingRevisionsFor($this->ta)->contains('id', $this->entrySubmitted->id));
+
+        $this->assertSame(1, \App\Services\ReconcileApprovedParents::run());
+        $this->assertSame(LogbookEntry::STATUS_APPROVED, $this->entrySubmitted->fresh()->status);
+        $this->assertFalse(LogbookEntry::pendingRevisionsFor($this->ta)->contains('id', $this->entrySubmitted->id));
+        $this->assertSame(0, \App\Services\ReconcileApprovedParents::run());
+    }
+
+    public function test_parent_with_active_child_is_not_closed(): void
+    {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+        $child = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->entrySubmitted->mahasiswa_ta_id,
+            'dosen_id' => $this->dosen->id,
+            'parent_entry_id' => $this->entrySubmitted->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'revision_round' => 1,
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+            'tanggal_pengiriman' => now()->toDateString(),
+        ]);
+
+        $this->assertSame(0, \App\Services\ReconcileApprovedParents::run());
+        $this->assertSame(LogbookEntry::STATUS_REVISI, $this->entrySubmitted->fresh()->status);
+        $this->assertSame(LogbookEntry::STATUS_SUBMITTED, $child->fresh()->status);
     }
 
     public function test_parent_dropdown_shows_topik_and_status(): void
@@ -933,7 +1215,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->assertSee($wizardBase, false)
             ->assertSee('step', false)
             ->assertSee('autopull', false)
-            ->assertSee('Kembali \u0026 Lengkapi Form', false);
+            ->assertSee('Kembali \u0026 Lengkapi', false);
 
         // Tanpa param: tetap ke detail entri seperti sebelumnya.
         $showUrl = str_replace('/', '\/', route('logbook.show', $draft, false));
@@ -950,6 +1232,104 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->assertOk()->getContent();
         $this->assertStringContainsString('var initialStep = 3', $html);
         $this->assertStringContainsString('var autoPullOnLoad = true', $html);
+    }
+
+    public function test_logbook_draft_requires_file_and_is_idempotent(): void
+    {
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Tandai', 'email' => 'isolasi-tandai@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI004',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Tandai',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+        $payload = [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi bertanda',
+            'lampiran' => UploadedFile::fake()->create('sesi.pdf', 100, 'application/pdf'),
+        ];
+        $this->actingAs($freshMhs)->postJson(route('logbook.store-draft'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi bertanda',
+        ])->assertUnprocessable();
+        $this->assertSame(0, LogbookEntry::where('topik', 'Sesi bertanda')->count());
+        $first = $this->actingAs($freshMhs)->postJson(route('logbook.store-draft'), $payload)
+            ->assertCreated()->assertJsonPath('ok', true);
+        $draftId = $first->json('entry_id');
+        $this->assertNotNull($draftId);
+        $this->assertNull(LogbookEntry::findOrFail($draftId)->sesi_ke);
+        $this->assertStringContainsString('/pdf/viewer', $first->json('viewer_url'));
+        $this->assertStringContainsString('/annotations/pull', $first->json('pull_url'));
+        $second = $this->actingAs($freshMhs)->postJson(route('logbook.store-draft'), $payload)
+            ->assertOk()->assertJsonPath('reused', true);
+        $this->assertSame($draftId, $second->json('entry_id'));
+    }
+
+    public function test_logbook_pull_fills_cards_and_submit_attaches_session(): void
+    {
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Salin', 'email' => 'isolasi-salin@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI005',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Salin',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+        $draftId = $this->actingAs($freshMhs)->postJson(route('logbook.store-draft'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi salin',
+            'lampiran' => UploadedFile::fake()->create('sesi.pdf', 100, 'application/pdf'),
+        ])->assertCreated()->json('entry_id');
+        $draft = LogbookEntry::findOrFail($draftId);
+        $draft->comments()->create([
+            'user_id' => $freshMhs->id, 'file_type' => \App\Models\PdfComment::FILE_TYPE_DRAFT,
+            'page_number' => 2, 'comment' => 'Bagian latar kurang contoh.',
+            'payload' => ['type' => 'highlight', 'page' => 2],
+            'resolution_status' => \App\Models\PdfComment::STATUS_OPEN, 'is_resolved' => false,
+        ]);
+        $this->actingAs($freshMhs)->postJson(route('logbook.annotations.pull', $draft))
+            ->assertOk()->assertJsonPath('pulled', 1)->assertJsonPath('rows.0.halaman', 'Hal. 2');
+        $rows = $draft->fresh()->riwayat_perbaikan ?? [];
+        $this->assertNotEmpty($rows);
+        $this->assertStringContainsString('Bagian latar kurang contoh.', $rows[0]['perbaikan'] ?? '');
+        // Kartu pull berstatus Draf + komentar manual kosong: lengkapi dulu.
+        $rows[0]['komentar_dosen'] = 'Perjelas latar dengan contoh';
+        $rows[0]['status'] = 'Sudah';
+        $this->actingAs($freshMhs)->post(route('logbook.store'), [
+            'draft_id' => $draftId,
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi salin',
+            'riwayat_perbaikan' => $rows,
+            'submit' => '1',
+        ])->assertRedirect();
+        $draft->refresh();
+        $this->assertSame(1, $draft->sesi_ke);
+        $this->assertSame(LogbookEntry::STATUS_SUBMITTED, $draft->status);
+    }
+
+    public function test_logbook_draft_respects_revision_gate(): void
+    {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+        $this->actingAs($this->mhs)->postJson(route('logbook.store-draft'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi bypass',
+            'lampiran' => UploadedFile::fake()->create('sesi.pdf', 100, 'application/pdf'),
+        ])->assertUnprocessable();
+        $this->actingAs($this->mhs)->postJson(route('logbook.store-draft'), [
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Sesi bypass',
+            'confirm_new_despite_revision' => '1',
+            'lampiran' => UploadedFile::fake()->create('sesi.pdf', 100, 'application/pdf'),
+        ])->assertCreated();
     }
 
     public function test_draft_endpoint_saves_file_and_returns_viewer_urls(): void
@@ -975,7 +1355,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->get(route('logbook.create-revisi', ['parent_entry_id' => $this->entrySubmitted->id]))
             ->assertOk()->getContent();
         $this->assertStringContainsString('id="lanjut-anotasi"', $html);
-        $this->assertStringContainsString('Lanjut ke anotasi PDF', $html);
+        $this->assertStringContainsString('Lanjut menandai', $html);
     }
 
     public function test_draft_endpoint_requires_file(): void
@@ -1041,7 +1421,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->get(route('logbook.create-revisi', ['parent_entry_id' => $this->entrySubmitted->id]))
             ->assertOk()->getContent();
         $this->assertStringContainsString('data-anotasi-open', $html);
-        $this->assertStringContainsString('Draf tersimpan otomatis saat klik Lanjut', $html);
+        $this->assertStringContainsString('Draf tersimpan sendiri', $html);
 
         // FIX 5: gate kirim nonaktif sejak muat (bukan menunggu ketikan).
         $this->assertStringContainsString('id="btn-kirim"', $html);
@@ -1073,12 +1453,12 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->assertStringContainsString('data-ubah-pesan', $html);
 
         // R3+R4: heading hasil + anchor kartu.
-        $this->assertStringContainsString('Hasil Tandaan', $html);
+        $this->assertStringContainsString('3. Salin</h2>', $html);
         $this->assertStringContainsString('id="kartu-perbaikan"', $html);
 
         // R5: label tanggal jujur + R12/R13 kesiapan + R8 live-region + F5 tombol bawah.
         $this->assertStringContainsString('Tanggal revisi', $html);
-        $this->assertStringContainsString('perlu dilengkapi', $html);
+        $this->assertStringContainsString('belum lengkap', $html);
         $this->assertStringContainsString('aria-live="polite"', $html);
         $this->assertStringContainsString('data-isi-otomatis-bawah', $html);
         $this->assertStringContainsString('badge-draft', $html);
@@ -1088,8 +1468,8 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->assertStringContainsString('mis. Jelaskan dasar pemilihan metode', $html);
 
         // F4: hapus minimal 1 kartu + konfirmasi (create) — dijaga di JS.
-        $this->assertStringContainsString('Minimal 1 kartu perbaikan harus ada.', $html);
-        $this->assertStringContainsString('Hapus kartu ini', $html);
+        $this->assertStringContainsString('Min. 1 jawaban harus ada.', $html);
+        $this->assertStringContainsString('Hapus jawaban ini', $html);
 
         // R1: kunci draf ganda + R9: guard nomor langkah.
         $this->assertStringContainsString('savingDraft', $html);

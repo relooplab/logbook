@@ -35,7 +35,7 @@ class DetailWorkspaceTest extends AuditSmokeTest
             ->assertSee(route('chat.start', ['user' => $this->mhs->id, 'ta' => $this->ta->id, 'entry' => $this->entrySubmitted->id]))
             ->assertSee(route('logbook.request-revisi', $this->entrySubmitted))
             ->assertDontSee('Status review revisi');
-        $this->assertSame(1, substr_count($response->getContent(), 'Buka PDF &amp; Anotasi'));
+        $this->assertSame(1, substr_count($response->getContent(), route('logbook.pdf-viewer', $this->entrySubmitted, false)));
     }
 
     public function test_student_sees_logbook_workspace_without_reviewer_decision(): void
@@ -66,10 +66,10 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $response = $this->actingAs($this->dosen)->get(route('logbook.show', $this->entryRevisi));
 
         $response->assertOk()
-            ->assertSee('Catatan Perbaikan')
+            ->assertSee('>Jawaban Mahasiswa</h2>', false)
             ->assertSee('1 dari 2 diperbaiki')
-            ->assertSee('Komentar Dosen')
-            ->assertSee('Perbaikan Mahasiswa')
+            ->assertSee('>Masukan Anda</th>', false)
+            ->assertSee('>Perbaikan mahasiswa</th>', false)
             ->assertSee('Perbaiki data tabel.')
             ->assertSee('action-item-add-toggle')
             ->assertSee('review-decision-form')
@@ -77,7 +77,7 @@ class DetailWorkspaceTest extends AuditSmokeTest
             ->assertSee(route('logbook.approve', $this->entryRevisi))
             ->assertSee(route('chat.start', ['user' => $this->mhs->id, 'ta' => $this->ta->id, 'entry' => $this->entryRevisi->id]))
             ->assertSee(route('logbook.request-revisi', $this->entryRevisi));
-        $this->assertSame(1, substr_count($response->getContent(), 'Buka PDF &amp; Anotasi'));
+        $this->assertSame(1, substr_count($response->getContent(), route('logbook.pdf-viewer', $this->entryRevisi, false)));
     }
 
     public function test_show_lists_own_entry_comments_in_context_table(): void
@@ -95,10 +95,10 @@ class DetailWorkspaceTest extends AuditSmokeTest
 
         $this->actingAs($this->dosen)->get(route('logbook.show', $this->entryRevisi))
             ->assertOk()
-            ->assertSee('Komentar Sebelumnya', false)
-            ->assertSee('Komentar entri ini', false)
+            ->assertSee('Komentar Lalu', false)
+            ->assertSee('Anotasi PDF sesi ini', false)
             ->assertSee('Komentar milik entri ini.', false)
-            ->assertSee('Belum ditindaklanjuti', false);
+            ->assertSee('Perlu tindak lanjut', false);
     }
 
     public function test_approval_feedback_is_optional_but_revision_feedback_remains_required(): void

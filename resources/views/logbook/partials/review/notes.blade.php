@@ -7,32 +7,42 @@
     $needsAttentionRevisions = $revisionRows->count() - $readyRevisions;
     $completedRevisions = $revisionRows->filter(fn ($row) => ($row['status'] ?? null) === 'Sudah')->count();
     $revisionPercent = $revisionRows->count() ? (int) round($completedRevisions / $revisionRows->count() * 100) : 0;
+    // Label sadar-peran (berbasis role, bukan ability): dosen membaca
+    // transkrip masukannya sendiri + perbaikan mahasiswa; mahasiswa membaca
+    // komentar dosen + perbaikannya.
+    $notesReviewer = $notesUser->isDosen();
+    $notesKomentarLabel = $notesReviewer ? 'Masukan Anda' : 'Komentar dosen';
+    $notesPerbaikanLabel = $notesReviewer ? 'Perbaikan mahasiswa' : 'Perbaikan Anda';
+    $notesTitle = $notesReviewer ? 'Jawaban Mahasiswa' : 'Jawaban';
+    $notesDesc = $notesReviewer
+        ? 'Transkrip masukan Anda dan perbaikan yang dilakukan mahasiswa.'
+        : 'Komentar dosen dan perbaikan yang sudah Anda lakukan.';
 @endphp
-@if ($logbook->jenis === 'revisi')
+@if ($revisionRows->isNotEmpty())
     <section class="card p-4 sm:p-5" aria-labelledby="revision-list-title">
         <div class="mb-3">
-            <h2 id="revision-list-title" class="font-heading font-semibold text-lg text-text-primary">Catatan Perbaikan</h2>
-            <p class="text-sm text-text-secondary mt-1">Daftar catatan perbaikan dari dosen beserta respons mahasiswa.</p>
+            <h2 id="revision-list-title" class="font-heading font-semibold text-lg text-text-primary">{{ $notesTitle }}</h2>
+            <p class="text-sm text-text-secondary mt-1">{{ $notesDesc }}</p>
         </div>
         @if ($needsAttentionRevisions > 0 && $notesOwner && $logbook->isEditable())
             <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-status-pending/50 bg-status-pending/10 px-4 py-3 text-sm" role="status">
-                <span class="font-medium">{{ $needsAttentionRevisions }} dari {{ $revisionRows->count() }} catatan perlu dilengkapi</span>
-                <a href="{{ route('logbook.edit', $logbook) }}" class="font-semibold text-brand hover:underline">Lengkapi sekarang →</a>
+                <span class="font-medium">{{ $needsAttentionRevisions }} dari {{ $revisionRows->count() }} baris belum lengkap</span>
+                <a href="{{ route('logbook.edit', $logbook) }}" class="font-semibold text-brand hover:underline">Lengkapi →</a>
             </div>
         @elseif ($needsAttentionRevisions > 0 && $notesUser->can('review', $logbook))
             <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-status-pending/50 bg-status-pending/10 px-4 py-3 text-sm" role="status">
-                <span class="font-medium">{{ $needsAttentionRevisions }} dari {{ $revisionRows->count() }} catatan belum lengkap</span>
+                <span class="font-medium">{{ $needsAttentionRevisions }} dari {{ $revisionRows->count() }} jawaban belum lengkap</span>
             </div>
         @endif
         <div class="flex items-center gap-3 mb-3 text-sm"><span>{{ $completedRevisions }} dari {{ $revisionRows->count() }} diperbaiki</span><div class="h-2 flex-1 rounded-full bg-bg-hover overflow-hidden" role="progressbar" aria-label="Progres perbaikan" aria-valuenow="{{ $completedRevisions }}" aria-valuemin="0" aria-valuemax="{{ $revisionRows->count() }}"><div class="h-full bg-status-success rounded-full" style="width: {{ $revisionPercent }}%"></div></div><span>{{ $revisionPercent }}%</span></div>
         <div class="overflow-x-auto rounded-xl border border-border">
             <table class="w-full min-w-[640px] text-sm">
-                <caption class="sr-only">Catatan perbaikan dosen dan respons mahasiswa</caption>
+                <caption class="sr-only">{{ $notesReviewer ? 'Transkrip masukan Anda dan perbaikan mahasiswa' : 'Komentar dosen dan perbaikan Anda' }}</caption>
                 <thead><tr class="text-left text-text-secondary border-b border-border">
                     <th scope="col" class="py-2 px-3 font-medium">No</th>
                     <th scope="col" class="py-2 px-3 font-medium">Halaman</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Komentar Dosen</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Perbaikan Mahasiswa</th>
+                    <th scope="col" class="py-2 px-3 font-medium">{{ $notesKomentarLabel }}</th>
+                    <th scope="col" class="py-2 px-3 font-medium">{{ $notesPerbaikanLabel }}</th>
                     <th scope="col" class="py-2 px-3 font-medium">Status</th>
                 </tr></thead>
                 <tbody>

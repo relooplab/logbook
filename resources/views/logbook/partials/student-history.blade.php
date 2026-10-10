@@ -5,7 +5,7 @@
         <a href="' . route('logbook.create', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
             <span class="material-symbols-outlined icon-sm text-accent-orange">add</span> + Logbook
         </a>
-        <a href="' . route('logbook.create-revisi', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">+ Entri Revisi</a>';
+        <a href="' . route('logbook.create-revisi', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Jawab Revisi</a>';
     } @endphp
 <x-page-header subtitle="Bimbingan" title="Logbook Bimbingan">
     <x-slot:actions>{!! $actionLinks !!}</x-slot:actions>
@@ -13,10 +13,24 @@
 
     @if (($pendingRevisions ?? collect())->isNotEmpty())
         <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
-            <p class="font-semibold text-text-primary">Revisi perlu ditanggapi dulu</p>
-            <p class="mt-1 text-sm text-text-secondary">Jawaban revisi harus dikirim lewat jalur revisi — bukan lewat sesi logbook baru — agar tidak terputus dari komentar dosen.</p>
+            <p class="font-semibold text-text-primary">
+                @if (($pendingRevisionThreads ?? collect())->count() > 1)
+                    {{ $pendingRevisionThreads->count() }} sesi menunggu jawabanmu
+                @else
+                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} menunggu jawabanmu
+                @endif
+            </p>
             @if (!empty($pendingRevisionAction['url']))
-                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Lanjutkan Revisi' }} →</a>
+                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">Jawab Revisi →</a>
+            @endif
+            @if (($pendingRevisionThreads ?? collect())->count() > 1)
+                <ul class="mt-3 space-y-1 text-sm">
+                    @foreach ($pendingRevisionThreads as $thread)
+                        <li>
+                            <a href="{{ route('logbook.show', $thread['root']) }}" class="text-brand hover:underline">{{ $thread['root']->shortTitle() }}</a>
+                        </li>
+                    @endforeach
+                </ul>
             @endif
         </div>
     @endif

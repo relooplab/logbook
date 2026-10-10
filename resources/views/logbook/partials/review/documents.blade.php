@@ -8,9 +8,9 @@
 @if ($logbook->lampiran_path || $logbook->catatan_perbaikan_path)
     <section class="card p-5 space-y-3 detail-workspace-card" aria-label="Dokumen">
         <h2 class="font-heading font-semibold text-text-primary">Dokumen</h2>
-        <a href="{{ route('logbook.pdf-viewer', array_merge(['logbook' => $logbook], $viewerParams)) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">{{ $canAnnotate ? 'Buka PDF & Anotasi' : 'Lihat PDF & Komentar' }}</a>
-        @if (auth()->user()->isMahasiswa() && $logbook->jenis === 'revisi' && $logbook->isEditable() && empty($logbook->riwayat_perbaikan))
-            <p class="text-xs text-text-secondary">Draf tersimpan tanpa tabel perbaikan. <a href="{{ route('logbook.edit', $logbook) }}" class="font-semibold text-brand hover:underline">Buka Edit</a> → tandai di PDF → isi otomatis ke kartu.</p>
+        <a href="{{ route('logbook.pdf-viewer', array_merge(['logbook' => $logbook], $viewerParams)) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">{{ $canAnnotate ? 'Buka PDF' : 'Lihat PDF' }}</a>
+        @if (auth()->user()->isMahasiswa() && in_array($logbook->jenis, ['revisi', 'logbook'], true) && $logbook->isEditable() && empty($logbook->riwayat_perbaikan))
+            <p class="text-xs text-text-secondary">Draf tersimpan tanpa jawaban. <a href="{{ route('logbook.edit', $logbook) }}" class="font-semibold text-brand hover:underline">Buka Edit</a> → tandai di PDF → salin.</p>
         @endif
         <div class="flex flex-wrap gap-x-3 gap-y-2 text-xs">
             @if ($logbook->lampiran_path)

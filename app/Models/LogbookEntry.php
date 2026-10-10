@@ -239,8 +239,48 @@ class LogbookEntry extends Model
     }
 
     /**
+     * Revisi pending dikelompokkan per-thread (satu akar rantai = satu item).
+     * Badge navigasi menghitung aksi yang bisa diklik, bukan baris DB:
+     * induk + anak revisinya di utas yang sama dihitung 1.
+     * Tiap item: ['root' => akar rantai, 'items' => koleksi pending di utas itu].
+     *
+     * @return \Illuminate\Support\Collection<int, array{root: self, items: \Illuminate\Support\Collection<int, self>}>
+     */
+    public static function pendingRevisionThreadsFor(?MahasiswaTa $ta): \Illuminate\Support\Collection
+    {
+        $pending = self::pendingRevisionsFor($ta);
+        if ($pending->isEmpty()) {
+            return collect();
+        }
+
+        $threads = [];
+        foreach ($pending as $entry) {
+            $root = $entry;
+            $guard = 0;
+            while ($root->parent_entry_id && $guard < 20) {
+                $parent = $root->parentEntry;
+                if (! $parent) {
+                    break;
+                }
+                $root = $parent;
+                $guard++;
+            }
+            // Induk di luar daftar pending tetap jadi kunci thread.
+            $threads[$root->id] ??= ['root' => $root, 'items' => collect()];
+            if (! $threads[$root->id]['items']->contains('id', $entry->id)) {
+                $threads[$root->id]['items']->push($entry);
+            }
+        }
+
+        return collect(array_values($threads))
+            ->sortBy(fn (array $t) => $t['root']->id)
+            ->values();
+    }
+
+    /**
      * Satu aksi lanjutan paling relevan untuk revisi pending: lanjutkan draf
      * bila ada, sonst buat revisi dari induk yang diminta revisi.
+     * Label memakai satu nama: "Jawab Revisi".
      */
     public static function pendingRevisionActionFor(?MahasiswaTa $ta): ?array
     {
@@ -252,7 +292,7 @@ class LogbookEntry extends Model
         $draft = $pending->first(fn (self $e) => $e->jenis === self::JENIS_REVISI && $e->isEditable());
         if ($draft) {
             return [
-                'label' => 'Lanjutkan Revisi',
+                'label' => 'Jawab Revisi',
                 'url' => route('logbook.edit', $draft),
                 'entry' => $draft,
                 'kind' => 'draft',
@@ -262,7 +302,7 @@ class LogbookEntry extends Model
         $parent = $pending->first(fn (self $e) => $e->status === self::STATUS_REVISI);
         if ($parent) {
             return [
-                'label' => 'Buat Revisi',
+                'label' => 'Jawab Revisi',
                 'url' => route('logbook.create-revisi', [
                     'parent_entry_id' => $parent->id,
                     'program' => $parent->mahasiswaTa?->jenis,
@@ -273,6 +313,20 @@ class LogbookEntry extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Judul pendek entri untuk banner: "Sesi 3" untuk logbook,
+     * "Jawaban Sesi 3" untuk revisi berinduk, "Jawaban baru" bila yatim.
+     */
+    public function shortTitle(): string
+    {
+        if ($this->jenis === self::JENIS_REVISI) {
+            $parentSesi = $this->parentEntry?->sesi_ke;
+            return $parentSesi ? 'Jawaban Sesi '.$parentSesi : 'Jawaban baru';
+        }
+
+        return $this->sesi_ke ? 'Sesi '.$this->sesi_ke : 'Logbook';
     }
 
     /**

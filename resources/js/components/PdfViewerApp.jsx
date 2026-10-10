@@ -602,15 +602,15 @@ function PdfViewerApp() {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.message || ('HTTP ' + res.status));
-      var skipNote = d.skipped_empty > 0 ? ' ' + d.skipped_empty + ' tandaan kosong dilewati.' : '';
+      var skipNote = d.skipped_empty > 0 ? ' ' + d.skipped_empty + ' yang kosong dilewati.' : '';
       if (d.pulled > 0) {
         setPullCount(d.pulled);
-        setPullMessage(d.pulled + (entryKind === 'revisi' ? ' isian sudah masuk dari PDF.' : ' poin sudah masuk ke ringkasan.') + ' Kembali untuk melengkapi yang kurang.' + skipNote);
+        setPullMessage(d.pulled + (entryKind === 'revisi' ? ' jawaban sudah disalin.' : ' poin sudah disalin.') + ' Kembali dan lengkapi.' + skipNote);
       } else {
-        setPullMessage('Belum ada yang baru — tandai dulu di PDF (blok teks / seret kotak), lalu klik lagi.' + skipNote);
+        setPullMessage('Belum ada yang baru. Tandai dulu, lalu klik lagi.' + skipNote);
       }
     } catch (e) {
-      setPullMessage('Gagal memasukkan ke form. Coba lagi.');
+      setPullMessage('Gagal. Coba lagi.');
     } finally {
       setPulling(false);
     }
@@ -691,9 +691,9 @@ function PdfViewerApp() {
       {/* Bar compact: kembali | judul | anotasi | outline | file | mode | zoom || aksi */}
       <div className="flex items-center gap-1.5 md:gap-2 rounded-lg border border-border bg-bg-surface px-2 py-1.5 overflow-x-auto shrink-0">
         {fromCreateRevisi ? (
-          <button onClick={goBackFromWizard} title="Kembali ke form revisi"
+          <button onClick={goBackFromWizard}
             className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-bg-panel hover:bg-bg-hover shrink-0">
-            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali ke Form</span>
+            <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
           </button>
         ) : (
           <a href={returnUrl} title="Kembali ke detail"
@@ -701,19 +701,18 @@ function PdfViewerApp() {
             <ArrowLeft className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kembali</span>
           </a>
         )}
-        <span className="text-sm font-bold whitespace-nowrap truncate" title={`Anotasi PDF · ${title || ''}`}>
+        <span className="text-sm font-bold whitespace-nowrap truncate">
           Anotasi PDF · {title}
         </span>
         <button onClick={() => setSidebarOpen((v) => !v)}
           aria-label="Tampilkan/sembunyikan panel anotasi"
           aria-pressed={sidebarOpen}
-          title="Tampilkan/sembunyikan panel anotasi"
           className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 ${sidebarOpen ? 'bg-brand text-white' : 'bg-bg-panel hover:bg-bg-hover'}`}>
           <PanelLeft className="h-3.5 w-3.5" /> {annotations.length}
         </button>
         <button
           onClick={() => setLeftOpen((v) => !v)}
-          title="Outline & halaman"
+          aria-label="Daftar isi dan halaman"
           className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 ${leftOpen ? 'bg-brand text-white' : 'bg-bg-panel hover:bg-bg-hover'}`}
         >
           <ListTree className="h-3.5 w-3.5" />
@@ -770,31 +769,30 @@ function PdfViewerApp() {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Mode anotasi">
+        <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Mode tandai">
           <button onClick={() => setAreaMode(false)}
             disabled={hasSelectableText === false}
             aria-keyshortcuts="t"
             aria-pressed={!areaMode}
-            title={hasSelectableText === false ? 'PDF pindaian: teks tidak dapat diblok' : 'Mode teks (T)'}
+            aria-label="Tandai tulisan"
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${!areaMode ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'} disabled:opacity-40`}>
             <Type className="h-3.5 w-3.5" /> Teks
           </button>
           <button onClick={() => setAreaMode(true)}
             aria-keyshortcuts="a"
             aria-pressed={areaMode}
-            title="Mode area (A)"
+            aria-label="Tandai area"
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${areaMode ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
             <Square className="h-3.5 w-3.5" /> Area
           </button>
         </div>
         <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" aria-label="Zoom">
-          <button onClick={zoomOut} title="Perkecil"
+          <button onClick={zoomOut} aria-label="Perkecil"
             className="px-2 py-1 rounded text-xs font-bold leading-none hover:bg-bg-hover">−</button>
           <input
             type="text"
             inputMode="decimal"
             aria-label="Zoom PDF dalam persen"
-            title="Ketik zoom (10–400%), Enter untuk menerapkan"
             value={zoomInput}
             onChange={(e) => setZoomInput(e.target.value)}
             onBlur={(e) => commitZoom(e.target.value)}
@@ -809,7 +807,6 @@ function PdfViewerApp() {
           />
           <select
             aria-label="Pilihan zoom PDF"
-            title="Pilih persentase zoom"
             value={scale === 'page-width' ? 'Pas' : ZOOM_OPTIONS.includes(Math.round(scale * 100)) && Math.abs(scale * 100 - Math.round(scale * 100)) < 0.001 ? `${Math.round(scale * 100)}%` : ''}
             onChange={(e) => commitZoom(e.target.value)}
             className="w-5 bg-transparent text-xs outline-none cursor-pointer"
@@ -818,31 +815,31 @@ function PdfViewerApp() {
             <option value="Pas">Pas lebar</option>
             {ZOOM_OPTIONS.map((n) => <option key={n} value={`${n}%`}>{n}%</option>)}
           </select>
-          <button onClick={zoomIn} title="Perbesar"
+          <button onClick={zoomIn} aria-label="Perbesar"
             className="px-2 py-1 rounded text-xs font-bold leading-none hover:bg-bg-hover">+</button>
         </div>
         <span className="hidden lg:inline text-xs text-text-secondary whitespace-nowrap shrink-0">{numPages || '…'} hal</span>
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
           {buildFeedbackUrl && (
-            <button onClick={buildFeedback} title="Kompilasi komentar menjadi feedback"
+            <button onClick={buildFeedback}
               className="flex items-center gap-1 px-2 py-1 rounded-md bg-brand-fill hover:bg-brand-fill-hover text-white text-xs font-semibold whitespace-nowrap">
-              <Zap className="h-3.5 w-3.5" /><span className="hidden md:inline">Feedback</span>
+              <Zap className="h-3.5 w-3.5" /><span className="hidden md:inline">Buat Pesan</span>
             </button>
           )}
           {canPullAnnotations && (
-            <button onClick={pullToTable} disabled={pulling} title="Pindahkan yang kamu tandai di PDF jadi isian di Langkah 3"
+            <button onClick={pullToTable} disabled={pulling}
               className="flex min-h-11 items-center gap-1.5 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand whitespace-nowrap disabled:opacity-50">
-              <ListTree className="h-3.5 w-3.5" /><span className="hidden md:inline">{pulling ? 'Lagi dimasukkan…' : 'Masukkan ke Form Revisi' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span><span className="md:hidden">{pulling ? '…' : 'Ke Form' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span>
+              <ListTree className="h-3.5 w-3.5" /><span className="hidden md:inline">{pulling ? 'Menyalin…' : 'Salin ke Jawaban' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span><span className="md:hidden">{pulling ? '…' : 'Salin' + (pullCount > 0 ? ' (' + pullCount + ')' : '')}</span>
             </button>
           )}
           {burnUrl && (
-            <a href={burnUrl.replace('__TYPE__', activeType)} target="_blank" rel="noopener" title="Unduh PDF dengan anotasi"
+            <a href={burnUrl.replace('__TYPE__', activeType)} target="_blank" rel="noopener" aria-label="Unduh PDF beserta tandanya"
               className="flex items-center gap-1 px-2 py-1 rounded-md bg-bg-panel hover:bg-bg-hover text-xs font-semibold whitespace-nowrap">
-              <Download className="h-3.5 w-3.5" /><span className="hidden md:inline">PDF Anotasi</span>
+              <Download className="h-3.5 w-3.5" /><span className="hidden md:inline">Unduh PDF</span>
             </a>
           )}
           <button onClick={() => setIsFullscreen((v) => !v)}
-            title={isFullscreen ? 'Keluar layar penuh (Esc)' : 'Layar penuh'}
+            aria-label={isFullscreen ? 'Keluar layar penuh' : 'Layar penuh'}
             className={`flex items-center px-2 py-1 rounded-md text-xs font-semibold ${isFullscreen ? 'bg-brand text-white' : 'bg-bg-panel hover:bg-bg-hover'}`}>
             {isFullscreen ? <Minimize className="h-3.5 w-3.5" /> : <Maximize className="h-3.5 w-3.5" />}
           </button>

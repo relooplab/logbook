@@ -182,23 +182,25 @@
                             @php $extrasRendered = true; @endphp
                             @if ($openComments->isNotEmpty())
                                 <div>
-                                    <p class="text-sm font-medium text-text-primary">Komentar belum diselesaikan ({{ $openComments->count() }})</p>
+                                    <p class="text-sm font-medium text-text-primary">Anotasi PDF belum selesai ({{ $openComments->count() }})</p>
                                     <div class="mt-1.5 space-y-1.5">
                                         @foreach ($openComments->take(3) as $comment)
                                             <div class="flex items-start gap-2 text-sm bg-bg-panel rounded-lg px-3 py-2">
                                                 <span class="text-xs text-text-secondary mt-0.5">Hal. {{ $comment->page_number ?: '—' }}</span>
-                                                <span class="flex-1 text-text-primary">{{ $comment->comment }}</span>
+                                                <span class="flex-1 text-text-primary">{{ $comment->comment }}
+                                                    <span class="block text-xs text-text-secondary">oleh {{ $comment->user?->name ?? '—' }}{{ $comment->user?->isDosen() ? ' (dosen)' : ' (mahasiswa)' }}</span>
+                                                </span>
                                             </div>
                                         @endforeach
                                         @if ($openComments->count() > 3)
-                                            <a href="{{ route('logbook.show', $node) }}" class="text-xs text-brand hover:underline">+{{ $openComments->count() - 3 }} komentar lainnya</a>
+                                            <a href="{{ route('logbook.show', $node) }}" class="text-xs text-brand hover:underline">+{{ $openComments->count() - 3 }} anotasi lainnya</a>
                                         @endif
                                     </div>
                                 </div>
                             @endif
                             @if ($totalItems > 0)
                                 <div>
-                                    <p class="text-sm font-medium text-text-primary">Action Items ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
+                                    <p class="text-sm font-medium text-text-primary">Dikerjakan ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
                                     <div class="mt-1.5 space-y-1.5">
                                         @foreach ($node->actionItems as $item)
                                             <div class="flex items-center gap-2 text-sm">
@@ -216,12 +218,12 @@
                     @if (! $extrasRendered && $hasExtras)
                         @if ($openComments->isNotEmpty())
                             <div>
-                                <p class="text-sm font-medium text-text-primary">Komentar belum diselesaikan ({{ $openComments->count() }})</p>
+                                <p class="text-sm font-medium text-text-primary">Anotasi PDF belum selesai ({{ $openComments->count() }})</p>
                             </div>
                         @endif
                         @if ($totalItems > 0)
                             <div>
-                                <p class="text-sm font-medium text-text-primary">Action Items ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
+                                <p class="text-sm font-medium text-text-primary">Dikerjakan ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
                                 <div class="mt-1.5 space-y-1.5">
                                     @foreach ($node->actionItems as $item)
                                         <div class="flex items-center gap-2 text-sm">

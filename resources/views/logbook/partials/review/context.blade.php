@@ -1,5 +1,5 @@
 @php
-    // Kartu konteks: komentar PDF seluruh rantai ke atas + tombol pakai-ulang.
+    // Kartu komentar sesi-sesi sebelumnya + tombol pakai.
     // Induk langsung expanded; leluhur lebih tua collapsed per entri.
     // $useFeedbackButtons (bool), $lastFeedback (?string) opsional.
     $useFeedbackButtons = $useFeedbackButtons ?? false;
@@ -16,7 +16,9 @@
     $olderAncestors = array_slice($chain, 1);
     $directComments = $directParent?->comments ?? collect();
     $ownComments = $logbook->comments ?? collect();
-    $resolutionLabels = ['open' => 'Belum ditindaklanjuti', 'addressed' => 'Sudah dijawab', 'resolved' => 'Selesai'];
+    // Label sadar-aktor: tiap anotasi menyebut penulisnya (dosen/mahasiswa).
+    $resolutionLabels = ['open' => 'Perlu tindak lanjut', 'addressed' => 'Sudah ditanggapi', 'resolved' => 'Selesai'];
+    $commentAuthor = fn ($c) => $c->user ? ($c->user->name.($c->user->isDosen() ? ' · dosen' : ' · mahasiswa')) : '—';
     $hasAnything = $directParent?->feedback_dosen || $directComments->isNotEmpty() || $ownComments->isNotEmpty()
         || collect($olderAncestors)->contains(fn ($a) => $a->comments->isNotEmpty())
         || $lastFeedback;
@@ -24,7 +26,7 @@
 @if ($hasAnything)
 <section class="card min-w-0 p-5 sm:p-6" aria-labelledby="previous-heading">
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="previous-heading" class="font-heading text-lg font-semibold text-text-primary">Komentar Sebelumnya</h2>
+        <h2 id="previous-heading" class="font-heading text-lg font-semibold text-text-primary">Komentar Lalu</h2>
         @php $totalComments = $ownComments->count() + $directComments->count() + collect($olderAncestors)->sum(fn ($a) => $a->comments->count()); @endphp
         @if ($totalComments > 0)
             <span class="text-xs text-text-secondary">{{ $totalComments }} komentar</span>
@@ -32,24 +34,25 @@
     </div>
     @if ($directParent?->feedback_dosen)
         <div class="mt-4 rounded-xl bg-bg-panel p-4">
-            <p class="text-xs font-semibold text-text-secondary">Feedback entri induk #{{ $directParent->id }}</p>
+            <p class="text-xs font-semibold text-text-secondary">Pesan sesi #{{ $directParent->id }}</p>
             <p class="mt-2 whitespace-pre-wrap break-words text-sm text-text-primary">{{ $directParent->feedback_dosen }}</p>
             <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <a href="{{ route('logbook.show', $directParent) }}" class="inline-block text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Buka entri induk ↗</a>
+                <a href="{{ route('logbook.show', $directParent) }}" class="inline-block text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Buka sesi sebelumnya ↗</a>
                 @if ($useFeedbackButtons)
-                    <button type="button" class="use-last-feedback text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $directParent->feedback_dosen }}">Gunakan sebagai feedback</button>
+                    <button type="button" class="use-last-feedback text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $directParent->feedback_dosen }}">Pakai pesan ini</button>
                 @endif
             </div>
         </div>
     @endif
     @if ($ownComments->isNotEmpty())
-        <p class="mt-4 text-xs font-semibold text-text-secondary">Komentar entri ini</p>
+        <p class="mt-4 text-xs font-semibold text-text-secondary">Anotasi PDF sesi ini (entri #{{ $logbook->id }})</p>
         <div class="mt-2 overflow-x-auto rounded-xl border border-border">
             <table class="w-full min-w-[560px] text-sm">
                 <thead><tr class="text-left text-text-secondary border-b border-border">
                     <th scope="col" class="py-2 px-3 font-medium">No</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Komentar</th>
+                    <th scope="col" class="py-2 px-3 font-medium">Anotasi</th>
                     <th scope="col" class="py-2 px-3 font-medium">Hal.</th>
+                    <th scope="col" class="py-2 px-3 font-medium">Penulis</th>
                     <th scope="col" class="py-2 px-3 font-medium">Status</th>
                 </tr></thead>
                 <tbody>
@@ -58,6 +61,7 @@
                             <td class="py-2 px-3 font-mono text-text-secondary">{{ $loop->iteration }}</td>
                             <td class="py-2 px-3">{{ $comment->comment }}</td>
                             <td class="py-2 px-3 whitespace-nowrap text-text-secondary">{{ $comment->page_number ? 'Hal. '.$comment->page_number : '—' }}</td>
+                            <td class="py-2 px-3 whitespace-nowrap text-xs text-text-secondary">{{ $commentAuthor($comment) }}</td>
                             <td class="py-2 px-3 whitespace-nowrap text-xs">{{ $resolutionLabels[$comment->resolution_status] ?? $comment->resolution_status }}</td>
                         </tr>
                     @endforeach
@@ -66,12 +70,14 @@
         </div>
     @endif
     @if ($directComments->isNotEmpty())
-        <div class="mt-4 overflow-x-auto rounded-xl border border-border">
+        <p class="mt-4 text-xs font-semibold text-text-secondary">Anotasi PDF sesi #{{ $directParent->id }} <a href="{{ route('logbook.show', $directParent) }}" class="font-normal text-brand hover:underline">Buka sesi ↗</a></p>
+        <div class="mt-2 overflow-x-auto rounded-xl border border-border">
             <table class="w-full min-w-[560px] text-sm">
                 <thead><tr class="text-left text-text-secondary border-b border-border">
                     <th scope="col" class="py-2 px-3 font-medium">No</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Komentar</th>
+                    <th scope="col" class="py-2 px-3 font-medium">Anotasi</th>
                     <th scope="col" class="py-2 px-3 font-medium">Hal.</th>
+                    <th scope="col" class="py-2 px-3 font-medium">Penulis</th>
                     <th scope="col" class="py-2 px-3 font-medium">Status</th>
                 </tr></thead>
                 <tbody>
@@ -80,6 +86,7 @@
                             <td class="py-2 px-3 font-mono text-text-secondary">{{ $loop->iteration }}</td>
                             <td class="py-2 px-3">{{ $comment->comment }}</td>
                             <td class="py-2 px-3 whitespace-nowrap text-text-secondary">{{ $comment->page_number ? 'Hal. '.$comment->page_number : '—' }}</td>
+                            <td class="py-2 px-3 whitespace-nowrap text-xs text-text-secondary">{{ $commentAuthor($comment) }}</td>
                             <td class="py-2 px-3 whitespace-nowrap text-xs">{{ $resolutionLabels[$comment->resolution_status] ?? $comment->resolution_status }}</td>
                         </tr>
                     @endforeach
@@ -102,8 +109,9 @@
                     <table class="w-full min-w-[560px] text-sm">
                         <thead><tr class="text-left text-text-secondary border-b border-border">
                             <th scope="col" class="py-2 px-3 font-medium">No</th>
-                            <th scope="col" class="py-2 px-3 font-medium">Komentar</th>
+                            <th scope="col" class="py-2 px-3 font-medium">Anotasi</th>
                             <th scope="col" class="py-2 px-3 font-medium">Hal.</th>
+                            <th scope="col" class="py-2 px-3 font-medium">Penulis</th>
                             <th scope="col" class="py-2 px-3 font-medium">Status</th>
                         </tr></thead>
                         <tbody>
@@ -112,6 +120,7 @@
                                     <td class="py-2 px-3 font-mono text-text-secondary">{{ $loop->iteration }}</td>
                                     <td class="py-2 px-3">{{ $comment->comment }}</td>
                                     <td class="py-2 px-3 whitespace-nowrap text-text-secondary">{{ $comment->page_number ? 'Hal. '.$comment->page_number : '—' }}</td>
+                                    <td class="py-2 px-3 whitespace-nowrap text-xs text-text-secondary">{{ $commentAuthor($comment) }}</td>
                                     <td class="py-2 px-3 whitespace-nowrap text-xs">{{ $resolutionLabels[$comment->resolution_status] ?? $comment->resolution_status }}</td>
                                 </tr>
                             @endforeach
@@ -123,10 +132,10 @@
     @endforeach
     @if ($lastFeedback && $lastFeedback !== $directParent?->feedback_dosen)
         <div class="mt-4 rounded-xl bg-bg-panel p-4">
-            <p class="text-xs font-semibold text-text-secondary">Feedback terakhir tersimpan</p>
+            <p class="text-xs font-semibold text-text-secondary">Pesan terakhir</p>
             <p class="mt-2 whitespace-pre-wrap break-words text-sm text-text-primary">{{ $lastFeedback }}</p>
             @if ($useFeedbackButtons)
-                <button type="button" class="use-last-feedback mt-2 text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $lastFeedback }}">Gunakan sebagai feedback</button>
+                <button type="button" class="use-last-feedback mt-2 text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $lastFeedback }}">Pakai pesan ini</button>
             @endif
         </div>
     @endif

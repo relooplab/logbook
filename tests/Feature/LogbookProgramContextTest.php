@@ -36,6 +36,7 @@ class LogbookProgramContextTest extends AuditSmokeTest
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Topik KP',
             'progres_kendala' => 'Progres KP',
+            'lampiran' => \Illuminate\Http\UploadedFile::fake()->create('kp.pdf', 100, 'application/pdf'),
         ]);
 
         $response->assertRedirect();

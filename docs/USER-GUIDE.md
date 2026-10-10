@@ -273,11 +273,9 @@ Selain workspace mahasiswa, dosen juga memiliki **workspace pribadi** melalui me
 1. Masuk ke **Dashboard** → klik **+ Logbook** (atau menu **Tambah Logbook**).
 2. Nomor **Sesi** terisi otomatis (sesi berikutnya).
 3. Isi **Tanggal Bimbingan**, **Topik Bimbingan**, dan **Ringkasan Perbaikan** (progres & kendala).
-4. (Opsional) Lampirkan file (PDF, dll).
-5. Pilih:
-   - **Simpan Draf** — menyimpan sebagai draf, dapat diedit dan dikirim nanti.
-   - **Kirim ke dosen** — langsung mengirim ke dosen untuk direview.
-6. Isian tersimpan otomatis (auto-save) setiap 5 detik; draf dipulihkan jika halaman tertutup.
+4. (Opsional) Lampirkan file (PDF, dll). Mau tandai langsung di PDF tanpa tulis manual? Isi tanggal + pilih file, klik **Tandai di PDF**, tandai di tab baru, kembali lalu klik **Salin** — poinnya masuk ringkasan sendiri.
+5. Klik **Kirim** untuk mengirim ke dosen. Belum siap? Klik **Simpan dulu, kirim nanti** — tersimpan di akunmu, bisa dilanjutkan dari HP lain.
+6. Ketikan tersimpan otomatis di browser ini tiap 5 detik (tanpa file); kalau tab tertutup, teks pulih saat dibuka lagi.
 
 > ⚠️ **Masih ada revisi yang belum selesai?** Jawaban revisi harus dikirim
 > lewat jalur revisi (**Buat Revisi / Lanjutkan Revisi**) — bukan lewat sesi
@@ -294,11 +292,13 @@ Selain workspace mahasiswa, dosen juga memiliki **workspace pribadi** melalui me
 5. Kirim → penerima menerima notifikasi (pembimbing ikut diberi tahu) dan mereview kembali.
 
 > 📌 **Revisi selalu menjawab satu entri.** Pada langkah 1 pilih **Entri
-> yang dijawab** — wajib diisi sebelum revisi dikirim ke dosen. Draf boleh
-> disimpan dulu sebagai *draf pribadi* (tanpa memilih entri) agar alur
-> tandai-di-PDF tetap jalan, tapi tidak bisa dikirim sampai ditautkan ke
-> satu entri. Draf pribadi yang belum bertuan bisa ditautkan belakangan
-> lewat **Lanjutkan Revisi** → pilih entri yang dijawab.
+> yang dijawab** — wajib diisi sebelum revisi dikirim ke dosen. Halaman
+> Jawab Revisi hanya dipakai saat ada sesi yang menunggu jawaban; bila
+> semua sesi sudah beres, halaman menampilkan "Tidak ada yang perlu
+> direvisi". Draf boleh disimpan dulu sebagai *draf pribadi* (tanpa memilih
+> entri) agar alur tandai-di-PDF tetap jalan, tapi tidak bisa dikirim
+> sampai ditautkan ke satu entri. Draf pribadi yang belum bertuan bisa
+> ditautkan belakangan lewat **Lanjutkan Revisi** → pilih entri yang dijawab.
 
 #### 4.1.4 Mengelola Workspace
 

@@ -376,6 +376,8 @@ class DashboardController extends Controller
         // Gerbang lunak: satu aksi revisi paling relevan agar jalur benar
         // (Lanjutkan/Buat Revisi) selalu paling mudah dijangkau mahasiswa.
         $pendingRevisionAction = LogbookEntry::pendingRevisionActionFor($ta);
+        // Badge/banner per-thread: satu utas = satu item yang bisa diklik.
+        $pendingRevisionThreads = LogbookEntry::pendingRevisionThreadsFor($ta);
         $unresolvedActionItems = $ta
             ? ActionItem::whereHas('entry', fn ($q) => $q->where('mahasiswa_ta_id', $ta->id))
                 ->where('is_done', false)
@@ -432,7 +434,7 @@ class DashboardController extends Controller
             'logbookHarian',
             'stats', 'timeline', 'heatmap', 'regularity', 'regularityTooltip',
             'unreadAnnouncements',
-            'draftCount', 'revisiCount', 'unresolvedActionItems', 'pendingRevisionAction',
+            'draftCount', 'revisiCount', 'unresolvedActionItems', 'pendingRevisionAction', 'pendingRevisionThreads',
             'university', 'nilai', 'sidangs', 'agendaTerdekat', 'seminarSubmission',
             'mahasiswaStatus', 'pendingApproval', 'rejectedProgram', 'profileIncomplete'
         ));

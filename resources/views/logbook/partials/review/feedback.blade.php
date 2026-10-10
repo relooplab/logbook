@@ -10,7 +10,7 @@
                 <span class="material-symbols-outlined icon-md text-status-pending">forum</span>
             </span>
             <div class="min-w-0">
-                <h2 id="feedback-title" class="font-heading font-semibold text-lg text-text-primary">Umpan Balik Dosen</h2>
+                <h2 id="feedback-title" class="font-heading font-semibold text-lg text-text-primary">Pesan Dosen</h2>
                 <p class="text-xs text-text-secondary mt-0.5">oleh {{ $feedbackReviewer }} · {{ $logbook->reviewed_at?->format('d M Y') ?? '—' }}</p>
             </div>
         </div>
@@ -18,7 +18,7 @@
         @php
             // Komentar manual dosen (ditulis langsung, bukan hasil anotasi PDF
             // yang berpayload geometri) di seluruh rantai: pelengkap feedback;
-            // yang berpayload tampil di tabel Komentar Sebelumnya.
+            // yang berpayload tampil di tabel Anotasi PDF sesi.
             $supportChainIds = [$logbook->id];
             $supportCursor = $logbook->parentEntry;
             $supportDepth = 0;
