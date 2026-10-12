@@ -33,6 +33,15 @@
                             <p class="font-medium text-text-primary">@include('logbook.partials.student-identity', ['entry' => $entry])</p>
                             <p class="text-xs text-text-secondary">{{ $entry->jenis === 'revisi' ? 'Revisi' : 'Logbook sesi '.$entry->sesi_ke }} · {{ $entry->topik ?: '' }}</p>
                         </div>
+                        @if (($draftEntryIds ?? collect())->contains($entry->id))
+                            <span class="badge badge-draft" title="Draf keputusan tersimpan">Draf</span>
+                        @endif
+                        @if (($unreadEntryIds ?? collect())->contains($entry->id))
+                            <span class="badge badge-info" title="Ada aktivitas belum dibaca pada entri ini">Baru</span>
+                        @endif
+                        @if ($entry->review_opened_by && (int) $entry->review_opened_by !== (int) auth()->id() && $entry->reviewOpener)
+                            <span class="badge badge-neutral" title="Dibuka {{ $entry->reviewOpener->name }} {{ $entry->review_opened_at?->diffForHumans() ?? '' }} — koordinasi agar keputusan tidak ganda">Dibuka {{ \Illuminate\Support\Str::limit($entry->reviewOpener->name, 14) }}</span>
+                        @endif
                         <a href="{{ route('logbook.show', $entry) }}" class="px-3 py-1.5 rounded-xl bg-brand text-[#0b1420] text-xs font-medium hover:opacity-90">Tinjau →</a>
                     </div>
                 @endforeach

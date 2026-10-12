@@ -3,7 +3,7 @@
     if (auth()->user()?->isMahasiswa()) {
         $actionLinks = '
         <a href="' . route('logbook.create', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
-            <span class="material-symbols-outlined icon-sm text-accent-orange">add</span> + Logbook
+            <span class="material-symbols-outlined icon-sm text-accent-orange">add</span> Buat Sesi
         </a>
         <a href="' . route('logbook.create-revisi', array_filter(['program' => request('program')])) . '" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Jawab Revisi</a>';
     } @endphp
@@ -112,7 +112,7 @@
                         <th class="py-3 px-4 table-col-tanggal">Tanggal</th>
                         <th class="py-3 px-4">Status</th>
                         @if (auth()->user()->isMahasiswa())
-                            <th class="py-3 px-4">Dilihat</th>
+                            <th class="py-3 px-4">Dilihat Dosen</th>
                         @endif
                         <th class="py-3 px-4">Aksi</th>
                     </tr>

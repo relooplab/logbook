@@ -59,7 +59,7 @@
                 <label for="history-to" class="history-label">Sampai tanggal</label>
                 <input id="history-to" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" class="history-input">
             </div>
-            <a href="{{ route('logbook.index') }}" class="btn-secondary px-3 py-2.5 text-sm text-center">Reset Filter</a>
+            <a href="{{ route('logbook.index') }}" class="btn-secondary px-3 py-2.5 text-sm text-center">Reset</a>
         </div>
         <input type="hidden" name="per_page" value="{{ $entries->perPage() }}">
         @if (request()->filled('program')) <input type="hidden" name="program" value="{{ request('program') }}"> @endif
@@ -79,7 +79,7 @@
             <div class="px-4 py-12 text-center text-text-secondary" role="status">
                 <span class="material-symbols-outlined icon-lg mb-3" aria-hidden="true">menu_book</span>
                 <p>{{ $activeFilters ? 'Tidak ada entri yang cocok dengan pencarian atau filter.' : 'Belum ada riwayat logbook atau revisi.' }}</p>
-                @if ($activeFilters) <a href="{{ route('logbook.index') }}" class="inline-block mt-4 text-brand hover:underline">Reset Filter</a> @endif
+                @if ($activeFilters) <a href="{{ route('logbook.index') }}" class="inline-block mt-4 text-brand hover:underline">Reset</a> @endif
             </div>
         @else
             <div class="history-desktop">

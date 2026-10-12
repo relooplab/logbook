@@ -51,6 +51,7 @@
                 'templates' => $templates,
                 'buildUrl' => route('quick-review.build-feedback', $entry),
                 'lastFeedback' => $lastFeedback,
+                'reviewDraft' => $reviewDraft ?? null,
                 'useButtons' => false,
                 'submitLabel' => $nextId ? 'Simpan & Berikutnya' : ($queueCount > 1 ? 'Simpan & Lihat Antrean' : 'Simpan & Selesai'),
                 'detailUrl' => route('logbook.show', $entry),
@@ -66,6 +67,9 @@
                     <p class="mt-1 font-heading font-semibold text-text-primary">{{ $nextEntry->mahasiswaTa?->mahasiswa?->name ?? 'Mahasiswa' }} · {{ $nextEntry->jenis === 'revisi' ? 'Revisi' : 'Logbook sesi '.$nextEntry->sesi_ke }}</p>
                     <p class="text-xs text-text-secondary mt-0.5">{{ $nextEntry->topik ?: 'Tanpa topik' }}</p>
                 </div>
+                @if (($draftEntryIds ?? collect())->contains($nextEntry->id))
+                    <span class="badge badge-draft" title="Draf keputusan tersimpan">Draf</span>
+                @endif
                 @include('partials.status-badge', ['status' => $nextEntry->status])
                 <a href="{{ route('quick-review.index', ['item' => $nextEntry->id]) }}" class="btn-primary inline-flex px-4 py-2 text-sm font-semibold">Buka →</a>
             </div>

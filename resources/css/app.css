@@ -338,9 +338,26 @@ html:not(.dark) .landing-marquee-group span:nth-child(even) { color: #7d5f16; }
 .detail-workspace-panel { min-width: 0; }
 .detail-workspace-card { overflow-wrap: anywhere; }
 
+/* Halaman detail /logbook/{id}: kolom kerja 50:50 agar kartu Keputusan
+   dan Jawaban lega. Hanya ≥1200px (di bawah itu tabel min-w menuntut
+   ruang) dan hanya pemakai modifier --balanced (show saja). */
+@container (min-width: 1200px) {
+    .detail-workspace-grid--balanced {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+}
+
+/* Pelengkap viewport: laptop 13" yang container-nya di bawah 1200px
+   tetap dapat 50:50. Di bawah 1100px kembali ke susunan lama. */
+@media (min-width: 1280px) {
+    .detail-workspace-grid--balanced {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+}
+
 /* Workspace detail: metadata stays compact, narrative text gets the width. */
-.revision-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: center; }
-.revision-summary-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+.revision-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.revision-summary-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
 .revision-summary-fields > div { min-width: 0; }
 .revision-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .revision-item-summary { list-style: none; }
@@ -354,7 +371,7 @@ html:not(.dark) .landing-marquee-group span:nth-child(even) { color: #7d5f16; }
 .seminar-document-row > :first-child { flex: 1 1 220px; }
 
 @container (min-width: 900px) {
-    .revision-summary { grid-template-columns: minmax(150px, 1fr) minmax(0, 2.6fr) auto; }
+    .revision-summary { grid-template-columns: minmax(0, 1fr); }
 }
 @container (min-width: 1100px) {
     .revision-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }

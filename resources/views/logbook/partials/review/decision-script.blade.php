@@ -16,6 +16,12 @@
         var initialFeedback = feedback ? feedback.value : '';
         var initialArchiveReason = archiveReason ? archiveReason.value : '';
         var initialDecision = form.querySelector('[name="review_decision"]:checked')?.value || '';
+        // Snapshot server terakhir (diperbarui tiap draf tersimpan) — guard
+        // navigasi membandingkan dengan ini agar tidak menakut-nakuti
+        // setelah autosave berhasil.
+        var serverFeedback = initialFeedback;
+        var serverArchiveReason = initialArchiveReason;
+        var serverDecision = initialDecision;
         var submitting = false;
 
         function decision() { return form.querySelector('[name="review_decision"]:checked')?.value || ''; }
@@ -39,7 +45,7 @@
 
         // Pengaman navigasi antrean quick-review.
         document.querySelectorAll('.quick-review-navigation').forEach(link => link.addEventListener('click', event => {
-            if (((feedback && feedback.value !== initialFeedback) || (archiveReason && archiveReason.value !== initialArchiveReason) || decision() !== initialDecision) && !window.confirm('Belum disimpan. Pindah tanpa menyimpan?')) event.preventDefault();
+            if (((feedback && feedback.value !== serverFeedback) || (archiveReason && archiveReason.value !== serverArchiveReason) || decision() !== serverDecision) && !window.confirm('Belum disimpan. Pindah tanpa menyimpan?')) event.preventDefault();
         }));
 
         function fillFeedback(text) {
@@ -86,10 +92,105 @@
                 const response = await fetch(buildBtn.dataset.buildUrl, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, credentials: 'same-origin'});
                 if (!response.ok) throw new Error();
                 const result = await response.json();
-                if (!result.feedback) { window.alert('Tidak ada anotasi yang belum beres.'); return; }
+                if (!result.feedback) { window.alert('Tidak ada anotasi yang belum selesai.'); return; }
                 fillFeedback(result.feedback);
             } catch (e) { window.alert('Gagal memuat anotasi.'); }
             finally { this.disabled = false; }
+        });
+
+        // ===== Draf keputusan dosen: simpan manual + autosave debounce =====
+        var saveBtn = document.getElementById('save-review-draft');
+        var discardBtn = document.getElementById('discard-review-draft');
+        var draftStatus = document.querySelector('[data-review-draft-status]');
+        var saveUrl = form.dataset.saveUrl || '';
+        var deleteUrl = form.dataset.deleteUrl || '';
+        var entryId = form.dataset.entryId || '';
+        var saving = false;
+        var debounceTimer = null;
+
+        function draftPayload() {
+            return {
+                logbook_entry_id: entryId ? parseInt(entryId) : null,
+                feedback_dosen: feedback && !feedback.disabled ? feedback.value : null,
+                review_decision: decision() || null,
+                archive_reason: archiveReason && !archiveReason.disabled ? archiveReason.value : null,
+            };
+        }
+
+        function draftDirty() {
+            return (feedback && feedback.value !== serverFeedback)
+                || (archiveReason && archiveReason.value !== serverArchiveReason)
+                || decision() !== serverDecision;
+        }
+
+        function setDraftStatus(text) {
+            if (draftStatus) draftStatus.textContent = text;
+        }
+
+        // Stempel simpanan server di bawah tombol Simpan Draf (persisten;
+        // status di atas tetap untuk pesan transient sukses/gagal).
+        function setSavedAt(text) {
+            var el = document.querySelector('[data-draf-saved-at]');
+            if (!el) return;
+            el.textContent = text;
+            el.classList.toggle('hidden', !text);
+        }
+
+        async function saveDraft(manual) {
+            if (saving || !saveUrl || !entryId) return;
+            if (!manual && !draftDirty()) return;
+            saving = true;
+            if (saveBtn) saveBtn.disabled = true;
+            try {
+                const response = await fetch(saveUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, credentials: 'same-origin', body: JSON.stringify(draftPayload())});
+                if (response.status === 409) {
+                    setDraftStatus('Entri sudah diputuskan — draf tidak tersimpan.');
+                    if (manual) window.alert('Entri sudah diputuskan. Draf tidak tersimpan.');
+                    return;
+                }
+                if (!response.ok) throw new Error();
+                serverFeedback = feedback ? feedback.value : '';
+                serverArchiveReason = archiveReason ? archiveReason.value : '';
+                serverDecision = decision();
+                // Sukses diwakili stempel persisten; status dikosongkan agar
+                // tidak dobel (status hanya untuk pesan transient/error).
+                setDraftStatus('');
+                setSavedAt('Terakhir disimpan baru saja');
+            } catch (e) {
+                setDraftStatus('Gagal menyimpan draf. Coba lagi.');
+                if (manual) window.alert('Gagal menyimpan draf. Coba lagi.');
+            } finally {
+                saving = false;
+                if (saveBtn) saveBtn.disabled = false;
+            }
+        }
+
+        function scheduleAutosave() {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function () { saveDraft(false); }, 2000);
+        }
+
+        if (saveBtn) saveBtn.addEventListener('click', function () { saveDraft(true); });
+        if (feedback) feedback.addEventListener('input', scheduleAutosave);
+        if (archiveReason) archiveReason.addEventListener('input', scheduleAutosave);
+        radios.forEach(radio => radio.addEventListener('change', scheduleAutosave));
+        if (discardBtn) discardBtn.addEventListener('click', async function () {
+            if (!deleteUrl) return;
+            if (!window.confirm('Buang draf keputusan ini? Isi yang sudah diketik di form tetap ada sampai halaman ditutup.')) return;
+            this.disabled = true;
+            try {
+                const response = await fetch(deleteUrl, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, credentials: 'same-origin'});
+                if (!response.ok && response.status !== 404) throw new Error();
+                serverFeedback = '';
+                serverArchiveReason = '';
+                serverDecision = '';
+                setDraftStatus('Belum ada draf');
+                setSavedAt('');
+            } catch (e) {
+                window.alert('Gagal membuang draf. Coba lagi.');
+            } finally {
+                this.disabled = false;
+            }
         });
 
         var modal = document.getElementById('tpl-modal');

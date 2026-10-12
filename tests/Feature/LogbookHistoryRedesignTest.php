@@ -41,6 +41,25 @@ class LogbookHistoryRedesignTest extends TestCase
             'tanggal_bimbingan' => '2026-09-28'], $attributes));
     }
 
+    public function test_entry_type_renders_without_raw_directives(): void
+    {
+        // Regresi: `@endif@if` berdempetan tidak dikompilasi Blade (regex
+        // `\B@` gagal saat `@` tepat setelah karakter kata) sehingga teks
+        // mentah `@if…@endif` bocor ke kolom Entri.
+        $lecturer = $this->account('dosen');
+        $program = $this->program($lecturer);
+        $this->entry($program, ['jenis' => 'revisi', 'sesi_ke' => null,
+            'parent_entry_id' => null, 'status' => 'submitted',
+            'tanggal_pengiriman' => '2026-10-02', 'submitted_at' => now()]);
+
+        $html = $this->actingAs($lecturer)->get(route('logbook.index'))
+            ->assertOk()->getContent();
+
+        $this->assertStringContainsString('tanpa entri asal', $html);
+        $this->assertStringNotContainsString('@if', $html);
+        $this->assertStringNotContainsString('@endif', $html);
+    }
+
     public function test_student_list_groups_revision_child_under_parent(): void
     {
         $lecturer = $this->account('dosen');

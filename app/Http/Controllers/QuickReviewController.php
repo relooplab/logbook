@@ -7,6 +7,7 @@ use App\Models\FeedbackTemplate;
 use App\Models\LogbookEntry;
 use App\Models\MahasiswaTa;
 use App\Models\PdfComment;
+use App\Models\ReviewDraft;
 use App\Services\AchievementService;
 use App\Services\LogbookReviewTransition;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,7 +57,33 @@ class QuickReviewController extends Controller
         $nextEntry = $nextId ? LogbookEntry::with(['mahasiswaTa.mahasiswa'])
             ->find($nextId) : null;
 
-        return view('logbook.quick-review', compact('entry', 'templates', 'lastFeedback', 'feedbackDraft', 'queueCount', 'queueIndex', 'previousId', 'nextId', 'nextEntry'));
+        // Draf keputusan milik reviewer untuk entri aktif + peta draf antrean
+        // (indikator chip tanpa N+1).
+        $reviewDraft = $entry ? ReviewDraft::where('logbook_entry_id', $entry->id)
+            ->where('user_id', $request->user()->id)
+            ->first() : null;
+        $draftEntryIds = collect();
+        if ($queueIds->isNotEmpty()) {
+            $draftEntryIds = ReviewDraft::where('user_id', $request->user()->id)
+                ->whereIn('logbook_entry_id', $queueIds->all())
+                ->pluck('logbook_entry_id');
+        }
+
+        return view('logbook.quick-review', compact('entry', 'templates', 'lastFeedback', 'feedbackDraft', 'reviewDraft', 'draftEntryIds', 'queueCount', 'queueIndex', 'previousId', 'nextId', 'nextEntry'));
+    }
+
+    /**
+     * Halaman keputusan basi (entri sudah diputuskan sejawat selagi
+     * antrean terbuka): kembali ke antrean dengan pesan ramah.
+     */
+    private function staleNextRedirect(Request $request, LogbookEntry $logbook): ?RedirectResponse
+    {
+        if ($logbook->status === LogbookEntry::STATUS_SUBMITTED) {
+            return null;
+        }
+
+        return redirect()->route('quick-review.index')
+            ->with('error', 'Entri ini sudah diputuskan ('.$logbook->statusLabel().'). Keputusan Anda tidak terkirim — lanjut ke antrean.');
     }
 
     /**
@@ -64,6 +91,9 @@ class QuickReviewController extends Controller
      */
     public function approveNext(Request $request, LogbookEntry $logbook, LogbookReviewTransition $transition): RedirectResponse
     {
+        if ($stale = $this->staleNextRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
 
         // Hanya program aktif yang bisa di-review.
@@ -83,6 +113,11 @@ class QuickReviewController extends Controller
             app(AchievementService::class)->evaluateForUser($owner);
         }
 
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
         return redirect()->route('quick-review.index', $this->nextQueueItem($request, $logbook))
             ->with('success', 'Entri disetujui. Lanjut ke berikutnya.');
     }
@@ -92,6 +127,9 @@ class QuickReviewController extends Controller
      */
     public function revisiNext(Request $request, LogbookEntry $logbook, LogbookReviewTransition $transition): RedirectResponse
     {
+        if ($stale = $this->staleNextRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
 
         // Hanya program aktif yang bisa di-review.
@@ -109,17 +147,30 @@ class QuickReviewController extends Controller
         $this->bestEffort(fn () => EntryStatusChanged::dispatch($logbook, 'Entri Anda diminta revisi.'));
         $logbook->notifyParties('Entri Anda diminta revisi: '.$validated['feedback_dosen'], route('logbook.show', $logbook), 'Permintaan Revisi');
 
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
         return redirect()->route('quick-review.index', $this->nextQueueItem($request, $logbook))
             ->with('success', 'Entri dikembalikan untuk revisi. Lanjut ke berikutnya.');
     }
 
     public function archiveNext(Request $request, LogbookEntry $logbook, \App\Services\ArchiveLogbookReview $archive): RedirectResponse
     {
+        if ($stale = $this->staleNextRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
         abort_unless(in_array($logbook->mahasiswaTa?->status_ta, [MahasiswaTa::STATUS_AKTIF, MahasiswaTa::STATUS_PENDING_APPROVAL], true), 403, 'Program belum aktif atau ditolak.');
 
         $validated = $request->validate(['archive_reason' => ['nullable', 'string', 'max:5000']]);
         $archive->archive($logbook, $request->user(), $validated['archive_reason'] ?? null);
+
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
 
         return redirect()->route('quick-review.index', $this->nextQueueItem($request, $logbook))
             ->with('success', 'Entri diarsipkan. Lanjut ke berikutnya.');
@@ -155,9 +206,9 @@ class QuickReviewController extends Controller
     }
 
     /**
-     * Compile feedback otomatis dari komentar PDF yang belum resolve,
-     * mencakup SEMUA peran penulis (dosen + mahasiswa) agar anotasi
-     * perbaikan mahasiswa tidak hilang, lalu simpan ke session untuk
+     * Compile feedback otomatis dari anotasi PDF milik reviewer yang login
+     * (bukan anotasi mahasiswa/dosen lain) yang belum resolve, beserta
+     * thread balasannya yang dua arah, lalu simpan ke session untuk
      * dipakai di quick review.
      */
     public function buildFeedbackFromComments(Request $request, LogbookEntry $logbook): JsonResponse
@@ -172,23 +223,50 @@ class QuickReviewController extends Controller
         }
 
         $comments = PdfComment::whereIn('logbook_entry_id', $entryIds)
-            ->with('user')
-            ->where('resolution_status', PdfComment::STATUS_OPEN)
+            ->with(['user', 'replies.user'])
+            ->where('user_id', $request->user()->id)
+            ->whereIn('resolution_status', [PdfComment::STATUS_OPEN, PdfComment::STATUS_ADDRESSED])
             ->orderBy('page_number')
             ->get();
 
-        if ($comments->isEmpty()) {
+        // Format: konten dulu, halaman di belakang (`komentar | Hal. N`).
+        $pageLabel = fn ($page) => filled($page) ? 'Hal. '.$page : 'Tanpa halaman';
+        $lines = $comments->map(function ($c, $i) use ($pageLabel) {
+            $line = ($i + 1).'. '.$c->comment.' | '.$pageLabel($c->page_number);
+            // Thread balasan dua arah (model replies + kolom legacy `reply`
+            // untuk balasan mahasiswa pertama) agar tanya-jawab tidak hilang.
+            // Urutan & dedupe mengikuti repliesForViewer() agar sama dengan viewer.
+            $seenBodies = [];
+            foreach ($c->replies as $reply) {
+                $replyRole = $reply->user && $reply->user->isDosen() ? 'dosen' : 'mahasiswa';
+                $line .= "\n".'   → dibalas '.$replyRole.': '.$reply->body;
+                $seenBodies[] = [$reply->user_id, $reply->body];
+            }
+            if ($c->reply && ! collect($seenBodies)->contains(fn ($seen) => $seen[1] === $c->reply)) {
+                $line .= "\n".'   → dibalas mahasiswa: '.$c->reply;
+            }
+
+            return $line;
+        });
+
+        // Balasan dosen per baris kartu Jawaban Mahasiswa (lihat
+        // LogbookController::saveJawabanReply) ikut dirangkum.
+        $lineNo = $comments->count();
+        foreach (collect($logbook->riwayat_perbaikan ?? [])->values() as $row) {
+            if (empty($row['dosen_reply'])) {
+                continue;
+            }
+            $lineNo++;
+            $lines->push($lineNo.'. '.($row['komentar_dosen'] ?? '—')
+                .' → '.($row['perbaikan'] ?? '—')
+                .' → '.$row['dosen_reply']
+                .' | '.$pageLabel($row['halaman'] ?? null));
+        }
+
+        if ($lines->isEmpty()) {
             return response()->json(['feedback' => '']);
         }
 
-        $lines = $comments->map(function ($c, $i) use ($logbook) {
-            $source = $c->logbook_entry_id === $logbook->id
-                ? 'Sesi ini'
-                : 'Sesi sebelumnya, entri #'.$c->logbook_entry_id;
-            $role = $c->user && $c->user->isDosen() ? 'dosen' : 'mahasiswa';
-
-            return ($i + 1).'. ('.$source.' · '.$role.', Hal. '.$c->page_number.') '.$c->comment;
-        });
         $feedback = $lines->implode("\n");
 
         // Simpan ke session untuk dipakai di quick review.

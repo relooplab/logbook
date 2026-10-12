@@ -14,7 +14,7 @@
         @include('partials.status-badge', ['status' => $logbook->status])
     </div>
     <form method="POST" action="{{ route('logbook.update', $logbook) }}" enctype="multipart/form-data"
-        class="card p-6 space-y-4">
+        id="edit-form" class="card p-6 space-y-4">
         @csrf
         @method('PUT')
         @if ($isRevisi)
@@ -129,7 +129,7 @@
             @enderror
         </div>
 
-        {{-- Lampiran draft --}} <div> <label class="block text-sm font-medium mb-1">Lampiran Draft
+        {{-- Lampiran draf --}} <div> <label class="block text-sm font-medium mb-1">Lampiran Draf
                 ({{ $typesLabel }})</label>
             @if ($logbook->lampiran_path)
                     <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-panel"> <span class="material-symbols-outlined icon-lg text-accent-blue">description</span>
@@ -162,8 +162,11 @@
         pada file yang diganti akan otomatis ditandai selesai (resolve). </div>
     <div class="flex flex-wrap gap-2 pt-2">
         <button type="submit" class="px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Simpan</button>
+        <button type="submit" data-draft-save
+            class="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-bg-hover">Simpan Draf</button>
         <a href="{{ route('logbook.show', $logbook) }}" class="px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20">Batal</a>
     </div>
+    <p class="hidden text-xs" data-draft-status role="status" aria-live="polite"></p>
 </form>
 {{-- Form hapus lampiran WAJIB di luar form utama (nested <form> membuat
     browser menutup form utama lebih awal sehingga tombol Simpan mati). --}}
@@ -176,6 +179,7 @@
 @endif
 </div>
 @endsection @section("scripts")
+@include('partials.draft-autosave-script')
 <script>
     var isRevisi = @json($isRevisi);
 
@@ -269,10 +273,6 @@
     (function () {
         var KEY = 'lbta-edit-draft-' + @json($logbook->id);
         var form = document.querySelector('form[action*="logbook"]');
-        var msg = document.createElement('p');
-        msg.className = 'text-xs text-text-secondary mt-1';
-        msg.id = 'edit-autosave-msg';
-        form.appendChild(msg);
 
         function collect() {
             var data = {
@@ -296,7 +296,6 @@
 
         function save() {
             localStorage.setItem(KEY, JSON.stringify(collect()));
-            msg.textContent = 'Draf tersimpan otomatis ' + new Date().toLocaleTimeString();
         }
 
         // Restore draft (hanya jika ada dan belum mengisi ulang).
@@ -311,13 +310,33 @@
                     tbody.innerHTML = '';
                     saved.riwayat.forEach(function (r) { addRow(r); });
                 }
-                msg.textContent = 'Draf dipulihkan dari penyimpanan otomatis.';
             }
         } catch (e) {}
 
         setInterval(save, 5000);
         form.addEventListener('submit', function () {
             localStorage.removeItem(KEY);
+        });
+    })();
+
+    // Simpan Draf ke server + autosave 2 menit setelah klik pertama.
+    (function () {
+        var editForm = document.getElementById('edit-form');
+        if (!editForm || !window.LbDraft) return;
+        window.LbDraft.init({
+            form: editForm,
+            button: editForm.querySelector('[data-draft-save]'),
+            statusEl: editForm.querySelector('[data-draft-status]'),
+            url: editForm.getAttribute('action'),
+            minFields: function () {
+                if (typeof isRevisi !== 'undefined' && isRevisi) {
+                    var tanggalRevisi = document.getElementById('tanggal_pengiriman');
+                    return !!(tanggalRevisi && tanggalRevisi.value);
+                }
+                var topik = document.getElementById('topik');
+                var tanggal = document.getElementById('tanggal_bimbingan');
+                return !!(topik && topik.value.trim() && tanggal && tanggal.value);
+            }
         });
     })();
 </script>

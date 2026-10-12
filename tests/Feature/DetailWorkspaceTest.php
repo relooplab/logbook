@@ -27,7 +27,7 @@ class DetailWorkspaceTest extends AuditSmokeTest
             ->assertSee('Ringkasan logbook bimbingan')
             ->assertSee('Sesi '.$this->entrySubmitted->sesi_ke)
             ->assertSee('Pembahasan bab metodologi')
-            ->assertSee('Tanggal Bimbingan')
+            ->assertSee($this->entrySubmitted->tanggal_tampil->format('d M Y'))
             ->assertSee('Metode penelitian sudah diperbaiki.')
             ->assertSee('review-decision-form')
             ->assertSee(route('logbook.pdf-viewer', $this->entrySubmitted))
@@ -43,7 +43,7 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $response = $this->actingAs($this->mhs)->get(route('logbook.show', $this->entryDraft));
 
         $response->assertOk()
-            ->assertSee('class="detail-workspace-grid"', false)
+            ->assertSee('detail-workspace-grid--balanced', false)
             ->assertSee('Ringkasan logbook bimbingan')
             ->assertSee('Ringkasan Perbaikan')
             ->assertSee(route('logbook.edit', $this->entryDraft))
@@ -68,8 +68,8 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $response->assertOk()
             ->assertSee('>Jawaban Mahasiswa</h2>', false)
             ->assertSee('1 dari 2 diperbaiki')
-            ->assertSee('>Masukan Anda</th>', false)
-            ->assertSee('>Perbaikan mahasiswa</th>', false)
+            ->assertSee('>Masukan Anda</p>', false)
+            ->assertSee('>Perbaikan mahasiswa</p>', false)
             ->assertSee('Perbaiki data tabel.')
             ->assertSee('action-item-add-toggle')
             ->assertSee('review-decision-form')
@@ -80,8 +80,10 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $this->assertSame(1, substr_count($response->getContent(), route('logbook.pdf-viewer', $this->entryRevisi, false)));
     }
 
-    public function test_show_lists_own_entry_comments_in_context_table(): void
+    public function test_show_does_not_repeat_own_entry_comments_in_context(): void
     {
+        // Komentar Lalu murni riwayat: anotasi sesi yang sedang dibuka tidak
+        // diulang di kartu itu (sudah terlihat lewat PDF viewer).
         $this->entryRevisi->update([
             'dosen_id' => $this->dosen->id,
             'status' => LogbookEntry::STATUS_SUBMITTED,
@@ -95,10 +97,7 @@ class DetailWorkspaceTest extends AuditSmokeTest
 
         $this->actingAs($this->dosen)->get(route('logbook.show', $this->entryRevisi))
             ->assertOk()
-            ->assertSee('Komentar Lalu', false)
-            ->assertSee('Anotasi PDF sesi ini', false)
-            ->assertSee('Komentar milik entri ini.', false)
-            ->assertSee('Perlu tindak lanjut', false);
+            ->assertDontSee('Anotasi PDF sesi ini', false);
     }
 
     public function test_approval_feedback_is_optional_but_revision_feedback_remains_required(): void

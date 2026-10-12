@@ -31,7 +31,7 @@ import {
  * "+ Tambah komentar" + toolbar inline pada highlight terpilih.
  * Navigasi hash: klik kartu -> #highlight-{id} -> scroll + ring aktif.
  *
- * Logika kampus dipertahankan: tabs draft/catatan, anotasi tersimpan sebagai
+ * Logika kampus dipertahankan: tabs draf/catatan, anotasi tersimpan sebagai
  * W3C Web Annotation (backend tidak berubah), warna status
  * open/addressed/resolved, reply/tanggapan, resolve, hapus,
  * Jadikan Feedback, dan Unduh PDF dengan Anotasi (burn server-side).
@@ -720,7 +720,7 @@ function PdfViewerApp() {
         <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="File">
           <button onClick={() => switchFile('draft')}
             className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${activeType === 'draft' ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-            Draft
+            Draf
           </button>
           {hasCatatan && (
             <button onClick={() => switchFile('catatan')}

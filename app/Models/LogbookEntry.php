@@ -67,7 +67,7 @@ class LogbookEntry extends Model
         self::STATUS_APPROVED => 'Disetujui',
         self::STATUS_REVISI => 'Revisi Diminta',
         self::STATUS_ARCHIVED => 'Diarsipkan',
-        self::STATUS_REVISION_IN_PROGRESS => 'Revisi sedang dikerjakan',
+        self::STATUS_REVISION_IN_PROGRESS => 'Revisi Sedang Dikerjakan',
     ];
 
     /**
@@ -110,6 +110,7 @@ class LogbookEntry extends Model
         'submitted_at',
         'reviewed_at',
         'review_opened_at',
+        'review_opened_by',
     ];
 
     protected function casts(): array
@@ -147,6 +148,12 @@ class LogbookEntry extends Model
     public function dosen(): BelongsTo
     {
         return $this->belongsTo(User::class, 'dosen_id');
+    }
+
+    /** Reviewer terakhir yang membuka PDF entri ini (sinyal sejawat). */
+    public function reviewOpener(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'review_opened_by');
     }
 
     public function comments(): HasMany

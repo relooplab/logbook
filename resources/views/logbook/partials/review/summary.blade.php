@@ -16,7 +16,8 @@
     $isOwner = $reviewUser->isMahasiswa() && $reviewProgram?->isMember($reviewUser);
     $reviewStudent = $reviewProgram?->mahasiswa;
 @endphp
-<section class="card p-5 sm:p-6" aria-label="{{ $logbook->jenis === 'revisi' ? 'Ringkasan revisi' : 'Ringkasan logbook bimbingan' }}">
+<section class="card p-4 sm:p-5" aria-label="{{ $logbook->jenis === 'revisi' ? 'Ringkasan revisi' : 'Ringkasan logbook bimbingan' }}">
+    @php $menungguHari = $logbook->submitted_at ? max(0, (int) $logbook->submitted_at->diffInDays(now())) : null; @endphp
     <div class="revision-summary detail-workspace-card">
         <div class="min-w-0">
             <div class="flex items-center gap-2">
@@ -35,20 +36,19 @@
                         @if ($reviewStudent?->nim)<span class="ml-1.5 font-mono text-xs font-normal text-text-secondary">{{ $reviewStudent->nim }}</span>@endif
                     </p>
                 </div>
+                <div class="ml-auto flex shrink-0 items-center gap-2">@include('partials.status-badge', ['status' => $logbook->status]) @if($logbook->revision_round)<p class="text-xs text-text-secondary">Revisi ke-{{ $logbook->revision_round }}</p>@endif</div>
             </div>
         </div>
         <dl class="revision-summary-fields text-sm">
-            <div><dt class="text-xs text-text-secondary">Topik</dt><dd class="font-medium mt-1">{{ $logbook->topik ?? ($logbook->jenis === 'revisi' ? 'Revisi' : '—') }}</dd></div>
-            <div><dt class="text-xs text-text-secondary">{{ $logbook->jenis === 'revisi' ? 'Tanggal Pengiriman' : 'Tanggal Bimbingan' }}</dt><dd class="font-medium mt-1">{{ $logbook->tanggal_tampil?->format('d M Y') ?? '—' }}</dd></div>
-            <div><dt class="text-xs text-text-secondary">{{ $logbook->jenis === 'revisi' ? 'Ditujukan kepada' : 'Dosen' }}</dt><dd class="font-medium mt-1">{{ $reviewerLabel ?? '—' }}</dd></div>
-            @if ($logbook->submitted_at)
-                <div><dt class="text-xs text-text-secondary">Menunggu review</dt><dd class="font-medium mt-1">{{ max(0, (int) $logbook->submitted_at->diffInDays(now())) }} hari</dd></div>
-            @endif
-            @if ($reviewProgram?->judul_ta)
-                <div><dt class="text-xs text-text-secondary">Judul TA</dt><dd class="font-medium mt-1">{{ $reviewProgram->judul_ta }}</dd></div>
+            <div><dt class="text-xs text-text-secondary">Topik</dt><dd class="font-medium mt-0.5">{{ $logbook->topik ?? ($logbook->jenis === 'revisi' ? 'Revisi' : '—') }}</dd><dd class="mt-0.5 text-xs text-text-secondary">{{ $logbook->tanggal_tampil?->format('d M Y') ?? '—' }}</dd></div>
+            <div><dt class="text-xs text-text-secondary">Penerima</dt><dd class="font-medium mt-0.5">{{ $reviewerLabel ?? '—' }}</dd></div>
+            @if ($menungguHari > 0)
+                <div><dt class="text-xs text-text-secondary">Menunggu review</dt><dd class="font-medium mt-0.5">{{ $menungguHari }} hari</dd></div>
             @endif
         </dl>
-        <div class="text-left lg:text-right">@include('partials.status-badge', ['status' => $logbook->status]) @if($logbook->revision_round)<p class="text-xs text-text-secondary mt-2">Revisi ke-{{ $logbook->revision_round }}</p>@endif</div>
+        @if ($reviewProgram?->judul_ta)
+            <p class="border-t border-border pt-2 text-xs text-text-secondary truncate" title="{{ $reviewProgram->judul_ta }}"><span class="font-semibold">Judul TA:</span> {{ $reviewProgram->judul_ta }}</p>
+        @endif
     </div>
     @if (collect($logbook->riwayat_perbaikan ?? [])->isNotEmpty())
         <div class="mt-4">
@@ -80,5 +80,5 @@
     <p class="mt-4 rounded-xl bg-status-pending/10 p-3 text-xs text-text-secondary"><strong class="text-status-pending">Terkunci:</strong> entri induk sudah mempunyai revisi anak. Perbaikan selanjutnya dilakukan melalui revisi baru.</p>
 @endif
 @if ($logbook->exceedsRevisionRoundLimit())
-    <p class="mt-3 text-sm text-status-pending">Sesi revisi sudah mencapai batas perhatian. Pertimbangkan bimbingan tatap muka sebelum siklus berikutnya.</p>
+    <p class="mt-3 text-sm text-status-pending">Batas 3 putaran revisi tercapai. Lanjut lewat bimbingan tatap muka.</p>
 @endif

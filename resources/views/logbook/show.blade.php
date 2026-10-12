@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <div class="detail-workspace-grid">
+    <div class="detail-workspace-grid detail-workspace-grid--balanced">
     <div class="space-y-4 min-w-0">
     <div class="space-y-5">
 
@@ -54,7 +54,7 @@
         @if (($otherPendingRevisions ?? collect())->isNotEmpty())
             @php $canReviewOther = auth()->user()->can('review', $logbook); @endphp
             <div class="rounded-xl border border-status-pending/40 bg-status-pending/10 p-4 text-sm" role="alert">
-                <p class="font-semibold text-text-primary">Ada {{ ($otherPendingRevisions ?? collect())->count() }} revisi lain yang belum beres</p>
+                <p class="font-semibold text-text-primary">Ada {{ ($otherPendingRevisions ?? collect())->count() }} revisi lain yang belum selesai</p>
                 <ul class="mt-2 space-y-1 text-text-secondary">
                     @foreach ($otherPendingRevisions->take(3) as $pending)
                         <li>
@@ -65,7 +65,7 @@
                 @if ($canReviewOther)
                     <p class="mt-2 text-text-secondary">Lihat dulu sebelum menilai entri ini.</p>
                 @else
-                    <p class="mt-2 text-text-secondary">Jawab revisinya dulu lewat Jawab Revisi.</p>
+                    <p class="mt-2 text-text-secondary">Selesaikan lewat halaman Jawab Revisi.</p>
                 @endif
             </div>
         @endif
@@ -119,10 +119,34 @@
                 'templates' => $templates ?? null,
                 'buildUrl' => route('quick-review.build-feedback', $logbook),
                 'lastFeedback' => $lastFeedback ?? null,
+                'reviewDraft' => $reviewDraft ?? null,
                 'useButtons' => false,
                 'submitLabel' => 'Simpan Keputusan',
                 'detailUrl' => null,
                 'pdfOpened' => $logbook->review_opened_at || (!$logbook->lampiran_path && !$logbook->catatan_perbaikan_path) ? '1' : '0'])
+        @elseif (!empty($reviewDraft))
+            <section class="card p-5 space-y-3" aria-label="Draf keputusan tersimpan">
+                <h2 class="font-heading font-semibold text-text-primary">Draf Keputusan</h2>
+                <p class="text-sm text-text-secondary">Entri sudah diputuskan — draf Anda tidak terkirim.</p>
+                <form method="POST" action="{{ route('review-drafts.destroy', $logbook) }}" data-orphan-draft-form
+                    onsubmit="return confirm('Buang draf keputusan ini?');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="w-full px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20">Buang Draf</button>
+                </form>
+            </section>
+            <script>
+                (function () {
+                    var f = document.querySelector('[data-orphan-draft-form]');
+                    if (!f) return;
+                    f.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        fetch(f.action, {method: 'DELETE', headers: {'X-CSRF-TOKEN': f.querySelector('input[name="_token"]').value, 'Accept': 'application/json'}, credentials: 'same-origin'})
+                            .then(function () { window.location.reload(); })
+                            .catch(function () { window.alert('Gagal membuang draf. Coba lagi.'); });
+                    });
+                })();
+            </script>
         @endif
 
         @if ($canReopen && $logbook->status === 'approved')

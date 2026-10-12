@@ -12,21 +12,48 @@
     $detailUrl = $detailUrl ?? null;
     $pdfOpened = $pdfOpened ?? '0';
     $feedbackDraft = $feedbackDraft ?? null;
-    $reviewDecision = old('review_decision', $errors->has('archive_reason') ? 'archive' : ($errors->has('feedback_dosen') ? 'revisi' : ''));
+    $reviewDraft = $reviewDraft ?? null;
+    $draftFeedback = $reviewDraft?->feedback_dosen;
+    $draftDecision = $reviewDraft?->review_decision;
+    $draftArchiveReason = $reviewDraft?->archive_reason;
+    $reviewDecision = old('review_decision', $errors->has('archive_reason') ? 'archive' : ($errors->has('feedback_dosen') ? 'revisi' : ($draftDecision ?? '')));
+    $initialFeedback = old('feedback_dosen', $draftFeedback ?? $feedbackDraft ?? '');
 @endphp
 <section class="card p-5 space-y-4 detail-workspace-card" aria-labelledby="decision-heading">
     <div>
-        <h2 id="decision-heading" class="font-heading font-semibold text-text-primary">Keputusan Review</h2>
+        <div class="flex flex-wrap items-center gap-2">
+            <h2 id="decision-heading" class="font-heading font-semibold text-text-primary">Keputusan Review</h2>
+            @if ($reviewDraft)
+                <span class="badge badge-neutral">Dimuat dari draf</span>
+            @endif
+        </div>
         @if (collect($logbook->riwayat_perbaikan ?? [])->isNotEmpty())
             <p class="text-sm text-text-secondary mt-1">{{ $logbook->completePerbaikanRows()->count() }} dari {{ count($logbook->riwayat_perbaikan ?? []) }} jawaban ditandai sudah oleh mahasiswa.</p>
+        @endif
+        <p class="mt-1 text-xs text-text-secondary" data-review-draft-status role="status" aria-live="polite">
+            @if ($reviewDraft)
+                Draf tersimpan · {{ $reviewDraft->updated_at?->diffForHumans() ?? 'baru saja' }}
+            @else
+                Belum ada draf
+            @endif
+        </p>
+        @if ($logbook->review_opened_by && (int) $logbook->review_opened_by !== (int) auth()->id() && $logbook->reviewOpener)
+            <p class="mt-2 flex items-start gap-1.5 rounded-lg bg-status-info/10 px-3 py-2 text-xs text-text-secondary">
+                <span class="material-symbols-outlined icon-sm mt-0.5 shrink-0" aria-hidden="true">group</span>
+                <span>Dibuka {{ $logbook->reviewOpener->name }} · {{ $logbook->review_opened_at?->diffForHumans() ?? 'baru saja' }} — koordinasi bila perlu agar keputusan tidak ganda.</span>
+            </p>
         @endif
     </div>
     <form method="POST" action="{{ $revisiUrl }}" id="review-decision-form" class="space-y-4"
         data-entry-kind="{{ $logbook->jenis }}"
+        data-entry-id="{{ $logbook->id }}"
         data-approve-url="{{ $approveUrl }}"
         data-revision-url="{{ $revisiUrl }}"
         data-archive-url="{{ $archiveUrl }}"
-        data-pdf-opened="{{ $pdfOpened }}">
+        data-pdf-opened="{{ $pdfOpened }}"
+        data-save-url="{{ route('review-drafts.store') }}"
+        data-delete-url="{{ route('review-drafts.destroy', $logbook) }}"
+        data-draft-saved-at="{{ $reviewDraft?->updated_at?->toIso8601String() }}">
         @csrf
         @if ($templates !== null)
             <div>
@@ -45,7 +72,7 @@
         <div>
             <label for="feedback_dosen" class="block text-sm font-semibold text-text-primary">Pesan untuk mahasiswa <span id="feedback-required" class="{{ $reviewDecision === 'revisi' ? '' : 'hidden' }} text-status-danger">(wajib bila minta revisi, min. 20 huruf)</span></label>
             <textarea id="feedback_dosen" name="feedback_dosen" rows="4" maxlength="5000" @if($reviewDecision === 'revisi') minlength="20" required @endif placeholder="Tulis pesan untuk mahasiswa..."
-                class="mt-2 w-full min-w-0 rounded-xl border border-border bg-bg-panel px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand/40" aria-describedby="feedback-hint feedback-error">{{ old('feedback_dosen', $feedbackDraft ?? '') }}</textarea>
+                class="mt-2 w-full min-w-0 rounded-xl border border-border bg-bg-panel px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand/40" aria-describedby="feedback-hint feedback-error">{{ $initialFeedback }}</textarea>
             <p id="feedback-hint" class="mt-1 text-xs text-text-secondary">Boleh kosong bila disetujui; wajib min. 20 huruf bila minta revisi.</p>
             @error('feedback_dosen') <p id="feedback-error" class="mt-2 text-xs text-status-danger" role="alert">{{ $message }}</p>
             @else <p id="feedback-error" class="mt-2 hidden text-xs text-status-danger" role="alert">Pesan revisi min. 20 huruf.</p>
@@ -56,10 +83,23 @@
             @if ($useButtons && $lastFeedback)
                 <button type="button" class="use-last-feedback mt-2 ml-2 text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $lastFeedback }}">Gunakan feedback terakhir</button>
             @endif
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" id="save-review-draft"
+                    class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">save</span>Simpan Draf
+                </button>
+                <button type="button" id="discard-review-draft"
+                    class="inline-flex min-h-11 items-center px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Buang Draf</button>
+            </div>
+            @if ($reviewDraft)
+                <p class="mt-1 text-[11px] text-text-secondary" data-draf-saved-at>Terakhir disimpan {{ $reviewDraft->updated_at?->diffForHumans() ?? 'baru saja' }}</p>
+            @else
+                <p class="mt-1 hidden text-[11px] text-text-secondary" data-draf-saved-at></p>
+            @endif
         </div>
         <div id="archive-reason-wrap" class="space-y-2 {{ $reviewDecision === 'archive' ? '' : 'hidden' }}">
             <label for="archive_reason" class="block text-xs font-semibold text-text-secondary">Catatan arsip (opsional)</label>
-            <textarea id="archive_reason" name="archive_reason" rows="3" maxlength="5000" placeholder="Tambahkan catatan jika perlu..." class="w-full rounded-xl border border-border bg-bg-panel px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand/40">{{ old('archive_reason') }}</textarea>
+            <textarea id="archive_reason" name="archive_reason" rows="3" maxlength="5000" placeholder="Tambahkan catatan jika perlu..." class="w-full rounded-xl border border-border bg-bg-panel px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand/40">{{ old('archive_reason', $draftArchiveReason ?? '') }}</textarea>
             @error('archive_reason') <p class="text-xs text-status-danger" role="alert">{{ $message }}</p> @enderror
         </div>
         <fieldset class="space-y-2">

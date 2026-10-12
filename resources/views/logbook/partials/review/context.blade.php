@@ -15,11 +15,12 @@
     $directParent = $chain[0] ?? null;
     $olderAncestors = array_slice($chain, 1);
     $directComments = $directParent?->comments ?? collect();
-    $ownComments = $logbook->comments ?? collect();
     // Label sadar-aktor: tiap anotasi menyebut penulisnya (dosen/mahasiswa).
     $resolutionLabels = ['open' => 'Perlu tindak lanjut', 'addressed' => 'Sudah ditanggapi', 'resolved' => 'Selesai'];
     $commentAuthor = fn ($c) => $c->user ? ($c->user->name.($c->user->isDosen() ? ' · dosen' : ' · mahasiswa')) : '—';
-    $hasAnything = $directParent?->feedback_dosen || $directComments->isNotEmpty() || $ownComments->isNotEmpty()
+    // Hanya riwayat (induk + leluhur + pesan): anotasi sesi ini milik halaman
+    // yang sedang dibuka, sudah terlihat lewat PDF viewer — tidak diulang di sini.
+    $hasAnything = $directParent?->feedback_dosen || $directComments->isNotEmpty()
         || collect($olderAncestors)->contains(fn ($a) => $a->comments->isNotEmpty())
         || $lastFeedback;
 @endphp
@@ -27,7 +28,7 @@
 <section class="card min-w-0 p-5 sm:p-6" aria-labelledby="previous-heading">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 id="previous-heading" class="font-heading text-lg font-semibold text-text-primary">Komentar Lalu</h2>
-        @php $totalComments = $ownComments->count() + $directComments->count() + collect($olderAncestors)->sum(fn ($a) => $a->comments->count()); @endphp
+        @php $totalComments = $directComments->count() + collect($olderAncestors)->sum(fn ($a) => $a->comments->count()); @endphp
         @if ($totalComments > 0)
             <span class="text-xs text-text-secondary">{{ $totalComments }} komentar</span>
         @endif
@@ -42,31 +43,6 @@
                     <button type="button" class="use-last-feedback text-xs font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" data-body="{{ $directParent->feedback_dosen }}">Pakai pesan ini</button>
                 @endif
             </div>
-        </div>
-    @endif
-    @if ($ownComments->isNotEmpty())
-        <p class="mt-4 text-xs font-semibold text-text-secondary">Anotasi PDF sesi ini (entri #{{ $logbook->id }})</p>
-        <div class="mt-2 overflow-x-auto rounded-xl border border-border">
-            <table class="w-full min-w-[560px] text-sm">
-                <thead><tr class="text-left text-text-secondary border-b border-border">
-                    <th scope="col" class="py-2 px-3 font-medium">No</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Anotasi</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Hal.</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Penulis</th>
-                    <th scope="col" class="py-2 px-3 font-medium">Status</th>
-                </tr></thead>
-                <tbody>
-                    @foreach ($ownComments as $comment)
-                        <tr class="border-b border-border last:border-0 {{ $comment->resolution_status === 'resolved' ? 'opacity-60' : '' }}">
-                            <td class="py-2 px-3 font-mono text-text-secondary">{{ $loop->iteration }}</td>
-                            <td class="py-2 px-3">{{ $comment->comment }}</td>
-                            <td class="py-2 px-3 whitespace-nowrap text-text-secondary">{{ $comment->page_number ? 'Hal. '.$comment->page_number : '—' }}</td>
-                            <td class="py-2 px-3 whitespace-nowrap text-xs text-text-secondary">{{ $commentAuthor($comment) }}</td>
-                            <td class="py-2 px-3 whitespace-nowrap text-xs">{{ $resolutionLabels[$comment->resolution_status] ?? $comment->resolution_status }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
         </div>
     @endif
     @if ($directComments->isNotEmpty())

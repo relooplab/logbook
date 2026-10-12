@@ -28,6 +28,7 @@ use App\Http\Controllers\ProfilPerusahaanController;
 use App\Http\Controllers\ProfilAkademikController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuickReviewController;
+use App\Http\Controllers\ReviewDraftController;
 use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\SeminarSubmissionController;
 use App\Http\Controllers\UtilityController;
@@ -190,6 +191,13 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::get('/review-bahan', [MaterialsReviewController::class, 'index'])->name('materials-review.index');
     Route::post('/feedback-templates', [QuickReviewController::class, 'storeTemplate'])->name('feedback-templates.store');
     Route::delete('/feedback-templates/{template}', [QuickReviewController::class, 'destroyTemplate'])->name('feedback-templates.destroy');
+
+    // Draf keputusan review dosen (per entri, milik sendiri).
+    Route::post('/review-drafts', [ReviewDraftController::class, 'store'])->middleware('throttle:30,1')->name('review-drafts.store');
+    Route::delete('/review-drafts/{entry}', [ReviewDraftController::class, 'destroy'])->name('review-drafts.destroy');
+
+    // Balasan dosen per baris kartu Jawaban Mahasiswa.
+    Route::post('/logbook/{logbook}/jawaban-reply', [LogbookController::class, 'saveJawabanReply'])->middleware('throttle:30,1')->name('logbook.jawaban-reply');
 
     // ---------------------------------------------------- action items (mahasiswa)
     Route::post('/logbook/{logbook}/action-items', [ActionItemController::class, 'store'])->name('action-items.store');

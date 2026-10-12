@@ -12,7 +12,7 @@
         "approved" => ["badge-success", "Disetujui"],
         "revisi" => ["badge-danger", "Revisi Diminta"],
         "archived" => ["badge-neutral", "Diarsipkan"],
-        "revision_in_progress" => ["badge-pending", "Revisi sedang dikerjakan"],
+        "revision_in_progress" => ["badge-pending", "Revisi Sedang Dikerjakan"],
     ];
 
     if (isset($taMap[$status])) {

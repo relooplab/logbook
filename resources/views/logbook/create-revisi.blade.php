@@ -74,12 +74,19 @@
     </x-page-header>
 
     @if ($ta)
-        <p class="mb-4 -mt-3 text-sm text-text-secondary">Program:
+        <p class="mb-4 text-sm text-text-secondary">Program:
             <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-brand/10 text-brand">{{ $ta->jenisLabel() }}</span>
             @if ($draft)
                 <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-status-pending/10 text-status-pending">Melanjutkan draf #{{ $draft->id }}</span>
             @endif
         </p>
+        @if (!empty($resumeDraft))
+            <p class="mb-4 text-xs text-text-secondary">
+                <a href="{{ route('logbook.create-revisi', array_filter(['draft_id' => $resumeDraft->id, 'program' => $ta->jenis])) }}"
+                    class="font-medium text-brand hover:underline">Lanjutkan draf terakhir →</a>
+                <span class="font-mono">#{{ $resumeDraft->id }}</span> · disimpan {{ $resumeDraft->updated_at?->diffForHumans() }}
+            </p>
+        @endif
     @endif
 
     @if (!($hasRevisionTarget ?? true))
@@ -88,7 +95,11 @@
             <h2 class="mt-3 font-heading text-xl font-bold text-text-primary">Tidak ada yang perlu direvisi</h2>
             <p class="mt-2 text-sm text-text-secondary">Semua sesi sudah beres. Bila dosen minta revisi nanti, halaman ini bisa dipakai menjawab.</p>
             <div class="mt-5 flex flex-wrap items-center justify-center gap-2">
-                <a href="{{ route('logbook.create', array_filter(['program' => $ta?->jenis])) }}" class="btn-primary inline-flex px-5 py-2.5 text-sm font-semibold">+ Logbook</a>
+                @if (!empty($resumeDraft))
+                    <a href="{{ route('logbook.create-revisi', array_filter(['draft_id' => $resumeDraft->id, 'program' => $ta?->jenis])) }}"
+                        class="btn-primary inline-flex px-5 py-2.5 text-sm font-semibold">Lanjutkan draf #{{ $resumeDraft->id }}</a>
+                @endif
+                <a href="{{ route('logbook.create', array_filter(['program' => $ta?->jenis])) }}" class="btn-primary inline-flex px-5 py-2.5 text-sm font-semibold">Buat Sesi</a>
                 <a href="{{ route('logbook.index', array_filter(['program' => $ta?->jenis])) }}" class="btn-ghost inline-flex px-5 py-2.5 text-sm font-medium">Lihat semua entri</a>
             </div>
         </div>
@@ -100,6 +111,14 @@
         </div>
     @endif
 
+    {{-- Kartu Kelola Draf hanya bila ada yang dikelola: ≥2 draf, atau sedang
+        melanjutkan (tandai "Sedang dibuka"). Satu draf cukup lewat banner. --}}
+    @if (($deletableEntries ?? collect())->count() > 1 || !empty($draft))
+        <div class="mb-5">
+            @include('logbook.partials.wizard.draft-manager', ['entries' => $deletableEntries ?? collect(), 'wizard' => 'revisi', 'currentDraftId' => $draft?->id, 'programJenis' => $ta?->jenis, 'formId' => 'bulk-delete-form-revisi'])
+        </div>
+    @endif
+
     @include('logbook.partials.wizard.stepper', ['steps' => $steps, 'ariaLabel' => 'Langkah pengisian entri revisi'])
 
     <form method="POST" action="{{ route('logbook.store-revisi') }}" enctype="multipart/form-data" id="revisi-form"
@@ -108,7 +127,9 @@
 
         <input type="hidden" name="program" value="{{ $ta?->jenis }}">
         @if ($draft)
-            <input type="hidden" name="draft_id" value="{{ $draft->id }}">
+            <input type="hidden" name="draft_id" value="{{ $draft->id }}" data-draft-id>
+        @else
+            <input type="hidden" name="draft_id" value="" data-draft-id>
         @endif
 
         <div class="form-workspace-column">
@@ -251,7 +272,7 @@
                                 </div>
                             </div>
                             <div class="form-field form-field--stack">
-                                <label class="form-field-label" for="lampiran">File Perbaikan/Draft</label>
+                                <label class="form-field-label" for="lampiran">File Perbaikan/Draf</label>
                                 <div class="form-field-body">
                                     @if ($draftLampiran)
                                         <div class="mb-3 flex items-center gap-3 rounded-xl border border-border bg-bg-panel px-3 py-2">
@@ -282,7 +303,7 @@
                         <button type="button" id="lanjut-tanpa-anotasi"
                             class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium"
                             >
-                            Lanjut tanpa menandai
+                            Lewati &amp; isi manual
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">skip_next</span>
                         </button>
                         <button type="button" id="lanjut-anotasi"
@@ -308,7 +329,7 @@
                 </div>
 
                 @include('logbook.partials.wizard.annotation-cta', [
-                    'openLabel' => 'Buka PDF',
+                    'openLabel' => 'Buka PDF & Tandai',
                     'copyLabel' => 'Salin ke Jawaban',
                     'hint' => 'Draf tersimpan sendiri. PDF terbuka di tab baru.',
                     'copyAttr' => 'data-isi-otomatis',
@@ -364,7 +385,7 @@
                         <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah manual
                     </button>
                     <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium" data-isi-otomatis-bawah disabled>
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Salin <span data-isi-count-bawah></span>
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Salin ke Jawaban <span data-isi-count-bawah></span>
                     </button>
                 </div>
                 <p class="mt-2 text-xs text-text-secondary">Alur utama: tandai di PDF → salin → lengkapi. Tulis sendiri bila perlu.</p>
@@ -440,7 +461,7 @@
                             <span class="text-xs text-text-secondary" id="review-jumlah" role="status">0 jawaban</span>
                         </div>
                         <ul class="mt-2 space-y-2" id="review-kartu-list"></ul>
-                        <p class="mt-2 text-sm text-text-secondary" id="review-kartu-empty">Belum ada jawaban.</p>
+                        <p class="mt-2 text-sm text-text-secondary" id="review-kartu-empty">Belum ada jawaban — tandai di PDF lalu salin, atau tulis manual.</p>
                     </div>
 
                     <div class="rounded-xl border border-border bg-bg-panel p-4">
@@ -470,7 +491,6 @@
                     <button type="button" class="wizard-prev btn-ghost min-h-11 px-4 py-2 text-sm font-medium">← Kembali</button>
                     <div class="form-actions-end">
                         <p id="kirim-hint" class="hidden w-full text-right text-xs text-status-pending" role="status"></p>
-                        <button type="submit" class="btn-secondary min-h-11 px-4 py-2 text-sm font-medium">Simpan Draft</button>
                         <button type="submit" name="submit" value="1" id="btn-kirim"
                             class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50" aria-describedby="kirim-hint">
                             <span data-kirim-label>Kirim ke Dosen</span>
@@ -482,7 +502,7 @@
         </div>
 
         {{-- Panel konteks: tetap tampil di semua langkah (cangkang bersama, isi follow-up). --}}
-        @component('logbook.partials.wizard.summary-shell', ['panelTitle' => 'Ringkasan Revisi', 'panelDesc' => 'Ringkasan informasi revisi Anda.', 'panelIcon' => 'summarize', 'ariaLabel' => 'Ringkasan revisi', 'autosavePanel' => 'lb-revisi', 'steps' => $steps])
+        @component('logbook.partials.wizard.summary-shell', ['panelTitle' => 'Ringkasan Revisi', 'panelDesc' => 'Ringkasan informasi revisi Anda.', 'panelIcon' => 'summarize', 'ariaLabel' => 'Ringkasan revisi', 'steps' => $steps, 'draftSave' => true, 'draftSavedAt' => $draft?->updated_at?->diffForHumans(), 'combinedStatus' => $combinedStatus ?? null, 'workflowLabel' => $workflowLabel ?? 'Revisi Sedang Dikerjakan'])
             <div class="summary-row">
                 <span class="summary-key">
                     <span class="material-symbols-outlined icon-sm" aria-hidden="true">forum</span> Sesi
@@ -509,17 +529,33 @@
             </div>
             <div class="summary-row">
                 <span class="summary-key">
-                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">save</span> Status Draft
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">event</span> Tanggal Revisi
+                </span>
+                <span class="summary-value" data-revisi-tanggal>—</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-key">
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">flag</span> Status
                 </span>
                 <span class="summary-value">
-                    <span class="badge badge-neutral" data-autosave-mini="lb-revisi">Belum disimpan</span>
+                    @if ($draft)
+                        @include('partials.status-badge', ['status' => $draft->status, 'entry' => $draft])
+                    @else
+                        <span class="badge badge-neutral">Belum disimpan</span>
+                    @endif
                 </span>
             </div>
             <div class="summary-row">
                 <span class="summary-key">
-                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">event</span> Tanggal Revisi
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">cloud_done</span> Disimpan di server
                 </span>
-                <span class="summary-value" data-revisi-tanggal>—</span>
+                <span class="summary-value" data-server-save-state role="status" aria-live="polite">
+                    @if ($draft)
+                        <span class="badge badge-draft">draf tersimpan</span>
+                    @else
+                        <span class="badge badge-neutral">belum tersimpan</span>
+                    @endif
+                </span>
             </div>
         @endcomponent
     </form>
@@ -529,6 +565,7 @@
 
 @section('scripts')
 @include('partials.form-workspace-script')
+@include('partials.draft-autosave-script')
 <script>
     // ===== Referensi elemen (id & nama field dipertahankan) =====
     var form = document.getElementById('revisi-form');
@@ -819,6 +856,11 @@
         renderSteps();
         if (currentStep === 3) maybeAutoPull();
         if (focusUpload && fileInputEl) fileInputEl.focus();
+        // Mobile: pastikan step aktif terlihat di dalam stepper yang bisa scroll horizontal.
+        var activeStepBtn = document.querySelector('.wizard-step[data-step="' + currentStep + '"]');
+        if (activeStepBtn && activeStepBtn.scrollIntoView) {
+            try { activeStepBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
+        }
         if (!options.silent) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -843,6 +885,8 @@
         draftEntryId = entry.entry_id;
         draftViewerUrl = entry.viewer_url;
         draftPullUrl = entry.pull_url;
+        var draftIdEl = form.querySelector('[data-draft-id]');
+        if (draftIdEl) draftIdEl.value = draftEntryId;
         var openBtn = document.querySelector('[data-anotasi-open]');
         var isiBtn = document.querySelector('[data-isi-otomatis]');
         if (openBtn) openBtn.disabled = false;
@@ -899,6 +943,12 @@
                     throw new Error(msg);
                 }
                 activateAnnotationStep(out.d);
+                var savedAtEl = document.querySelector('[data-draf-saved-at]');
+                if (savedAtEl) { savedAtEl.textContent = 'Terakhir disimpan baru saja'; savedAtEl.classList.remove('hidden'); }
+                var serverStateEl = document.querySelector('[data-server-save-state]');
+                if (serverStateEl) { serverStateEl.innerHTML = '<span class="badge badge-draft">draf tersimpan</span>'; }
+                var combinedEl = document.querySelector('[data-status-combined]');
+                if (combinedEl) { combinedEl.textContent = (combinedEl.dataset.workflow || 'Draf') + ' · tersimpan baru saja · belum dikirim'; }
                 window.open(withFrom(out.d.viewer_url), '_blank');
                 showStep(3);
             })
@@ -1024,7 +1074,7 @@
                     setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada yang baru — tandai dulu di PDF, lalu klik lagi.', true);
                     updateUploadGate();
                 })
-                .catch(function () { setMsg('Gagal memasukkan ke form. Coba lagi.', false); })
+                .catch(function () { setMsg('Gagal menyalin. Coba lagi.', false); })
                 .finally(function () {
                 if (btn) btn.disabled = false;
                 syncIsiButtons();
@@ -1273,7 +1323,7 @@
             }
             var hapus = event.target.closest('.hapus-kartu');
             if (hapus) {
-                if (cards().length <= 1) { alert('Min. 1 jawaban harus ada.'); return; }
+                if (cards().length <= 1) { alert('Minimal 1 jawaban harus ada.'); return; }
                 var num = hapus.closest('.perbaikan-card').querySelector('[data-card-number]');
                 if (!confirm('Hapus ' + (num ? num.textContent : 'kartu') + '? Tindakan tidak dapat dibatalkan.')) return;
                 hapus.closest('.perbaikan-card').remove();
@@ -1303,7 +1353,7 @@
 
     // ===== Gerbang kirim: induk + file valid + semua kartu lengkap + status bukan Draf =====
     // Induk wajib saat kirim (server: parent_entry_id required bila submit),
-    // tapi boleh kosong saat Simpan Draft (draf mandiri untuk alur anotasi-dulu).
+    // tapi boleh kosong saat Simpan Draf (draf mandiri untuk alur anotasi-dulu).
     function updateUploadGate() {
         var fileOk = fileValid();
         var cardsOk = allCardsComplete();
@@ -1535,7 +1585,7 @@
         var readyR = list.length - missingR;
         setText('#review-jumlah', list.length === 0 ? '0 jawaban' : readyR + ' siap · ' + missingR + ' belum lengkap');
         // R10: daftar review menjadi pengingat kondisional agar tidak menumpuk pesan kosong.
-        setText('#review-kartu-empty', list.length === 0 ? 'Belum ada kartu — tambahkan lewat langkah Hasil Penandaan.' : '');
+        setText('#review-kartu-empty', list.length === 0 ? 'Belum ada jawaban — tandai di PDF lalu salin, atau tulis manual.' : '');
         var listEl = document.getElementById('review-kartu-list');
         if (listEl) listEl.innerHTML = list.map(reviewCardRow).join('');
         var emptyEl = document.getElementById('review-kartu-empty');
@@ -1615,48 +1665,19 @@
             renderSteps();
         }
 
-        function restoreDraft(saved) {
-            applyDraft(saved);
-            syncParentFeedback(false);
-            window.LbAutosave.set(PANEL, 'restored', { time: 'Dipulihkan dari draf ' + timeLabel(saved.ts) });
-        }
-
-        function discardDraft() {
-            try { localStorage.removeItem(KEY); } catch (e) {}
-            if (tanggalEl) tanggalEl.value = '';
-            if (parentSelect) parentSelect.value = '';
-            if (pesanInput) pesanInput.value = '';
-            if (recipientSelect && defaultRecipientValue) recipientSelect.value = defaultRecipientValue;
-            kartuContainer.innerHTML = '';
-            addKartu();
-            updateCounter();
-            updateUploadGate();
-            renderSteps();
-            window.LbAutosave.set(PANEL, 'discarded');
-        }
-
-        // Cek draft tersimpan: pesan non-kosong dipulihkan otomatis (perilaku lama),
-        // selain itu tombol pulihkan/buang draf ditawarkan.
+        // Mode senyap: draf tersimpan dipulihkan otomatis (hanya bila field
+        // Mode senyap: draf tersimpan dipulihkan otomatis (hanya bila field
+        // server kosong), tanpa tombol/pesan. Buang otomatis saat submit.
         try {
             var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
             if (saved && saved.progres_kendala && pesanInput && !pesanInput.value) {
                 applyDraft(saved);
                 syncParentFeedback(false);
-                window.LbAutosave.set(PANEL, 'restored', { time: 'Dipulihkan dari draf ' + timeLabel(saved.ts) });
-            } else if (saved) {
-                window.LbAutosave.set(PANEL, 'idle', { time: 'Draf tersimpan ' + timeLabel(saved.ts) });
-                window.LbAutosave.draftAvailable(PANEL, true);
+            } else if (saved && saved.riwayat && saved.riwayat.length && cards().length <= 1 && cardsPristine()) {
+                applyDraft(saved);
+                syncParentFeedback(false);
             }
         } catch (e) {}
-
-        window.LbAutosave.on(PANEL, 'retry', save);
-        window.LbAutosave.on(PANEL, 'restore', function () {
-            try {
-                var stored = JSON.parse(localStorage.getItem(KEY) || 'null');
-                if (stored) restoreDraft(stored);
-            } catch (e) {}
-        });
-        window.LbAutosave.on(PANEL, 'discard', discardDraft);
 
         if (form) {
             form.addEventListener('input', function () {
@@ -1672,7 +1693,7 @@
 
     // FIX 1: halaman create belum punya draf tersimpan - CTA hanya informatif.
     // Alur anotasi (buka PDF + isi otomatis) tersedia di halaman Edit
-    // setelah Simpan Draft. Tidak ada tombol disabled yang menipu.
+    // setelah Simpan Draf. Tidak ada tombol disabled yang menipu.
 
     // ===== Inisialisasi =====
     // FIX 5: gate kirim + badge dihitung sejak halaman dimuat (termasuk kartu
@@ -1690,6 +1711,19 @@
     // ditandai jadi isian langkah 3 tanpa menunggu sinyal storage.
     if (autoPullOnLoad && initialStep === 3 && draftPullUrl) {
         maybeAutoPull(true);
+    }
+    // Simpan Draf ke server + autosave 2 menit setelah klik pertama.
+    if (window.LbDraft) {
+        window.LbDraft.init({
+            form: form,
+            button: document.querySelector('[data-draft-save]'),
+            statusEl: document.querySelector('[data-draft-status]'),
+            entryInput: form.querySelector('[data-draft-id]'),
+            url: form.getAttribute('action'),
+            minFields: function () {
+                return !!(tanggalEl && tanggalEl.value);
+            }
+        });
     }
 </script>
 @endsection

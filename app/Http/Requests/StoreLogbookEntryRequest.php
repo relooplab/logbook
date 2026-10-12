@@ -52,11 +52,12 @@ class StoreLogbookEntryRequest extends FormRequest
             'addressed_dosen_id' => ['nullable', Rule::in($ta?->allDosenIds() ?? [])],
             'tanggal_bimbingan' => ['required', 'date', 'before_or_equal:today'],
             'topik' => ['required', 'string', 'max:255'],
-            // Step 3 memakai kartu jawaban seperti revisi: draf boleh kosong
-            // (alur upload → tandai → salin), kirim wajib minimal 1 kartu
-            // lengkap. Pesan untuk dosen opsional (maks 500).
+            // Step 3 kartu jawaban opsional untuk sesi biasa: draf boleh
+            // kosong, kirim pun boleh tanpa kartu (mode ringan). Revisi
+            // tetap wajib lewat StoreRevisiRequest. Pesan untuk dosen
+            // opsional (maks 500).
             'progres_kendala' => ['nullable', 'string', 'max:500'],
-            'riwayat_perbaikan' => $submit ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
+            'riwayat_perbaikan' => ['nullable', 'array'],
             'riwayat_perbaikan.*.halaman' => [$submit ? 'required' : 'nullable', 'string', 'max:255'],
             'riwayat_perbaikan.*.komentar_dosen' => [$submit ? 'required' : 'nullable', 'string', 'max:1000'],
             'riwayat_perbaikan.*.perbaikan' => [$submit ? 'required' : 'nullable', 'string', 'max:2000'],
@@ -83,8 +84,7 @@ class StoreLogbookEntryRequest extends FormRequest
             'tanggal_bimbingan.before_or_equal' => 'Tanggal jangan hari esok.',
             'topik.required' => 'Isi topik.',
             'progres_kendala.max' => 'Pesan untuk dosen maksimal 500 karakter.',
-            'riwayat_perbaikan.required' => 'Isi kartu jawaban minimal 1 (tandai di PDF lalu salin, atau tulis manual).',
-            'riwayat_perbaikan.min' => 'Isi kartu jawaban minimal 1 (tandai di PDF lalu salin, atau tulis manual).',
+            'riwayat_perbaikan.array' => 'Format kartu jawaban tidak valid.',
             'riwayat_perbaikan.*.halaman.required' => 'Kolom Halaman/Bagian wajib diisi.',
             'riwayat_perbaikan.*.komentar_dosen.required' => 'Kolom Komentar dosen wajib diisi.',
             'riwayat_perbaikan.*.perbaikan.required' => 'Kolom Perbaikan Anda wajib diisi.',

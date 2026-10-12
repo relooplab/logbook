@@ -20,9 +20,9 @@
             @if ($canCreate)
                 @if (!empty($pendingRevisionAction['url']))
                     <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi →</a>
-                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
+                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Buat Sesi</a>
                 @else
-                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">+ Logbook</a>
+                    <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Buat Sesi</a>
                     <a href="{{ route('logbook.index', ['program' => $ta->jenis, 'status' => 'revisi']) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi</a>
                 @endif
             @endif

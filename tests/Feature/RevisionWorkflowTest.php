@@ -18,16 +18,18 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->assertSee('Tambah Entri Logbook')
             ->assertSee('Ringkasan Entri')
             ->assertSee('Info Bimbingan')
-            ->assertSee('Hasil Tandaan')
+            ->assertSee('3. Jawaban')
             ->assertSee('lanjut-tanpa-anotasi', false)
-            ->assertSee('data-autosave-panel="lb-create"', false);
+            // Autosave browser senyap: kartu status tidak lagi dirender.
+            ->assertDontSee('Hanya di perangkat ini', false);
 
         // Wizard revisi butuh target: buat induk yang diminta revisi dulu.
         $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
         $revisi = $this->actingAs($this->mhs)->get(route('revisi.create'));
         $revisi->assertOk()
             ->assertSee('Ringkasan Revisi')
-            ->assertSee('data-autosave-panel="lb-revisi"', false)
+            ->assertDontSee('Hanya di perangkat ini', false)
+            ->assertDontSee('data-autosave-mini="lb-revisi"', false)
             ->assertSee('data-step-status="4"', false);
 
         foreach ([$logbook, $revisi] as $response) {
@@ -54,7 +56,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->actingAs($freshMhs)->get(route('logbook.create-revisi'))
             ->assertOk()
             ->assertSee('Tidak ada yang perlu direvisi', false)
-            ->assertSee('+ Logbook', false)
+            ->assertSee('Buat Sesi', false)
             ->assertSee('Lihat semua entri', false)
             ->assertDontSee('id="revisi-form"', false);
     }
@@ -84,7 +86,23 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->assertOk()
             ->assertSee('Melanjutkan draf #'.$draftId, false)
             ->assertSee('name="draft_id" value="'.$draftId.'"', false)
-            ->assertSee('Sudah diunggah', false);
+            ->assertSee('Sudah diunggah', false)
+            // Tombol + stempel simpanan server (bukan autosave browser).
+            ->assertSee('Simpan Draf', false)
+            ->assertSee('data-draf-saved-at', false)
+            ->assertSee('Terakhir disimpan', false)
+            ->assertSee('>draf tersimpan<', false)
+            ->assertDontSee('Simpan Draft', false);
+
+        // Form baru tanpa draf: tombol ada, elemen stempel server kosong
+        // dan tersembunyi (teks 'Terakhir disimpan' lain milik autosave browser).
+        $freshHtml = $this->actingAs($this->mhs)
+            ->get(route('logbook.create'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('Simpan Draf', $freshHtml);
+        $this->assertStringContainsString('data-draf-saved-at></p>', $freshHtml);
+        $this->assertStringContainsString('>belum tersimpan<', $freshHtml);
 
         // Kirim tanpa upload ulang: file draf dipakai, tanpa baris baru.
         // Step 3 memakai kartu jawaban: kirim wajib minimal 1 kartu lengkap.
@@ -229,9 +247,8 @@ class RevisionWorkflowTest extends AuditSmokeTest
 
     public function test_edit_save_button_is_inside_update_form(): void
     {
-        // Regresi: form hapus-lampiran yang bersarang menutup form utama lebih
-        // awal sehingga tombol Simpan jatuh di luar form (klik mati di browser).
-        // Draf logbook (editor lama) dengan lampiran.
+        // Satu pintu editor: /logbook/{id}/edit untuk draf logbook kini
+        // redirect ke wizard create (?draft_id=), bukan halaman edit lama.
         // Isolasi ke mahasiswa+program baru: gerbang revisi-pending tidak ikut.
         $freshMhs = \App\Models\User::create([
             'name' => 'Mhs Isolasi Edit', 'email' => 'isolasi-edit@test.com',
@@ -255,21 +272,35 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->where('status', LogbookEntry::STATUS_DRAFT)->latest('id')->firstOrFail();
         $this->assertNotNull($draft->lampiran_path);
 
-        $html = $this->actingAs($freshMhs)->get(route('logbook.edit', $draft))->assertOk()->getContent();
+        $this->actingAs($freshMhs)->get(route('logbook.edit', $draft))
+            ->assertRedirect(route('logbook.create', ['draft_id' => $draft->id, 'program' => $draft->fresh()->mahasiswaTa->jenis]));
 
-        $actionPos = strpos($html, 'action="'.route('logbook.update', $draft).'"');
-        $this->assertNotFalse($actionPos);
-        $formStart = strrpos(substr($html, 0, $actionPos), '<form');
-        $openEnd = strpos($html, '>', $formStart);
-        $simpanPos = strpos($html, '>Simpan</button>', $openEnd);
-        $this->assertNotFalse($simpanPos, 'Tombol Simpan tidak ditemukan setelah form update.');
-        $between = substr($html, $openEnd, $simpanPos - $openEnd);
-        $this->assertStringNotContainsString('<form', $between, 'Ada <form> bersarang sebelum tombol Simpan.');
-        $this->assertStringNotContainsString('</form', $between, 'Form utama tertutup sebelum tombol Simpan.');
+        // Wizard memuat draf + kartu Kelola Draf menawarkannya kembali.
+        $html = $this->actingAs($freshMhs)
+            ->get(route('logbook.create', ['draft_id' => $draft->id]))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('Melanjutkan draf #'.$draft->id, $html);
+        $this->assertStringContainsString('Kelola Draf', $html);
+        $this->assertStringContainsString('Sedang dibuka', $html);
 
-        // Form hapus lampiran tetap ada namun terpisah dari form utama.
-        $this->assertStringContainsString('id="form-hapus-lampiran"', $html);
-        $this->assertStringContainsString('form="form-hapus-lampiran"', $html);
+        // Tepat satu draf dan tidak melanjutkan: banner cukup, kartu disembunyikan.
+        $freshHtml = $this->actingAs($freshMhs)
+            ->get(route('logbook.create'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('Lanjutkan draf terakhir', $freshHtml);
+        $this->assertStringNotContainsString('Kelola Draf', $freshHtml);
+
+        // Menghapus draf yang sedang dibuka tidak mendarat ke ?draft_id= yatim
+        // (404), melainkan ke wizard bersih dengan pesan yang jelas.
+        $this->actingAs($freshMhs)
+            ->from(route('logbook.create', ['draft_id' => $draft->id]))
+            ->post(route('logbook.bulk-destroy'), ['ids' => [$draft->id]])
+            ->assertRedirect(route('logbook.create'))
+            ->assertSessionHas('success');
+        $this->actingAs($freshMhs)->get(route('logbook.create'))->assertOk();
+        $this->assertDatabaseMissing('logbook_entries', ['id' => $draft->id]);
     }
 
     public function test_edit_flags_incomplete_rows_and_allows_completion_then_submit(): void
@@ -451,7 +482,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->assertTrue(strpos($html, 'riwayat-halaman-0') < strpos($html, 'riwayat-perbaikan-0'));
     }
 
-    public function test_edit_redirects_revision_draft_to_wizard_but_keeps_logbook_edit(): void
+    public function test_edit_redirects_both_draft_kinds_to_wizard(): void
     {
         // Draf revisi → wizard.
         $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
@@ -465,7 +496,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->actingAs($this->mhs)->get(route('logbook.edit', $draft))
             ->assertRedirect(route('logbook.create-revisi', ['draft_id' => $draft->id, 'program' => $draft->fresh()->mahasiswaTa->jenis]));
 
-        // Draf logbook biasa → halaman edit lama.
+        // Draf logbook biasa → wizard create (?draft_id=).
         $this->actingAs($this->mhs)->post(route('logbook.store'), [
             'tanggal_bimbingan' => now()->toDateString(),
             'topik' => 'Topik draf logbook',
@@ -477,7 +508,8 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->where('jenis', LogbookEntry::JENIS_LOGBOOK)->where('status', LogbookEntry::STATUS_DRAFT)
             ->latest('id')->firstOrFail();
 
-        $this->actingAs($this->mhs)->get(route('logbook.edit', $logbookDraft))->assertOk();
+        $this->actingAs($this->mhs)->get(route('logbook.edit', $logbookDraft))
+            ->assertRedirect(route('logbook.create', ['draft_id' => $logbookDraft->id, 'program' => $logbookDraft->fresh()->mahasiswaTa->jenis]));
     }
 
     public function test_wizard_loads_draft_table_and_file(): void
@@ -630,7 +662,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->get(route('logbook.create-revisi'))
             ->assertOk()
             ->assertSee('id="lanjut-tanpa-anotasi"', false)
-            ->assertSee('Lanjut tanpa menandai', false);
+            ->assertSee('Lewati &amp; isi manual', false);
     }
 
     public function test_show_places_feedback_card_above_compact_revision_notes(): void
@@ -1468,7 +1500,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         $this->assertStringContainsString('mis. Jelaskan dasar pemilihan metode', $html);
 
         // F4: hapus minimal 1 kartu + konfirmasi (create) — dijaga di JS.
-        $this->assertStringContainsString('Min. 1 jawaban harus ada.', $html);
+        $this->assertStringContainsString('Minimal 1 jawaban harus ada.', $html);
         $this->assertStringContainsString('Hapus jawaban ini', $html);
 
         // R1: kunci draf ganda + R9: guard nomor langkah.

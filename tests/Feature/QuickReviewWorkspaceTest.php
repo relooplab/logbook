@@ -112,13 +112,17 @@ class QuickReviewWorkspaceTest extends AuditSmokeTest
             ->assertSee('Template saya')->assertDontSee('Template dosen lain');
 
         $this->actingAs($this->dosen)->postJson(route('quick-review.build-feedback', $revision))->assertOk()
-            ->assertJsonPath('feedback', '1. (Sesi sebelumnya, entri #'.$this->entrySubmitted->id.' · dosen, Hal. 54) Komentar halaman asli');
+            ->assertJsonPath('feedback', '1. Komentar halaman asli | Hal. 54');
         $this->actingAs($this->dosen)->get(route('quick-review.index', ['item' => $revision->id]))->assertSee('Komentar halaman asli');
 
-        // Anotasi mahasiswa ikut terkompilasi (berlabel peran) agar tidak hilang.
+        // Anotasi penulis lain (mahasiswa/dosen lain) tidak ikut ketarik —
+        // hanya milik reviewer login beserta thread-nya.
         PdfComment::create(['logbook_entry_id' => $revision->id, 'user_id' => $this->mhs->id, 'file_type' => PdfComment::FILE_TYPE_DRAFT, 'page_number' => 3, 'comment' => 'Bagian metode sudah dilengkapi.', 'resolution_status' => PdfComment::STATUS_OPEN]);
+        PdfComment::create(['logbook_entry_id' => $revision->id, 'user_id' => $this->dosen2->id, 'file_type' => PdfComment::FILE_TYPE_DRAFT, 'page_number' => 4, 'comment' => 'Komentar dosen lain.', 'resolution_status' => PdfComment::STATUS_OPEN]);
+        $own = PdfComment::create(['logbook_entry_id' => $revision->id, 'user_id' => $this->dosen->id, 'file_type' => PdfComment::FILE_TYPE_DRAFT, 'page_number' => 5, 'comment' => 'Anotasi saya sendiri.', 'resolution_status' => PdfComment::STATUS_OPEN]);
+        $own->replies()->create(['user_id' => $this->mhs->id, 'body' => 'Siap, diperbaiki.']);
         $this->actingAs($this->dosen)->postJson(route('quick-review.build-feedback', $revision))->assertOk()
-            ->assertJsonPath('feedback', '1. (Sesi ini · mahasiswa, Hal. 3) Bagian metode sudah dilengkapi.'."\n".'2. (Sesi sebelumnya, entri #'.$this->entrySubmitted->id.' · dosen, Hal. 54) Komentar halaman asli');
+            ->assertJsonPath('feedback', '1. Anotasi saya sendiri. | Hal. 5'."\n".'   → dibalas mahasiswa: Siap, diperbaiki.'."\n".'2. Komentar halaman asli | Hal. 54');
     }
 
     public function test_unified_layout_blocks_order_and_next_card(): void

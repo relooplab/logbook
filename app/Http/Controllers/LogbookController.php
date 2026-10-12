@@ -11,6 +11,7 @@ use App\Models\FeedbackTemplate;
 use App\Models\LogbookEntry;
 use App\Models\MahasiswaTa;
 use App\Models\PdfComment;
+use App\Models\ReviewDraft;
 use App\Models\User;
 use App\Notifications\ActivityNotification;
 use App\Services\AchievementService;
@@ -51,10 +52,12 @@ class LogbookController extends Controller
         $dosenOptions = $ta->dosenRecipientOptions();
         $defaultRecipientId = old('addressed_dosen_id', $ta->pembimbing_1_id ?: array_key_first($dosenOptions));
 
-        // Daftar entri yang masih bisa dihapus massal (isEditable: draf atau
-        // revisi sedang dikerjakan yang belum dikirim) untuk kartu bulk delete.
+        // Daftar draf logbook program ini yang masih bisa dikelola
+        // (isEditable: draf yang belum dikirim) untuk kartu Kelola Draf.
         $deletableEntries = $ta->entries()
+            ->with('parentEntry')
             ->withExists('revisionChildren')
+            ->where('jenis', LogbookEntry::JENIS_LOGBOOK)
             ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
             ->latest('id')
             ->limit(50)
@@ -89,6 +92,28 @@ class LogbookController extends Controller
             }
         }
 
+        // Resume cepat: draf logbook terakhir yang masih bisa diedit (bukan
+        // yang sedang dibuka ?draft_id=) agar mahasiswa bisa melanjutkan
+        // pekerjaan yang tersimpan sebelumnya dari header wizard.
+        $resumeDraft = null;
+        if (! $draft) {
+            $candidate = $ta->entries()
+                ->where('jenis', LogbookEntry::JENIS_LOGBOOK)
+                ->where('status', LogbookEntry::STATUS_DRAFT)
+                ->whereNull('submitted_at')
+                ->latest('id')
+                ->first();
+            if ($candidate && $candidate->isEditable()) {
+                $resumeDraft = $candidate;
+            }
+        }
+
+        // Kalimat status gabungan aside (alur + simpan + kirim).
+        $workflowLabel = 'Draf';
+        $combinedStatus = $draft
+            ? (LogbookEntry::STATUS_LABELS[$draft->status] ?? 'Draf').' · tersimpan '.($draft->updated_at?->diffForHumans() ?? 'baru saja').' · belum dikirim'
+            : 'Belum ada simpanan di server';
+
         // Nilai awal form: draf yang dilanjutkan menang atas default baru.
         $defaultTanggal = old('tanggal_bimbingan', $draft?->tanggal_bimbingan?->format('Y-m-d') ?? now()->format('Y-m-d'));
         $defaultTopik = old('topik', $draft?->topik ?? $lastTopik);
@@ -105,7 +130,7 @@ class LogbookController extends Controller
             'has_file' => (bool) $draftLampiran,
         ] : null;
 
-        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId', 'deletableEntries', 'pendingRevisions', 'pendingRevisionAction', 'pendingRevisionThreads', 'draft', 'defaultTanggal', 'defaultTopik', 'defaultProgres', 'defaultRecipient', 'draftLampiran', 'draftBoot', 'requestedStep', 'autoPullOnLoad'));
+        return view('logbook.create', compact('ta', 'nextSesi', 'lastTopik', 'dosenOptions', 'defaultRecipientId', 'deletableEntries', 'pendingRevisions', 'pendingRevisionAction', 'pendingRevisionThreads', 'draft', 'defaultTanggal', 'defaultTopik', 'defaultProgres', 'defaultRecipient', 'draftLampiran', 'draftBoot', 'requestedStep', 'autoPullOnLoad', 'resumeDraft', 'workflowLabel', 'combinedStatus'));
     }
 
     public function createRevisi(Request $request): View
@@ -233,14 +258,48 @@ class LogbookController extends Controller
         // kartu kosong ("tidak ada yang perlu direvisi"), bukan wizard buntu.
         $hasRevisionTarget = (bool) ($draft || $parents->isNotEmpty() || $activeRevision);
 
+        // Resume cepat: draf revisi terakhir yang masih bisa diedit (bukan
+        // yang sedang dibuka ?draft_id=, bukan saat kotak "induk terkunci"
+        // sudah menawarkan Lanjutkan draf #id) agar tidak dobel.
+        $resumeDraft = null;
+        if (! $draft && ! $activeRevision) {
+            $candidate = $ta->entries()
+                ->where('jenis', LogbookEntry::JENIS_REVISI)
+                ->where('status', LogbookEntry::STATUS_REVISION_IN_PROGRESS)
+                ->whereNull('submitted_at')
+                ->latest('id')
+                ->first();
+            if ($candidate && $candidate->isEditable()) {
+                $resumeDraft = $candidate;
+            }
+        }
+
+        // Kalimat status gabungan aside (alur + simpan + kirim).
+        $workflowLabel = 'Revisi Sedang Dikerjakan';
+        $combinedStatus = $draft
+            ? (LogbookEntry::STATUS_LABELS[$draft->status] ?? 'Revisi Sedang Dikerjakan').' · tersimpan '.($draft->updated_at?->diffForHumans() ?? 'baru saja').' · belum dikirim'
+            : 'Belum ada simpanan di server';
+
+        // Daftar draf revisi program ini untuk kartu Kelola Draf.
+        $deletableEntries = $ta->entries()
+            ->with('parentEntry')
+            ->withExists('revisionChildren')
+            ->where('jenis', LogbookEntry::JENIS_REVISI)
+            ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->filter(fn (LogbookEntry $e) => $e->isEditable())
+            ->values();
+
         return view('logbook.create-revisi', compact(
             'ta', 'parents', 'selectedParentId', 'parentComments', 'dosenOptions', 'defaultRecipientId', 'activeRevision',
             'draft', 'defaultTanggal', 'defaultPesan', 'draftLampiran', 'draftBoot', 'requestedStep', 'autoPullOnLoad',
-            'hasRevisionTarget'
+            'hasRevisionTarget', 'resumeDraft', 'deletableEntries', 'workflowLabel', 'combinedStatus'
         ));
     }
 
-    public function store(StoreLogbookEntryRequest $request): RedirectResponse
+    public function store(StoreLogbookEntryRequest $request): RedirectResponse|JsonResponse
     {
         $ta = ProgramContext::resolve($request->user(), $request);
         abort_unless($ta, 403);
@@ -262,9 +321,9 @@ class LogbookController extends Controller
                 ->first();
             abort_unless($draftEntry && $request->user()->can('update', $draftEntry), 404);
 
-            $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+            $riwayat = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
                 ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-                ->values()->all();
+                ->values()->all(), $draftEntry->riwayat_perbaikan ?? null);
 
             $entry = null;
             for ($attempt = 0; $attempt < 3 && ! $entry; $attempt++) {
@@ -310,6 +369,15 @@ class LogbookController extends Controller
                 );
             }
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'entry_id' => $entry->id,
+                    'draft' => ! $submit,
+                    'saved_at' => now()->toIso8601String(),
+                ]);
+            }
+
             return redirect()->route('logbook.index')
                 ->with('success', $submit
                     ? 'Logbook terkirim.'
@@ -319,9 +387,9 @@ class LogbookController extends Controller
         // Buat entry dulu agar path unik {entry_id}/{uuid} bisa memakai id.
         // sesi_ke dihitung secara atomik & di-retry bila bentrok (unique index)
         // untuk menghindari race condition pada request paralel (TOCTOU).
-        $riwayatBaru = collect($data['riwayat_perbaikan'] ?? [])
+        $riwayatBaru = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
             ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-            ->values()->all();
+            ->values()->all());
         $entry = null;
         for ($attempt = 0; $attempt < 3 && ! $entry; $attempt++) {
             try {
@@ -378,6 +446,15 @@ class LogbookController extends Controller
                 route('logbook.show', $entry),
                 'Entri Baru Menunggu Review',
             );
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'entry_id' => $entry->id,
+                'draft' => ! $submit,
+                'saved_at' => now()->toIso8601String(),
+            ]);
         }
 
         return redirect()->route('logbook.index')
@@ -511,9 +588,9 @@ class LogbookController extends Controller
         });
 
         $dosen = $ta->storageChargeTarget();
-        $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+        $riwayat = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
             ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-            ->values()->all();
+            ->values()->all());
         $storeLampiran = function () use ($request, $entry, $riwayat) {
             $entry->update([
                 'lampiran_path' => $this->storeUniqueFile($request->file('lampiran'), 'lampiran', $entry->id),
@@ -606,9 +683,9 @@ class LogbookController extends Controller
             ->whereNull('submitted_at')
             ->where('created_at', '>=', now()->subMinutes(10))
             ->latest('id')->first();
-        $riwayatDraft = collect($data['riwayat_perbaikan'] ?? [])
+        $riwayatDraft = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
             ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-            ->values()->all();
+            ->values()->all(), $reuse?->riwayat_perbaikan ?? null);
 
         if ($reuse && $reuse->lampiran_path && $request->user()->can('update', $reuse)) {
             $reuse->update(array_merge(array_filter([
@@ -691,7 +768,7 @@ class LogbookController extends Controller
         }
     }
 
-    public function storeRevisi(StoreRevisiRequest $request): RedirectResponse
+    public function storeRevisi(StoreRevisiRequest $request): RedirectResponse|JsonResponse
     {
         $ta = ProgramContext::resolve($request->user(), $request);
         abort_unless($ta, 403);
@@ -727,10 +804,11 @@ class LogbookController extends Controller
                             'parent_entry_id' => 'Entri yang dipilih tidak bisa dijawab (bukan milik program atau statusnya tidak meminta revisi).',
                         ]);
                     }
-                    if ($this->activeRevisionChild($candidate, $explicit->id)) {
-                        session()->flash('active_revision', $this->activeRevisionPayload($this->activeRevisionChild($candidate, $explicit->id)));
+                    $activeChild = $this->activeRevisionChild($candidate, $explicit->id);
+                    if ($activeChild) {
+                        session()->flash('active_revision', $this->activeRevisionPayload($activeChild));
                         throw ValidationException::withMessages([
-                            'parent_entry_id' => $this->activeRevisionMessage($candidate),
+                            'parent_entry_id' => $this->activeRevisionMessage($candidate, $activeChild),
                         ]);
                     }
                     if (($candidate->revision_round ?? 0) + 1 > LogbookEntry::MAX_REVISION_ROUND) {
@@ -844,9 +922,9 @@ class LogbookController extends Controller
         // Alur anotasi-dulu: draf boleh disimpan tanpa tabel perbaikan agar
         // mahasiswa bisa upload -> anotasi di PDF -> tarik otomatis ke tabel.
         // Tabel tetap wajib lengkap saat kirim ke dosen (dijaga validasi).
-        $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+        $riwayat = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
             ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-            ->values()->all();
+            ->values()->all(), $entry->riwayat_perbaikan ?? null);
         $storeLampiranRevisi = function () use ($request, $entry, $data, $riwayat) {
             $entry->update([
                 'lampiran_path' => $this->storeUniqueFile($request->file('lampiran'), 'lampiran', $entry->id),
@@ -903,6 +981,15 @@ class LogbookController extends Controller
                 route('logbook.show', $entry),
                 'Entri Baru Menunggu Review',
             );
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'entry_id' => $entry->id,
+                'draft' => ! $submit,
+                'saved_at' => now()->toIso8601String(),
+            ]);
         }
 
         if ($submit) {
@@ -1214,7 +1301,7 @@ class LogbookController extends Controller
         $logbook->load([
             'mahasiswaTa.mahasiswa', 'mahasiswaTa.pembimbing1', 'mahasiswaTa.pembimbing2', 'dosen', 'comments.user',
             'parentEntry.comments.user', 'parentEntry.parentEntry', 'revisionChildren',
-            'actionItems',
+            'actionItems', 'reviewOpener',
         ]);
 
         $draftPdf = $logbook->lampiran_path ? Storage::disk('local')->path($logbook->lampiran_path) : null;
@@ -1234,18 +1321,22 @@ class LogbookController extends Controller
             ->reject(fn (LogbookEntry $e) => $e->id === $logbook->id || $e->parent_entry_id === $logbook->id)
             ->values();
 
-        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf', 'templates', 'lastFeedback', 'otherPendingRevisions'));
+        // Draf keputusan milik reviewer saat ini (prefill kartu Keputusan).
+        $reviewDraft = ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        return view('logbook.show', compact('logbook', 'draftPdf', 'catatanPdf', 'templates', 'lastFeedback', 'otherPendingRevisions', 'reviewDraft'));
     }
 
     // ---------------------------------------------------------------- edit
 
-    public function edit(Request $request, LogbookEntry $logbook): View|RedirectResponse
+    public function edit(Request $request, LogbookEntry $logbook): RedirectResponse
     {
         $this->authorize('update', $logbook);
 
-        // Satu pintu editor: draf revisi dilanjutkan lewat wizard create-revisi
-        // (?draft_id=) agar layout & perilakunya sama; draf logbook biasa
-        // tetap memakai halaman edit.
+        // Satu pintu editor: kedua jenis draf dilanjutkan lewat wizard
+        // (?draft_id=) agar layout & perilakunya sama.
         if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
             return redirect()->route('logbook.create-revisi', array_filter([
                 'draft_id' => $logbook->id,
@@ -1253,10 +1344,13 @@ class LogbookController extends Controller
             ]));
         }
 
-        return view('logbook.edit', compact('logbook'));
+        return redirect()->route('logbook.create', array_filter([
+            'draft_id' => $logbook->id,
+            'program' => $logbook->mahasiswaTa?->jenis,
+        ]));
     }
 
-    public function update(UpdateLogbookEntryRequest $request, LogbookEntry $logbook): RedirectResponse
+    public function update(UpdateLogbookEntryRequest $request, LogbookEntry $logbook): RedirectResponse|JsonResponse
     {
         $this->authorize('update', $logbook);
 
@@ -1282,9 +1376,9 @@ class LogbookController extends Controller
         if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
             // Alur anotasi-dulu: baris kosong tidak disimpan; catatan PDF hanya
             // dibuat ulang bila tabel punya isi (submit menjaga kelengkapan).
-            $riwayat = collect($data['riwayat_perbaikan'] ?? [])
+            $riwayat = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
                 ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-                ->values()->all();
+                ->values()->all(), $logbook->riwayat_perbaikan ?? null);
             $logbook->update([
                 'tanggal_pengiriman' => $data['tanggal_pengiriman'],
                 'progres_kendala' => $data['progres_kendala'] ?? null,
@@ -1298,9 +1392,9 @@ class LogbookController extends Controller
         } else {
             // Step 3 logbook memakai kartu jawaban: baris kosong tidak
             // disimpan; catatan PDF dibuat ulang bila tabel punya isi.
-            $riwayatLogbook = collect($data['riwayat_perbaikan'] ?? [])
+            $riwayatLogbook = $this->sanitizeRiwayatRows(collect($data['riwayat_perbaikan'] ?? [])
                 ->filter(fn ($row) => filled($row['halaman'] ?? null) || filled($row['komentar_dosen'] ?? null) || filled($row['perbaikan'] ?? null))
-                ->values()->all();
+                ->values()->all(), $logbook->riwayat_perbaikan ?? null);
             $logbook->update(array_merge([
                 'tanggal_bimbingan' => $data['tanggal_bimbingan'],
                 'topik' => $data['topik'],
@@ -1310,6 +1404,15 @@ class LogbookController extends Controller
             if (! empty($logbook->fresh()->riwayat_perbaikan)) {
                 $this->generateCatatanPerbaikanPdf($logbook);
             }
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'entry_id' => $logbook->id,
+                'draft' => true,
+                'saved_at' => now()->toIso8601String(),
+            ]);
         }
 
         return redirect()->route('logbook.show', $logbook)
@@ -1387,6 +1490,72 @@ class LogbookController extends Controller
     }
 
     /**
+     * Simpan balasan dosen untuk satu baris kartu Jawaban Mahasiswa
+     * (riwayat_perbaikan). Hanya reviewer entri submitted; balasan kosong
+     * menghapus balasan yang ada.
+     */
+    public function saveJawabanReply(Request $request, LogbookEntry $logbook): JsonResponse
+    {
+        $this->authorize('review', $logbook);
+
+        $validated = $request->validate([
+            'index' => ['required', 'integer', 'min:0'],
+            'reply' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $rows = collect($logbook->riwayat_perbaikan ?? [])
+            ->map(fn ($row) => is_array($row) ? $row : [])
+            ->values()->all();
+        abort_if(! array_key_exists($validated['index'], $rows), 404);
+
+        if (! filled($validated['reply'] ?? null)) {
+            unset($rows[$validated['index']]['dosen_reply'], $rows[$validated['index']]['dosen_reply_at']);
+        } else {
+            $rows[$validated['index']]['dosen_reply'] = $validated['reply'];
+            $rows[$validated['index']]['dosen_reply_at'] = now()->toIso8601String();
+        }
+        $logbook->update(['riwayat_perbaikan' => array_values($rows)]);
+
+        // Panggil mahasiswa: notifikasi deep-link ke baris yang dibalas.
+        if (filled($validated['reply'] ?? null) && ($owner = $logbook->mahasiswaTa?->mahasiswa)) {
+            $this->bestEffort(fn () => $owner->notify(new ActivityNotification(
+                'Dosen membalas jawaban baris '.($validated['index'] + 1).': "'.mb_strimwidth($validated['reply'], 0, 120, '…').'"',
+                route('logbook.show', $logbook).'#jawaban-baris-'.$validated['index'],
+                'Balasan Jawaban',
+            )));
+        }
+
+        return response()->json([
+            'ok' => true,
+            'saved_at' => $logbook->fresh()->updated_at?->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Bersihkan kunci balasan dosen dari baris kiriman mahasiswa (anti
+     * injeksi) lalu pertahankan balasan lama per indeks agar kirim ulang
+     * mahasiswa tidak menghapus balasan dosen.
+     */
+    private function sanitizeRiwayatRows(array $rows, ?array $oldRows = null): array
+    {
+        $old = array_values($oldRows ?? []);
+
+        return collect($rows)->values()->map(function ($row, $i) use ($old) {
+            $row = is_array($row) ? $row : [];
+            unset($row['dosen_reply'], $row['dosen_reply_at']);
+            if (isset($old[$i]) && is_array($old[$i])) {
+                foreach (['dosen_reply', 'dosen_reply_at'] as $key) {
+                    if (! empty($old[$i][$key])) {
+                        $row[$key] = $old[$i][$key];
+                    }
+                }
+            }
+
+            return $row;
+        })->all();
+    }
+
+    /**
      * Hapus massal entri logbook — hanya pemilik & hanya entri yang masih
      * dapat diedit (isEditable: draf / revisi sedang dikerjakan yang belum
      * dikirim). Entri yang tidak memenuhi syarat dilewati (tidak 403) agar
@@ -1407,8 +1576,9 @@ class LogbookController extends Controller
         $user = $request->user();
         $deleted = 0;
         $skipped = 0;
+        $deletedIds = [];
 
-        DB::transaction(function () use ($entries, $user, &$deleted, &$skipped) {
+        DB::transaction(function () use ($entries, $user, &$deleted, &$skipped, &$deletedIds) {
             $parentIds = [];
             foreach ($entries as $entry) {
                 if (! $user->can('delete', $entry) || ! $entry->isEditable()) {
@@ -1429,6 +1599,7 @@ class LogbookController extends Controller
                 if ($entry->parent_entry_id) {
                     $parentIds[] = $entry->parent_entry_id;
                 }
+                $deletedIds[] = $entry->id;
                 $entry->delete();
                 $deleted++;
             }
@@ -1448,6 +1619,22 @@ class LogbookController extends Controller
             $message .= ' '.$skipped.' entri dilewati (sudah tidak bisa dihapus).';
         }
 
+        // Bila draf yang sedang dibuka ikut terhapus, jangan kembali ke URL
+        // ?draft_id= yatim (404) — mulai wizard bersih dengan pesan yang jelas.
+        $previous = (string) url()->previous();
+        $prevPath = trim((string) parse_url($previous, PHP_URL_PATH), '/');
+        if (in_array($prevPath, ['logbook/create', 'logbook/create-revisi'], true)) {
+            parse_str((string) parse_url($previous, PHP_URL_QUERY), $prevQuery);
+            $openDraftId = isset($prevQuery['draft_id']) ? (int) $prevQuery['draft_id'] : 0;
+            if ($openDraftId && in_array($openDraftId, $deletedIds, true)) {
+                unset($prevQuery['draft_id']);
+                $message .= ' Draf yang sedang dibuka ikut terhapus — mulai baru.';
+                $clean = '/'.$prevPath.($prevQuery ? '?'.http_build_query($prevQuery) : '');
+
+                return redirect()->to($clean)->with('success', $message);
+            }
+        }
+
         return back()->with('success', $message);
     }
 
@@ -1456,9 +1643,10 @@ class LogbookController extends Controller
      * revisi / sedang dikerjakan). Dipakai agar penolakan "revisi aktif" bisa
      * menunjuk draf mana yang dimaksud, bukan sekadar pesan umum.
      */
-    private function activeRevisionChild(LogbookEntry $parent): ?LogbookEntry
+    private function activeRevisionChild(LogbookEntry $parent, ?int $exceptId = null): ?LogbookEntry
     {
         return $parent->revisionChildren()
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
             ->whereIn('status', [LogbookEntry::STATUS_DRAFT, LogbookEntry::STATUS_SUBMITTED, LogbookEntry::STATUS_REVISI, LogbookEntry::STATUS_REVISION_IN_PROGRESS])
             ->latest('id')
             ->first();
@@ -1656,8 +1844,24 @@ class LogbookController extends Controller
         return back()->with('success', 'Entri dikirim ke dosen.');
     }
 
+    /**
+     * Halaman keputusan basi (entri sudah diputuskan sejawat selagi form
+     * terbuka): kembalikan pesan ramah, bukan 403 mentah.
+     */
+    private function staleDecisionRedirect(Request $request, LogbookEntry $logbook): ?RedirectResponse
+    {
+        if ($logbook->status === LogbookEntry::STATUS_SUBMITTED) {
+            return null;
+        }
+
+        return back()->with('error', 'Entri ini sudah diputuskan ('.$logbook->statusLabel().'). Keputusan Anda tidak terkirim.');
+    }
+
     public function approve(Request $request, LogbookEntry $logbook, LogbookReviewTransition $transition): RedirectResponse
     {
+        if ($stale = $this->staleDecisionRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
 
         // Hanya program aktif yang bisa di-review.
@@ -1686,11 +1890,19 @@ class LogbookController extends Controller
             app(AchievementService::class)->evaluateForUser($owner);
         }
 
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
         return back()->with('success', 'Entri disetujui.');
     }
 
     public function requestRevisi(Request $request, LogbookEntry $logbook, LogbookReviewTransition $transition): RedirectResponse
     {
+        if ($stale = $this->staleDecisionRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
 
         // Hanya program aktif yang bisa di-review.
@@ -1712,16 +1924,29 @@ class LogbookController extends Controller
             'Permintaan Revisi',
         );
 
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
         return back()->with('success', 'Entri dikembalikan untuk revisi.');
     }
 
     public function archive(Request $request, LogbookEntry $logbook, ArchiveLogbookReview $archive): RedirectResponse
     {
+        if ($stale = $this->staleDecisionRedirect($request, $logbook)) {
+            return $stale;
+        }
         $this->authorize('review', $logbook);
         abort_unless(in_array($logbook->mahasiswaTa?->status_ta, [MahasiswaTa::STATUS_AKTIF, MahasiswaTa::STATUS_PENDING_APPROVAL], true), 403, 'Program belum aktif atau ditolak.');
 
         $validated = $request->validate(['archive_reason' => ['nullable', 'string', 'max:5000']]);
         $archive->archive($logbook, $request->user(), $validated['archive_reason'] ?? null);
+
+        // Keputusan final menghapus draf milik pengirim.
+        ReviewDraft::where('logbook_entry_id', $logbook->id)
+            ->where('user_id', $request->user()->id)
+            ->delete();
 
         return back()->with('success', 'Entri diarsipkan.');
     }
@@ -2084,8 +2309,8 @@ class LogbookController extends Controller
     public function viewer(Request $request, LogbookEntry $logbook): View
     {
         $this->authorize('view', $logbook);
-        if ($request->user()->isDosen() && $request->user()->can('review', $logbook) && ! $logbook->review_opened_at) {
-            $logbook->update(['review_opened_at' => now()]);
+        if ($request->user()->isDosen() && $request->user()->can('review', $logbook)) {
+            $logbook->update(['review_opened_at' => now(), 'review_opened_by' => $request->user()->id]);
         }
         $logbook->load('comments.user');
 

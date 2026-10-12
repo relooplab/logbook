@@ -1,6 +1,11 @@
 {{-- Cangkang panel ringkasan konteks (aside) bersama. --}}
 {{-- Props: $panelTitle, $panelDesc, $panelIcon ('description'|'summarize'), --}}
-{{-- $ariaLabel, $autosavePanel ('lb-create'|'lb-revisi'), $steps (untuk progress segments). --}}
+{{-- $ariaLabel, $steps (untuk progress segments), $draftSave (bool: tampilkan --}}
+{{-- tombol Simpan Draf ke server + baris status), $draftSavedAt (?string: --}}
+{{-- stempel simpanan server terakhir, mis. diffForHumans), $combinedStatus --}}
+{{-- (?string: kalimat status gabungan), $workflowLabel (?string: label alur --}}
+{{-- untuk kalimat gabungan live). Autosave browser senyap dan tidak mengisi --}}
+{{-- stempel ini. --}}
 {{-- Isi baris summary di-supply via $slot agar hook data-* per halaman tetap utuh. --}}
 <aside class="form-workspace-panel" aria-label="{{ $ariaLabel }}">
     <section class="card form-workspace-card p-5">
@@ -26,12 +31,30 @@
             </div>
         </div>
 
+        @if (!empty($combinedStatus))
+            <p class="mt-3 rounded-lg bg-bg-panel px-3 py-2 text-xs text-text-secondary" data-status-combined
+                data-workflow="{{ $workflowLabel ?? 'Draf' }}" role="status" aria-live="polite">{{ $combinedStatus }}</p>
+        @endif
+
         <div class="mt-4">
             {{ $slot }}
         </div>
 
         {!! $after ?? '' !!}
-    </section>
 
-    <x-autosave-status :panel="$autosavePanel" />
+        @if (!empty($draftSave))
+            <div class="mt-4 border-t border-border pt-4">
+                <button type="submit" data-draft-save
+                    class="btn-secondary inline-flex min-h-11 w-full items-center justify-center gap-2 px-4 py-2 text-sm font-medium">
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">save</span> Simpan Draf
+                </button>
+                @if (!empty($draftSavedAt))
+                    <p class="mt-1 text-[11px] text-text-secondary" data-draf-saved-at>Terakhir disimpan {{ $draftSavedAt }}</p>
+                @else
+                    <p class="mt-1 hidden text-[11px] text-text-secondary" data-draf-saved-at></p>
+                @endif
+                <p class="mt-2 hidden text-xs" data-draft-status role="status" aria-live="polite"></p>
+            </div>
+        @endif
+    </section>
 </aside>

@@ -43,7 +43,7 @@
     $steps = [
         1 => ['Info Bimbingan', 'forum', 'Penerima, tanggal & topik'],
         2 => ['Upload File', 'upload_file', 'Unggah file bimbingan'],
-        3 => ['Hasil Tandaan', 'build', 'Tandaan jadi ringkasan'],
+        3 => ['Jawaban', 'build', 'Tandaan jadi jawaban'],
         4 => ['Review & Kirim', 'send', 'Periksa lalu kirim'],
     ];
 @endphp
@@ -59,12 +59,19 @@
     </x-page-header>
 
     @if ($ta)
-        <p class="mb-4 -mt-3 text-sm text-text-secondary">Program:
+        <p class="mb-4 text-sm text-text-secondary">Program:
             <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-brand/10 text-brand">{{ $ta->jenisLabel() }}</span>
             @if (!empty($draft))
                 <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-status-pending/10 text-status-pending">Melanjutkan draf #{{ $draft->id }}</span>
             @endif
         </p>
+        @if (!empty($resumeDraft))
+            <p class="mb-4 text-xs text-text-secondary">
+                <a href="{{ route('logbook.create', array_filter(['draft_id' => $resumeDraft->id, 'program' => $ta->jenis])) }}"
+                    class="font-medium text-brand hover:underline">Lanjutkan draf terakhir →</a>
+                <span class="font-mono">#{{ $resumeDraft->id }}</span> · disimpan {{ $resumeDraft->updated_at?->diffForHumans() }}
+            </p>
+        @endif
     @endif
 
     @if (($pendingRevisions ?? collect())->isNotEmpty())
@@ -88,6 +95,14 @@
                     @endforeach
                 </ul>
             @endif
+        </div>
+    @endif
+
+    {{-- Kartu Kelola Draf hanya bila ada yang dikelola: ≥2 draf, atau sedang
+        melanjutkan (tandai "Sedang dibuka"). Satu draf cukup lewat banner. --}}
+    @if (($deletableEntries ?? collect())->count() > 1 || !empty($draft))
+        <div class="mb-5">
+            @include('logbook.partials.wizard.draft-manager', ['entries' => $deletableEntries ?? collect(), 'wizard' => 'logbook', 'currentDraftId' => $draft?->id, 'programJenis' => $ta?->jenis, 'formId' => 'bulk-delete-form-create'])
         </div>
     @endif
 
@@ -118,7 +133,7 @@
                 </div>
 
                 <div class="form-field">
-                    <label class="form-field-label" for="addressed_dosen_id">Kirim kepada (penerima logbook)</label>
+                    <label class="form-field-label" for="addressed_dosen_id">Penerima</label>
                     <div class="form-field-body">
                         <select name="addressed_dosen_id" id="addressed_dosen_id" required class="form-control">
                             @foreach ($dosenOptions as $dosenId => $label)
@@ -210,7 +225,7 @@
                                 <a href="{{ $draftLampiran['url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-brand hover:underline">Lihat</a>
                             </div>
                         @endif
-                        <x-file-upload input="lampiran" title="Upload Lampiran" :hint="$fileHint"
+                        <x-file-upload input="lampiran" title="Unggah Lampiran" :hint="$fileHint"
                             :accept="$accept" :max-mb="$maxMb" :types="$allowedTypes" :required="empty($draftLampiran)" />
                         @error('lampiran')
                             <p class="form-field-error">{{ $message }}</p>
@@ -228,7 +243,7 @@
                         <button type="button" id="lanjut-tanpa-anotasi"
                             class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium"
                             title="Lewati anotasi PDF, langsung isi kartu jawaban manual">
-                            Lanjut tanpa anotasi
+                            Lewati &amp; isi manual
                             <span class="material-symbols-outlined icon-sm" aria-hidden="true">skip_next</span>
                         </button>
                         <button type="button" id="lanjut-anotasi"
@@ -248,13 +263,13 @@
                         <span class="material-symbols-outlined icon-md text-brand">build</span>
                     </span>
                     <div class="min-w-0">
-                        <h2 class="font-heading font-semibold text-text-primary">3. Hasil Tandaan</h2>
-                        <p class="text-caption text-text-secondary">Tandai di PDF lalu salin otomatis, atau tulis ringkasan manual.</p>
+                        <h2 class="font-heading font-semibold text-text-primary">3. Jawaban</h2>
+                        <p class="text-caption text-text-secondary">Opsional untuk sesi biasa — boleh kosong. Tandai di PDF lalu salin otomatis, atau tulis ringkasan manual.</p>
                     </div>
                 </div>
 
                 @include('logbook.partials.wizard.annotation-cta', [
-                    'openLabel' => 'Buka PDF & tandai',
+                    'openLabel' => 'Buka PDF & Tandai',
                     'copyLabel' => 'Salin ke Jawaban',
                     'hint' => 'Draf tersimpan otomatis saat klik Lanjut — PDF terbuka di tab baru.',
                     'copyAttr' => 'data-isi-otomatis',
@@ -310,7 +325,7 @@
                         <span class="material-symbols-outlined icon-sm" aria-hidden="true">add</span> Tambah manual
                     </button>
                     <button type="button" class="btn-secondary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium" data-isi-otomatis-bawah disabled>
-                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Salin <span data-isi-count-bawah></span>
+                        <span class="material-symbols-outlined icon-sm" aria-hidden="true">bolt</span> Salin ke Jawaban <span data-isi-count-bawah></span>
                     </button>
                 </div>
                 <p class="mt-2 text-xs text-text-secondary">Alur utama: tandai di PDF → salin → lengkapi. Tulis sendiri bila perlu.</p>
@@ -392,7 +407,7 @@
                         <p class="text-xs font-semibold uppercase tracking-widest text-text-secondary">Jawaban</p>
                         <p class="mt-2 text-sm text-text-primary" id="review-jumlah">0 jawaban</p>
                         <ul class="mt-2 space-y-2" id="review-kartu-list"></ul>
-                        <p class="mt-2 text-sm text-text-secondary" id="review-kartu-empty">Belum ada jawaban.</p>
+                        <p class="mt-2 text-sm text-text-secondary" id="review-kartu-empty">Belum ada jawaban — tandai di PDF lalu salin, atau tulis manual.</p>
                     </div>
 
                     <div class="rounded-xl border border-border bg-bg-panel p-4">
@@ -409,7 +424,6 @@
                 <div class="form-actions">
                     <button type="button" class="wizard-prev btn-ghost min-h-11 px-4 py-2 text-sm font-medium">← Kembali</button>
                     <div class="form-actions-end">
-                        <button type="submit" class="btn-secondary min-h-11 px-4 py-2 text-sm font-medium">Simpan Draft</button>
                         <button type="submit" name="submit" value="1" id="btn-kirim"
                             class="btn-primary inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm font-medium"
                             @if ($hasPendingRevision) data-require-revision-confirm @endif>
@@ -426,7 +440,7 @@
         </div>
 
         {{-- Panel konteks: tetap tampil di semua langkah (cangkang bersama, isi induk). --}}
-        @component('logbook.partials.wizard.summary-shell', ['panelTitle' => 'Ringkasan Entri', 'panelDesc' => 'Tinjau informasi sebelum dikirim.', 'panelIcon' => 'description', 'ariaLabel' => 'Ringkasan entri logbook', 'autosavePanel' => 'lb-create', 'steps' => $steps])
+        @component('logbook.partials.wizard.summary-shell', ['panelTitle' => 'Ringkasan Entri', 'panelDesc' => 'Tinjau informasi sebelum dikirim.', 'panelIcon' => 'description', 'ariaLabel' => 'Ringkasan entri logbook', 'steps' => $steps, 'draftSave' => true, 'draftSavedAt' => $draft?->updated_at?->diffForHumans(), 'combinedStatus' => $combinedStatus ?? null, 'workflowLabel' => $workflowLabel ?? 'Draf'])
             <div class="summary-row">
                 <span class="summary-key">
                     <span class="material-symbols-outlined icon-sm" aria-hidden="true">tag</span> Sesi
@@ -465,95 +479,30 @@
                 <span class="summary-key">
                     <span class="material-symbols-outlined icon-sm" aria-hidden="true">flag</span> Status
                 </span>
-                <span class="summary-value">@include('partials.status-badge', ['status' => 'draft'])</span>
+                <span class="summary-value">
+                    @include('partials.status-badge', ['status' => $draft?->status ?? 'draft', 'entry' => $draft ?? null])
+                </span>
             </div>
-            @slot('after')
-                <div class="mt-5 border-t border-border pt-4">
-                    <h3 class="mb-3 font-heading text-sm font-semibold text-text-primary">Lampiran</h3>
-                    <x-file-upload-mirror input="lampiran" empty-text="Belum ada lampiran" :hint="$fileHint" :actions="false" />
-                </div>
-            @endslot
+            <div class="summary-row">
+                <span class="summary-key">
+                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">cloud_done</span> Disimpan di server
+                </span>
+                <span class="summary-value" data-server-save-state role="status" aria-live="polite">
+                    @if ($draft)
+                        <span class="badge badge-draft">draf tersimpan</span>
+                    @else
+                        <span class="badge badge-neutral">belum tersimpan</span>
+                    @endif
+                </span>
+            </div>
         @endcomponent
     </form>
-
-    {{-- Bulk delete: draf / revisi sedang dikerjakan pada program ini. --}}
-    <section class="card p-5 mt-6" aria-label="Hapus draf terpilih">
-        <div class="flex flex-wrap items-center gap-3">
-            <div class="min-w-0">
-                <h2 class="font-heading font-semibold text-text-primary">Hapus Draf Terpilih</h2>
-                <p class="text-caption text-text-secondary">Hanya draf / revisi sedang dikerjakan yang bisa dipilih.</p>
-            </div>
-            <div class="ml-auto flex items-center gap-2">
-                @if (($deletableEntries ?? collect())->isNotEmpty())
-                    <button type="submit" form="bulk-delete-form-create" id="bulk-delete-btn-create" disabled
-                        class="px-4 py-2 rounded-xl bg-status-danger/10 text-status-danger text-sm font-medium hover:bg-status-danger/20 disabled:opacity-40 disabled:cursor-not-allowed">
-                        Hapus terpilih (<span id="bulk-delete-count-create">0</span>)
-                    </button>
-                @endif
-            </div>
-        </div>
-        @if (($deletableEntries ?? collect())->isEmpty())
-            <p class="mt-3 text-sm text-text-secondary">Tidak ada draf yang bisa dihapus pada program ini.</p>
-        @else
-            <form id="bulk-delete-form-create" method="POST" action="{{ route('logbook.bulk-destroy') }}" class="mt-4 space-y-2">
-                @csrf
-                @if ($ta?->jenis) <input type="hidden" name="program" value="{{ $ta->jenis }}"> @endif
-                <label class="flex items-center gap-2 text-xs text-text-secondary">
-                    <input type="checkbox" id="bulk-select-all-create"> Pilih semua
-                </label>
-                @foreach ($deletableEntries as $entry)
-                    <label class="flex items-start gap-3 rounded-xl border border-border px-3 py-2 text-sm hover:bg-bg-panel/50">
-                        <input type="checkbox" name="ids[]" value="{{ $entry->id }}" class="bulk-checkbox-create mt-1">
-                        <span class="min-w-0">
-                            <span class="block font-medium text-text-primary">{{ $entry->jenis === 'revisi' ? 'Revisi' : 'Sesi '.$entry->sesi_ke }} · {{ $entry->topik ?? 'Tanpa topik' }}</span>
-                            <span class="block text-xs text-text-secondary">{{ $entry->tanggal_tampil?->format('d M Y') ?? '—' }} · @include('partials.status-badge', ['status' => $entry->status, 'entry' => $entry])</span>
-                        </span>
-                    </label>
-                @endforeach
-            </form>
-            <script>
-                (function () {
-                    var form = document.getElementById('bulk-delete-form-create');
-                    if (!form) return;
-                    var boxes = Array.from(form.querySelectorAll('.bulk-checkbox-create'));
-                    var countEl = document.getElementById('bulk-delete-count-create');
-                    var btn = document.getElementById('bulk-delete-btn-create');
-                    var selectAll = document.getElementById('bulk-select-all-create');
-
-                    function refresh() {
-                        var n = boxes.filter(function (b) { return b.checked; }).length;
-                        if (countEl) countEl.textContent = n;
-                        if (btn) btn.disabled = n === 0;
-                        if (selectAll) {
-                            selectAll.checked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
-                            selectAll.indeterminate = n > 0 && n < boxes.length;
-                        }
-                    }
-
-                    boxes.forEach(function (b) { b.addEventListener('change', refresh); });
-                    if (selectAll) {
-                        selectAll.addEventListener('change', function () {
-                            boxes.forEach(function (b) { b.checked = selectAll.checked; });
-                            refresh();
-                        });
-                    }
-                    form.addEventListener('submit', function (e) {
-                        var n = boxes.filter(function (b) { return b.checked; }).length;
-                        if (n === 0) { e.preventDefault(); return; }
-                        if (!confirm('Hapus ' + n + ' entri terpilih? Hanya draf / revisi sedang dikerjakan yang akan dihapus.')) {
-                            e.preventDefault();
-                        }
-                    });
-                    refresh();
-                })();
-            </script>
-        @endif
-    </section>
 </div>
 @endsection
 
 @section('scripts')
 @include('partials.form-workspace-script')
+@include('partials.draft-autosave-script')
 <script>
     // ===== Wizard entri logbook (4 langkah, pola create-revisi) =====
     var form = document.getElementById('logbook-form');
@@ -632,7 +581,7 @@
     }
 
     function incompleteCount() {
-        return cards().filter(cardNeedsAttention).length;
+        return activeCards().filter(cardNeedsAttention).length;
     }
 
     function cardMissingFields(card) {
@@ -649,9 +598,20 @@
         return kartuContainer ? Array.prototype.slice.call(kartuContainer.querySelectorAll('.perbaikan-card')) : [];
     }
 
+    // Kartu yang sepenuhnya kosong dianggap tidak ada (mode ringan: sesi
+    // biasa boleh dikirim tanpa jawaban; kartu setengah isi tetap digate).
+    function cardIsEmpty(card) {
+        var d = cardData(card);
+        return !d.halaman.trim() && !d.komentar_dosen.trim() && !d.perbaikan.trim() && (!d.status || d.status === 'Draf');
+    }
+
+    function activeCards() {
+        return cards().filter(function (card) { return !cardIsEmpty(card); });
+    }
+
     function allCardsComplete() {
-        var list = cards();
-        return list.length > 0 && list.every(cardComplete);
+        var list = activeCards();
+        return list.length === 0 || list.every(cardComplete);
     }
 
     function updateCardSummary(card) {
@@ -697,13 +657,13 @@
         if (!hint) return;
         var fileOk = fileValid();
         var missing = incompleteCount();
-        var total = cards().length;
+        var total = activeCards().length;
         var countEl = hint.querySelector('[data-kartu-count]');
         var msg;
         if (!fileOk) {
             msg = 'Unggah file bimbingan pada langkah 2 — tanpa file, PDF tidak bisa ditandai.';
         } else if (total === 0) {
-            msg = 'Belum ada isian — tandai di PDF lalu salin, atau tulis sendiri.';
+            msg = 'Belum ada isian — boleh dikosongkan untuk sesi biasa, atau tandai di PDF lalu salin.';
         } else if (missing > 0) {
             msg = missing + ' dari ' + total + ' jawaban belum lengkap';
         } else {
@@ -771,6 +731,11 @@
         renderSteps();
         if (currentStep === 3) maybeAutoPull();
         if (focusUpload && fileInputEl) fileInputEl.focus();
+        // Mobile: pastikan step aktif terlihat di dalam stepper yang bisa scroll horizontal.
+        var activeStepBtn = document.querySelector('.wizard-step[data-step="' + currentStep + '"]');
+        if (activeStepBtn && activeStepBtn.scrollIntoView) {
+            try { activeStepBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
+        }
         if (!options.silent) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -778,7 +743,7 @@
         updateUploadGate();
         var hint = document.getElementById('kartu-hint');
         if (hint) hint.classList.remove('hidden');
-        var bad = cards().filter(cardNeedsAttention)[0];
+        var bad = activeCards().filter(cardNeedsAttention)[0];
         if (bad) {
             bad.scrollIntoView({ behavior: 'smooth', block: 'center' });
             var focusEl = null;
@@ -792,7 +757,7 @@
     }
 
     // Gerbang kirim: file valid + semua kartu lengkap (+ konfirmasi topik
-    // baru bila ada revisi pending). Simpan Draft tidak digate.
+    // baru bila ada revisi pending). Simpan Draf tidak digate.
     var mergePulledRows = null;
     var isiOtomatisFrom = null;
     function updateUploadGate() {
@@ -809,7 +774,7 @@
             var missing = incompleteCount();
             if (missing > 0) {
                 var need = {};
-                cards().filter(cardNeedsAttention).forEach(function (card) {
+                activeCards().filter(cardNeedsAttention).forEach(function (card) {
                     cardMissingFields(card).forEach(function (f) { need[f] = true; });
                 });
                 var needList = Object.keys(need).join(', ');
@@ -981,6 +946,12 @@
                     throw new Error(msg);
                 }
                 activateAnnotationStep(out.d);
+                var savedAtEl = document.querySelector('[data-draf-saved-at]');
+                if (savedAtEl) { savedAtEl.textContent = 'Terakhir disimpan baru saja'; savedAtEl.classList.remove('hidden'); }
+                var serverStateEl = document.querySelector('[data-server-save-state]');
+                if (serverStateEl) { serverStateEl.innerHTML = '<span class="badge badge-draft">draf tersimpan</span>'; }
+                var combinedEl = document.querySelector('[data-status-combined]');
+                if (combinedEl) { combinedEl.textContent = (combinedEl.dataset.workflow || 'Draf') + ' · tersimpan baru saja · belum dikirim'; }
                 window.open(withFrom(out.d.viewer_url), '_blank');
                 showStep(3);
             })
@@ -1087,7 +1058,7 @@
                     setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada yang baru — tandai dulu di PDF, lalu klik lagi.', true);
                     updateUploadGate();
                 })
-                .catch(function () { setMsg('Gagal memasukkan ke form. Coba lagi.', false); })
+                .catch(function () { setMsg('Gagal menyalin. Coba lagi.', false); })
                 .finally(function () {
                     if (btn) btn.disabled = false;
                     syncIsiButtons();
@@ -1206,7 +1177,6 @@
             }
             var hapus = event.target.closest('.hapus-kartu');
             if (hapus) {
-                if (cards().length <= 1) { alert('Min. 1 jawaban harus ada.'); return; }
                 var num = hapus.closest('.perbaikan-card').querySelector('[data-card-number]');
                 if (!confirm('Hapus ' + (num ? num.textContent : 'kartu') + '? Tindakan tidak dapat dibatalkan.')) return;
                 hapus.closest('.perbaikan-card').remove();
@@ -1297,7 +1267,7 @@
         var missingR = list.filter(cardNeedsAttention).length;
         var readyR = list.length - missingR;
         setText('#review-jumlah', list.length === 0 ? '0 jawaban' : readyR + ' siap · ' + missingR + ' belum lengkap');
-        setText('#review-kartu-empty', list.length === 0 ? 'Belum ada kartu — tambahkan lewat langkah Hasil Tandaan.' : '');
+        setText('#review-kartu-empty', list.length === 0 ? 'Belum ada jawaban — tandai di PDF lalu salin, atau tulis manual.' : '');
         var listEl = document.getElementById('review-kartu-list');
         if (listEl) listEl.innerHTML = list.map(reviewCardRow).join('');
         var emptyEl = document.getElementById('review-kartu-empty');
@@ -1379,51 +1349,18 @@
             window.LbAutosave.set(PANEL, 'saved', { time: 'Terakhir disimpan ' + timeLabel() });
         }
 
-        function restoreDraft(saved) {
-            applyDraft(saved);
-            window.LbAutosave.set(PANEL, 'restored', { time: 'Dipulihkan dari draf ' + timeLabel(saved.ts) });
-        }
-
-        function discardDraft() {
-            try { localStorage.removeItem(KEY); } catch (e) {}
-            if (topik) topik.value = '';
-            if (pesan) pesan.value = '';
-            if (tanggal) tanggal.value = '{{ now()->format('Y-m-d') }}';
-            if (penerima) penerima.value = @json((string) ($ta->pembimbing_1_id ?: array_key_first($dosenOptions)));
-            if (kartuContainer) {
-                kartuContainer.innerHTML = '';
-                addKartu(null, { silentFocus: true });
-            }
-            updateCounter();
-            updateUploadGate();
-            if (typeof syncSummaryPanel === 'function') syncSummaryPanel();
-            if (typeof renderSteps === 'function') renderSteps();
-            window.LbAutosave.set(PANEL, 'discarded');
-        }
-
-        // Cek draft tersimpan.
+        // Mode senyap: draf tersimpan dipulihkan otomatis (hanya bila field
+        // server kosong), tanpa tombol/pesan. Buang otomatis saat submit.
         try {
             var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
             if (saved && (saved.progres_kendala || saved.progres) && pesan && !pesan.value) {
                 applyDraft(saved);
-                window.LbAutosave.set(PANEL, 'restored', { time: 'Dipulihkan dari draf ' + timeLabel(saved.ts) });
             } else if (saved && saved.riwayat && saved.riwayat.length && cards().length <= 1 && cardsPristine()) {
                 applyDraft(saved);
-                window.LbAutosave.set(PANEL, 'restored', { time: 'Dipulihkan dari draf ' + timeLabel(saved.ts) });
-            } else if (saved) {
-                window.LbAutosave.set(PANEL, 'idle', { time: 'Draf tersimpan ' + timeLabel(saved.ts) });
-                window.LbAutosave.draftAvailable(PANEL, true);
+            } else if (saved && saved.topik && topik && !topik.value) {
+                applyDraft(saved);
             }
         } catch (e) {}
-
-        window.LbAutosave.on(PANEL, 'retry', save);
-        window.LbAutosave.on(PANEL, 'restore', function () {
-            try {
-                var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-                if (saved) restoreDraft(saved);
-            } catch (e) {}
-        });
-        window.LbAutosave.on(PANEL, 'discard', discardDraft);
 
         form.addEventListener('input', function () {
             window.LbAutosave.set(PANEL, 'pending');
@@ -1450,6 +1387,19 @@
     // Kembali dari viewer tab-sama (?step=3&autopull=1): gabungkan yang ditandai.
     if (autoPullOnLoad && initialStep === 3 && draftPullUrl) {
         maybeAutoPull(true);
+    }
+    // Simpan Draf ke server + autosave 2 menit setelah klik pertama.
+    if (window.LbDraft) {
+        window.LbDraft.init({
+            form: form,
+            button: document.querySelector('[data-draft-save]'),
+            statusEl: document.querySelector('[data-draft-status]'),
+            entryInput: form.querySelector('[data-draft-id]'),
+            url: form.getAttribute('action'),
+            minFields: function () {
+                return !!(topikEl && topikEl.value.trim() && tanggalEl && tanggalEl.value);
+            }
+        });
     }
 </script>
 @endsection

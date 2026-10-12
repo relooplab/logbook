@@ -65,6 +65,14 @@
                     <span class="material-symbols-outlined icon-sm text-status-info">visibility_off</span> Belum
                 </span>
             @endif
+            @php
+                $lastReplyAt = collect($entry->riwayat_perbaikan ?? [])
+                    ->map(fn ($r) => $r['dosen_reply_at'] ?? null)->filter()
+                    ->map(fn ($t) => \Illuminate\Support\Carbon::parse($t))->sort()->last();
+            @endphp
+            @if ($lastReplyAt)
+                <span class="block text-[10px] text-brand" title="{{ $lastReplyAt->format('d M Y H:i') }}">Dosen membalas · {{ $lastReplyAt->diffForHumans() }}</span>
+            @endif
         </td>
     @endif
     <td class="py-3 px-4">

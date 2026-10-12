@@ -167,7 +167,7 @@
             var retry = panel.querySelector('[data-autosave-retry]');
             if (retry) retry.classList.toggle('hidden', state !== 'error');
 
-            // Ringkasan konteks (baris Status Draft) memakai label yang sama.
+            // Ringkasan konteks (baris Status) memakai label yang sama.
             document.querySelectorAll('[data-autosave-mini="' + prefix + '"]').forEach(function (mini) {
                 mini.textContent = meta.mini;
                 VARIANTS.forEach(function (cls) { mini.classList.remove(cls); });

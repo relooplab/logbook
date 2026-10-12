@@ -108,11 +108,11 @@ class FeedbackThreadTest extends AuditSmokeTest
 
         $content = $this->actingAs($this->mhs)->get(route('logbook.feedback'))->getContent();
 
-        // Logbook dikirim (lebih dulu) harus tampil sebelum umpan balik diterima.
+        // Logbook dikirim (lebih dulu) harus tampil sebelum Pesan Dosen Diterima.
         $this->assertLessThan(
-            strpos($content, 'Umpan balik diterima'),
+            strpos($content, 'Pesan Dosen Diterima'),
             strpos($content, 'Logbook dikirim'),
-            'Logbook dikirim harus tampil sebelum Umpan balik diterima.'
+            'Logbook dikirim harus tampil sebelum Pesan Dosen Diterima.'
         );
     }
 
@@ -140,8 +140,8 @@ class FeedbackThreadTest extends AuditSmokeTest
         // Feedback node revisi tampil sekali, di dalam event hasil review.
         $this->assertSame(1, substr_count($content, 'Masih kurang tepat.'));
         $this->assertStringContainsString('Revisi diminta', $content);
-        // "Umpan balik diterima" hanya untuk node logbook (1x).
-        $this->assertSame(1, substr_count($content, 'Umpan balik diterima'));
+        // "Pesan Dosen Diterima" hanya untuk node logbook (1x).
+        $this->assertSame(1, substr_count($content, 'Pesan Dosen Diterima'));
         // Revisi dibuat (tanpa feedback) tampil sebelum Revisi dikirim.
         $this->assertLessThan(
             strpos($content, 'Revisi dikirim'),

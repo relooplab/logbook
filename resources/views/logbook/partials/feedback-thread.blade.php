@@ -85,10 +85,10 @@
                             </div>
                         @endif
 
-                        {{-- Umpan balik diterima (node logbook) --}}
+                        {{-- Pesan Dosen Diterima (node logbook) --}}
                         @if ($ev['kind'] === 'feedback')
                             <div>
-                                <p class="text-sm font-medium text-text-primary">Umpan balik diterima</p>
+                                <p class="text-sm font-medium text-text-primary">Pesan Dosen Diterima</p>
                                 @php $longFeedback = mb_strlen($node->feedback_dosen) > 220; @endphp
                                 <p class="text-sm text-text-secondary whitespace-pre-wrap mt-0.5" data-feedback-text>{{ $longFeedback ? \Illuminate\Support\Str::limit($node->feedback_dosen, 220) : $node->feedback_dosen }}</p>
                                 @if ($longFeedback)
@@ -145,7 +145,7 @@
                                 <div class="mt-1">
                                     @include('partials.status-badge', ['status' => $node->status, 'entry' => $node])
                                 </div>
-                                <a href="{{ route('logbook.show', $node) }}" class="text-xs text-brand hover:underline mt-1 inline-block">Lihat revisi →</a>
+                                <a href="{{ route('logbook.show', $node) }}" class="text-xs text-brand hover:underline mt-1 inline-block">Lihat Detail</a>
                             </div>
                         @endif
 
@@ -158,7 +158,7 @@
                                     @elseif ($node->status === \App\Models\LogbookEntry::STATUS_REVISI)
                                         Revisi diminta
                                     @else
-                                        Umpan balik diterima
+                                        Pesan Dosen Diterima
                                     @endif
                                     @if ($node->reviewed_at)
                                         <span class="text-xs font-normal text-text-secondary">· {{ $node->reviewed_at->format('d M Y, H:i') }}</span>
@@ -200,7 +200,7 @@
                             @endif
                             @if ($totalItems > 0)
                                 <div>
-                                    <p class="text-sm font-medium text-text-primary">Dikerjakan ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
+                                    <p class="text-sm font-medium text-text-primary">Tugas ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
                                     <div class="mt-1.5 space-y-1.5">
                                         @foreach ($node->actionItems as $item)
                                             <div class="flex items-center gap-2 text-sm">
@@ -223,7 +223,7 @@
                         @endif
                         @if ($totalItems > 0)
                             <div>
-                                <p class="text-sm font-medium text-text-primary">Dikerjakan ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
+                                <p class="text-sm font-medium text-text-primary">Tugas ({{ $doneItems }}/{{ $totalItems }} selesai)</p>
                                 <div class="mt-1.5 space-y-1.5">
                                     @foreach ($node->actionItems as $item)
                                         <div class="flex items-center gap-2 text-sm">

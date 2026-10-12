@@ -135,8 +135,8 @@ class ChatController extends Controller
         foreach ($contacts as $contact) {
             // Do not duplicate an existing thread for the same contact and program.
             if ($rows->contains(fn ($row) => $row->other->id === $contact['other']->id
-                && ($row->conversation->mahasiswa_ta_id === $contact['program']->id
-                    || $row->conversation->mahasiswa_ta_id === null))) {
+                && ($row->conversation?->mahasiswa_ta_id === $contact['program']->id
+                    || $row->conversation?->mahasiswa_ta_id === null))) {
                 continue;
             }
             $rows->push((object) ['conversation' => null, 'other' => $contact['other'],
