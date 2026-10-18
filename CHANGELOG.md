@@ -1,3 +1,17 @@
+# [1.2.0](https://github.com/relooplab/logbook/compare/v1.1.0...v1.2.0) (2026-10-18)
+
+
+### Features
+
+* **logbook:** jawaban ack, tindak lanjut feedback terbuka, banding PDF revisi ([0665419](https://github.com/relooplab/logbook/commit/066541969723922a49282547e7cb411783585803))
+* **logbook:** review drafts, draft autosave, jawaban replies ([5385d64](https://github.com/relooplab/logbook/commit/5385d649893a80ae2d2029bef29e01aa04ec9085))
+* **logbook:** unify dosen review layout show + quick-review ([8124444](https://github.com/relooplab/logbook/commit/81244440c443ad563d04a00d0f34bffa5f4650c5))
+* **logbook:** wizard gate, autopull merge, table review cards ([00d2130](https://github.com/relooplab/logbook/commit/00d213016645767eb09eb1302b832a5e82d0d948))
+* **logbook:** wizard unify, answer cards, terminology, parent reconcile ([93a98c5](https://github.com/relooplab/logbook/commit/93a98c51977e33cf778e59e3c40a6aab17a26199))
+* **seminar:** redesign submission workspace with context sidebar ([a966d4f](https://github.com/relooplab/logbook/commit/a966d4f613f36629c9e843ab2040fcaffd708fe4))
+* **seminar:** remove info banner and tips, compact dropzone and field layout ([ef346c7](https://github.com/relooplab/logbook/commit/ef346c7c11ebf6836449b43d4b28db9806bda4de))
+* **seminar:** separate video conference link field and generic labeling ([619a882](https://github.com/relooplab/logbook/commit/619a882d92275f24f5c270b902ae7a98da356143))
+
 # [1.1.0](https://github.com/relooplab/logbook/compare/v1.0.0...v1.1.0) (2026-10-05)
 
 
