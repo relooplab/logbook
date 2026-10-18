@@ -42,13 +42,6 @@
                     el.classList.toggle('hidden', !text);
                 }
 
-                // Balik indikator baris aside ke "draf tersimpan".
-                function flipServerState() {
-                    var wrap = document.querySelector('[data-server-save-state]');
-                    if (!wrap) return;
-                    wrap.innerHTML = '<span class="badge badge-draft">draf tersimpan</span>';
-                }
-
                 // Kalimat status gabungan aside.
                 function updateCombined() {
                     var el = document.querySelector('[data-status-combined]');
@@ -94,7 +87,6 @@
                         // dikosongkan agar tidak dobel dengan stempel.
                         setStatus('', false);
                         setSavedAt('Terakhir disimpan ' + timeLabel());
-                        flipServerState();
                         updateCombined();
                         start();
                         return true;

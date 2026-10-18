@@ -43,12 +43,16 @@ class DosenArchiveReviewTest extends AuditSmokeTest
     public function test_archive_accepts_short_reason_and_requires_submitted_status(): void
     {
         $url = '/logbook/'.$this->entrySubmitted->id.'/archive';
+        // Entri belum submitted: ditolak dengan redirect + pesan ramah,
+        // bukan 403 mentah (keputusan basi / belum waktunya).
         $this->actingAs($this->dosen)->post('/logbook/'.$this->entryDraft->id.'/archive', [
             'archive_reason' => self::REASON,
-        ])->assertForbidden();
+        ])->assertRedirect()->assertSessionHas('error');
         $this->actingAs($this->dosen)->post($url, ['archive_reason' => 'singkat'])->assertRedirect();
         $this->assertSame('singkat', $this->entrySubmitted->fresh()->archive_reason);
-        $this->actingAs($this->dosen)->post($url, ['archive_reason' => self::REASON])->assertForbidden();
+        // Entri sudah diputuskan: sama, redirect + pesan, bukan 403.
+        $this->actingAs($this->dosen)->post($url, ['archive_reason' => self::REASON])
+            ->assertRedirect()->assertSessionHas('error');
     }
 
     public function test_detail_review_archives_without_reason_and_notifies_without_empty_reason_label(): void

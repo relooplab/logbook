@@ -38,7 +38,8 @@ import {
  */
 
 const DATA = window.PDF_VIEWER_DATA || {};
-const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, wizardParentId, wizardDraftId, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf } = DATA;
+const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, wizardParentId, wizardDraftId, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf, parentPdfUrl, parentCommentsUrl, parentTitle, parentEntryId } = DATA;
+const canCompare = !!parentPdfUrl;
 
 const parseIdFromHash = () => {
   const m = (document.location.hash || '').match(/^#highlight-(.+)$/);
@@ -51,11 +52,42 @@ const resetHash = () => {
 // ---------------------------------------------------------------------------
 // Container render tiap highlight. Toolbar aksi kampus menempel lewat slot
 // extraButtons/extraPanel bawaan lib (pola example-app).
+// Mode readOnly (panel berkas sebelumnya): sorotan polos tanpa toolbar,
+// klik (bukan saat memblok teks) menggulir ke anotasi tersebut.
 // ---------------------------------------------------------------------------
-function HighlightContainer({ annotationsById, onReply, onToggleResolve, onDelete, onSkipNext, hasNext }) {
+function HighlightContainer({ annotationsById, onReply, onToggleResolve, onDelete, onSkipNext, hasNext, readOnly, onOpenOld }) {
   const { highlight, isScrolledTo } = useHighlightContainerContext();
   const meta = annotationsById[highlight.id];
   const color = statusColor(meta?.resolutionStatus);
+  if (readOnly) {
+    const tip = meta?.comment || highlight.content?.text || '';
+    const open = () => {
+      try {
+        if (window.getSelection && !window.getSelection().isCollapsed) return;
+      } catch (e) { /* abaikan */ }
+      if (onOpenOld) onOpenOld(highlight);
+    };
+    if (highlight.type === 'text') {
+      return (
+        <div onClick={open} title={tip}>
+          <TextHighlight
+            highlight={highlight}
+            isScrolledTo={isScrolledTo}
+            highlightColor={color}
+          />
+        </div>
+      );
+    }
+    return (
+      <div onClick={open} title={tip}>
+        <AreaHighlight
+          highlight={highlight}
+          isScrolledTo={isScrolledTo}
+          highlightColor={color}
+        />
+      </div>
+    );
+  }
   const controls = useAnnotationControls(highlight, meta, {
     canReview,
     canReply,
@@ -115,6 +147,8 @@ function HighlighterView({
   onLeftOpenChange,
   isMobile,
   utilsRef,
+  readOnly,
+  onOpenHighlight,
 }) {
   const [utilsReady, setUtilsReady] = useState(false);
   const readyRef = useRef(false);
@@ -174,8 +208,8 @@ function HighlighterView({
         <PdfHighlighter
           pdfDocument={pdfDocument}
           highlights={highlights}
-          enableAreaSelection={() => areaMode}
-          areaSelectionMode={areaMode}
+          enableAreaSelection={() => (readOnly ? false : areaMode)}
+          areaSelectionMode={readOnly ? false : areaMode}
           pdfScaleValue={scale}
           initialPage={initialPage}
           onPageChange={onPageChange}
@@ -188,7 +222,7 @@ function HighlighterView({
               setUtilsReady(true);
             }
           }}
-          selectionTip={<SelectionTip onSave={onSaveSelection} />}
+          selectionTip={readOnly ? null : <SelectionTip onSave={onSaveSelection} />}
           style={{ height: '100%' }}
         >
           <HighlightContainer
@@ -198,6 +232,8 @@ function HighlighterView({
             onDelete={actions.remove}
             onSkipNext={actions.skipNext}
             hasNext={hasNext}
+            readOnly={readOnly}
+            onOpenOld={onOpenHighlight}
           />
         </PdfHighlighter>
       </div>
@@ -228,6 +264,33 @@ function PdfViewerApp() {
   const [pulling, setPulling] = useState(false);
   const [pullMessage, setPullMessage] = useState(null);
   const [pullCount, setPullCount] = useState(0);
+  // Mode banding berkas sebelumnya (hanya bila induk ber-PDF & boleh dilihat).
+  const readPref = (key, def) => {
+    try {
+      const v = window.localStorage.getItem(key);
+      return v === null ? def : v === '1';
+    } catch (e) {
+      return def;
+    }
+  };
+  const [compareOpen, setCompareOpen] = useState(() => readPref('pdf-compare-open', false));
+  const [compareAnn, setCompareAnn] = useState(() => readPref('pdf-compare-ann', true));
+  const [syncOn, setSyncOn] = useState(() => readPref('pdf-compare-sync', true));
+  const [compareTab, setCompareTab] = useState('new');
+  const [parentAnnotations, setParentAnnotations] = useState([]);
+  const [mainViewerReady, setMainViewerReady] = useState(false);
+  const [parentViewerReady, setParentViewerReady] = useState(false);
+  const parentUtilsRef = useRef(null);
+  const syncingRef = useRef(false);
+  useEffect(() => { try { window.localStorage.setItem('pdf-compare-open', compareOpen ? '1' : '0'); } catch (e) {} }, [compareOpen]);
+  useEffect(() => { try { window.localStorage.setItem('pdf-compare-ann', compareAnn ? '1' : '0'); } catch (e) {} }, [compareAnn]);
+  useEffect(() => { try { window.localStorage.setItem('pdf-compare-sync', syncOn ? '1' : '0'); } catch (e) {} }, [syncOn]);
+  useEffect(() => {
+    if (!compareOpen) {
+      setParentViewerReady(false);
+      parentUtilsRef.current = null;
+    }
+  }, [compareOpen]);
   const sidebarCloseRef = useRef(null);
   const spread = 0; // Selalu satu halaman (mode spread dimatikan agar fokus & stabil).
 
@@ -422,6 +485,78 @@ function PdfViewerApp() {
     });
     return map;
   }, [annotations]);
+
+  // ---------------------------------------------------------------- banding berkas sebelumnya
+  useEffect(() => {
+    if (!compareOpen || !parentCommentsUrl) return;
+    let cancelled = false;
+    fetch(parentCommentsUrl + '?type=draft', { credentials: 'same-origin' })
+      .then((r) => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then((list) => {
+        if (!cancelled) setParentAnnotations(list.map(toAnnotation));
+      })
+      .catch(() => {
+        if (!cancelled) setParentAnnotations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareOpen, parentCommentsUrl]);
+
+  const noopActions = useMemo(() => ({ reply: () => {}, toggleResolve: () => {}, remove: () => {}, skipNext: () => {} }), []);
+
+  const parentHighlights = useMemo(() => parentAnnotations.map((a) => a.highlight), [parentAnnotations]);
+  const parentById = useMemo(() => {
+    const map = {};
+    parentAnnotations.forEach((a) => {
+      map[String(a.id)] = a;
+    });
+    return map;
+  }, [parentAnnotations]);
+
+  const scrollParentTo = useCallback((hl) => {
+    try {
+      const target = parentById[String(hl.id)] || hl;
+      if (parentUtilsRef.current && target.highlight) {
+        parentUtilsRef.current.scrollToHighlight(target.highlight);
+      }
+    } catch (e) { /* abaikan */ }
+  }, [parentById]);
+
+  const handleMainUtilsReady = useCallback(() => {
+    setMainViewerReady(true);
+    handleUtilsReady();
+  }, [handleUtilsReady]);
+
+  // Sinkron gulir proporsional dua arah; toleransi 2px cegah pantulan.
+  useEffect(() => {
+    if (!compareOpen || !syncOn) return;
+    const a = utilsRef.current?.getViewer?.()?.container;
+    const b = parentUtilsRef.current?.getViewer?.()?.container;
+    if (!a || !b || a === b) return;
+    const apply = (from, to) => {
+      if (syncingRef.current) return;
+      const fMax = from.scrollHeight - from.clientHeight;
+      const tMax = to.scrollHeight - to.clientHeight;
+      if (fMax <= 0 || tMax <= 0) return;
+      const target = (from.scrollTop / fMax) * tMax;
+      if (Math.abs(to.scrollTop - target) < 2) return;
+      syncingRef.current = true;
+      to.scrollTop = target;
+      requestAnimationFrame(() => { syncingRef.current = false; });
+    };
+    const onA = () => apply(a, b);
+    const onB = () => apply(b, a);
+    a.addEventListener('scroll', onA, { passive: true });
+    b.addEventListener('scroll', onB, { passive: true });
+    return () => {
+      a.removeEventListener('scroll', onA);
+      b.removeEventListener('scroll', onB);
+    };
+  }, [compareOpen, syncOn, mainViewerReady, parentViewerReady, activeType]);
 
   // ---------------------------------------------------------------- navigasi hash ala demo
   const scrollToAnnotation = useCallback((a) => {
@@ -684,6 +819,173 @@ function PdfViewerApp() {
     ? `absolute inset-y-0 left-0 z-40 w-80 max-w-[85vw] bg-bg-surface border-r border-border transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
     : `flex-shrink-0 border-r border-border transition-all duration-300 overflow-hidden ${sidebarOpen ? 'w-80' : 'w-0 border-r-0'}`;
 
+  const showCompare = compareOpen && canCompare;
+
+  const mainPane = (
+    <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-bg-surface">
+      {isMobile && sidebarOpen && (
+        <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />
+      )}
+      {isMobile && sidebarOpen && (
+        <button
+          ref={sidebarCloseRef}
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setSidebarOpen(false); }}
+          aria-label="Tutup panel anotasi"
+          className="absolute right-2 top-2 z-50 rounded-lg bg-bg-surface px-3 py-2 text-xs font-semibold shadow-lg border border-border"
+        >
+          Tutup ✕ (Esc)
+        </button>
+      )}
+
+      <div className={sidebarClass}>
+        <div className="h-full w-80 max-w-[85vw]">
+          <AnnotationSidebar
+            annotations={annotations}
+            scrolledId={scrolledId}
+            canReview={canReview}
+            canReply={canReply}
+            canDiscuss={canDiscuss}
+            currentUserId={currentUserId}
+            unrespondedCount={unrespondedDosen.length}
+            onOpen={openAnnotation}
+            onReply={saveReply}
+            onToggleResolve={toggleResolve}
+            onDelete={removeAnnotation}
+            onBuildFeedback={buildFeedback}
+            // Footer feedback sidebar disembunyikan: tombolnya sudah ada di bar compact.
+            buildFeedbackUrl={null}
+          />
+        </div>
+      </div>
+
+      <div className="relative min-w-0 flex-1">
+        {error === 'NON_PDF' ? (
+          <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-sm">
+            <p className="font-semibold">File ini bukan PDF sehingga tidak bisa dianotasi di sini.</p>
+            <p className="text-text-secondary">Unduh file asli, perbaiki, lalu unggah ulang sebagai PDF bila perlu anotasi.</p>
+            <a href={pdfUrl} download className="rounded-lg bg-brand px-4 py-2 font-semibold text-[#0b1420] hover:opacity-90">
+              Unduh file asli
+            </a>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
+            {error}
+          </div>
+        ) : null}
+        {!error && pdfUrl && (
+          <PdfLoader
+            key={activeType}
+            document={pdfUrl}
+            disableAutoFetch={false}
+            beforeLoad={() => (
+              <div className="flex items-center justify-center p-8 text-center text-sm text-text-secondary">
+                Memuat PDF…
+              </div>
+            )}
+            errorMessage={() => (
+              <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
+                Gagal memuat PDF. Pastikan file tersedia dan aset frontend ter-build (lihat README).
+              </div>
+            )}
+          >
+            {(pdfDocument) => (
+              <HighlighterView
+                pdfDocument={pdfDocument}
+                highlights={highlights}
+                annotationsById={annotationsById}
+                actions={actions}
+                hasNext={unrespondedDosen.length > 0}
+                areaMode={areaMode}
+                scale={scale}
+                initialPage={positionsRef.current[activeType]?.page}
+                onPageChange={restorePending}
+                onScaleChange={setScale}
+                onSaveSelection={saveAnnotation}
+                onDocumentReady={setNumPages}
+                onTextDetect={handleTextDetect}
+                onUtilsReady={handleMainUtilsReady}
+                leftOpen={leftOpen}
+                onLeftOpenChange={setLeftOpen}
+                isMobile={isMobile}
+                utilsRef={utilsRef}
+              />
+            )}
+          </PdfLoader>
+        )}
+      </div>
+    </div>
+  );
+
+  const comparePane = showCompare ? (
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-bg-surface">
+      <p className="shrink-0 border-b border-border bg-bg-panel px-3 py-1.5 text-xs">
+        <span className="font-semibold">Ini berkas sebelumnya dari {parentTitle || 'revisi'}</span>
+        <span className="text-text-secondary"> — hanya bisa dilihat</span>
+      </p>
+      <div className="relative min-h-0 flex-1">
+        <PdfLoader
+          key="parent"
+          document={parentPdfUrl}
+          disableAutoFetch={false}
+          beforeLoad={() => (
+            <div className="flex items-center justify-center p-8 text-center text-sm text-text-secondary">
+              Memuat berkas sebelumnya…
+            </div>
+          )}
+          errorMessage={() => (
+            <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
+              Gagal memuat berkas sebelumnya.
+            </div>
+          )}
+        >
+          {(parentDoc) => (
+            <HighlighterView
+              readOnly
+              pdfDocument={parentDoc}
+              highlights={compareAnn ? parentHighlights : []}
+              annotationsById={parentById}
+              actions={noopActions}
+              hasNext={false}
+              areaMode={false}
+              scale={scale}
+              initialPage={undefined}
+              onPageChange={() => {}}
+              onScaleChange={setScale}
+              onSaveSelection={() => {}}
+              onDocumentReady={() => {}}
+              onTextDetect={() => {}}
+              onUtilsReady={() => setParentViewerReady(true)}
+              leftOpen={false}
+              onLeftOpenChange={() => {}}
+              isMobile={isMobile}
+              utilsRef={parentUtilsRef}
+              onOpenHighlight={scrollParentTo}
+            />
+          )}
+        </PdfLoader>
+      </div>
+    </div>
+  ) : null;
+
+  const compareTabs = showCompare && isMobile && (
+    <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 self-start shrink-0" role="group" aria-label="Pilih berkas">
+      <button
+        onClick={() => setCompareTab('new')}
+        aria-pressed={compareTab === 'new'}
+        className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareTab === 'new' ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+        Berkas baru
+      </button>
+      <button
+        onClick={() => setCompareTab('old')}
+        aria-pressed={compareTab === 'old'}
+        className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareTab === 'old' ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+        Berkas sebelumnya
+      </button>
+    </div>
+  );
+
   return (
     <div className={isFullscreen
       ? 'fixed inset-0 z-[60] bg-bg-base flex flex-col gap-2 p-2'
@@ -729,6 +1031,33 @@ function PdfViewerApp() {
             </button>
           )}
         </div>
+        {canCompare && (
+          <>
+            <span className="w-px h-5 bg-border shrink-0" />
+            <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Banding berkas">
+              <button onClick={() => setCompareOpen((v) => !v)}
+                aria-pressed={compareOpen}
+                title="Tampilkan berkas sebelumnya di samping"
+                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareOpen ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+                Berkas sebelumnya: {compareOpen ? 'Tampil' : 'Sembunyi'}
+              </button>
+              <button onClick={() => compareOpen && setCompareAnn((v) => !v)}
+                disabled={!compareOpen}
+                aria-pressed={compareAnn}
+                title="Tampilkan anotasi pada berkas sebelumnya"
+                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${compareAnn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+                Anotasi lama: {compareAnn ? 'Tampil' : 'Sembunyi'}
+              </button>
+              <button onClick={() => compareOpen && setSyncOn((v) => !v)}
+                disabled={!compareOpen}
+                aria-pressed={syncOn}
+                title="Gulir kedua berkas berbarengan"
+                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${syncOn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+                Scroll Sync: {syncOn ? 'Aktif' : 'Nonaktif'}
+              </button>
+            </div>
+          </>
+        )}
         <span className="w-px h-5 bg-border shrink-0" />
         <div className="flex items-center gap-1 rounded-md bg-bg-panel p-0.5 shrink-0" role="search">
           <Search className="h-3.5 w-3.5 mx-1 text-text-secondary" />
@@ -879,102 +1208,17 @@ function PdfViewerApp() {
         </div>
       )}
 
-      {/* Main flex-fill: sidebar anotasi + viewer PDF */}
-      {/* Mobile: sidebar menjadi drawer + tombol tutup yang bisa difokus (Esc menutup). */}
-      <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-lg border border-border bg-bg-surface">
-        {isMobile && sidebarOpen && (
-          <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />
-        )}
-        {isMobile && sidebarOpen && (
-          <button
-            ref={sidebarCloseRef}
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setSidebarOpen(false); }}
-            aria-label="Tutup panel anotasi"
-            className="absolute right-2 top-2 z-50 rounded-lg bg-bg-surface px-3 py-2 text-xs font-semibold shadow-lg border border-border"
-          >
-            Tutup ✕ (Esc)
-          </button>
-        )}
-
-        <div className={sidebarClass}>
-          <div className="h-full w-80 max-w-[85vw]">
-            <AnnotationSidebar
-              annotations={annotations}
-              scrolledId={scrolledId}
-              canReview={canReview}
-              canReply={canReply}
-              canDiscuss={canDiscuss}
-              currentUserId={currentUserId}
-              unrespondedCount={unrespondedDosen.length}
-              onOpen={openAnnotation}
-              onReply={saveReply}
-              onToggleResolve={toggleResolve}
-              onDelete={removeAnnotation}
-              onBuildFeedback={buildFeedback}
-              // Footer feedback sidebar disembunyikan: tombolnya sudah ada di bar compact.
-              buildFeedbackUrl={null}
-            />
-          </div>
+      {compareTabs}
+      {showCompare && !isMobile ? (
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden">
+          {mainPane}
+          {comparePane}
         </div>
-
-        <div className="relative min-w-0 flex-1">
-          {error === 'NON_PDF' ? (
-            <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-sm">
-              <p className="font-semibold">File ini bukan PDF sehingga tidak bisa dianotasi di sini.</p>
-              <p className="text-text-secondary">Unduh file asli, perbaiki, lalu unggah ulang sebagai PDF bila perlu anotasi.</p>
-              <a href={pdfUrl} download className="rounded-lg bg-brand px-4 py-2 font-semibold text-[#0b1420] hover:opacity-90">
-                Unduh file asli
-              </a>
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
-              {error}
-            </div>
-          ) : null}
-          {!error && pdfUrl && (
-            <PdfLoader
-              key={activeType}
-              document={pdfUrl}
-              disableAutoFetch={false}
-              beforeLoad={() => (
-                <div className="flex items-center justify-center p-8 text-center text-sm text-text-secondary">
-                  Memuat PDF…
-                </div>
-              )}
-              errorMessage={() => (
-                <div className="flex items-center justify-center p-8 text-center text-sm text-status-danger">
-                  Gagal memuat PDF. Pastikan file tersedia dan aset frontend ter-build (lihat README).
-                </div>
-              )}
-            >
-              {(pdfDocument) => (
-                <HighlighterView
-                  pdfDocument={pdfDocument}
-                  highlights={highlights}
-                  annotationsById={annotationsById}
-                  actions={actions}
-                  hasNext={unrespondedDosen.length > 0}
-                  areaMode={areaMode}
-                  scale={scale}
-                  initialPage={positionsRef.current[activeType]?.page}
-                  onPageChange={restorePending}
-                  onScaleChange={setScale}
-                  onSaveSelection={saveAnnotation}
-                  onDocumentReady={setNumPages}
-                  onTextDetect={handleTextDetect}
-                  onUtilsReady={handleUtilsReady}
-                  leftOpen={leftOpen}
-                  onLeftOpenChange={setLeftOpen}
-                  isMobile={isMobile}
-                  utilsRef={utilsRef}
-                />
-              )}
-            </PdfLoader>
-          )}
-        </div>
-      </div>
+      ) : (
+        <>
+          {(!showCompare || !isMobile || compareTab === 'new') ? mainPane : comparePane}
+        </>
+      )}
     </div>
   );
 }

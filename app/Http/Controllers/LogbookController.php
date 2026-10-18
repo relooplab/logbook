@@ -108,11 +108,12 @@ class LogbookController extends Controller
             }
         }
 
-        // Kalimat status gabungan aside (alur + simpan + kirim).
+        // Kalimat status gabungan aside (alur + simpan + kirim), bahasa
+        // pengguna tanpa jargon infrastruktur.
         $workflowLabel = 'Draf';
         $combinedStatus = $draft
             ? (LogbookEntry::STATUS_LABELS[$draft->status] ?? 'Draf').' · tersimpan '.($draft->updated_at?->diffForHumans() ?? 'baru saja').' · belum dikirim'
-            : 'Belum ada simpanan di server';
+            : 'Belum ada simpanan — mulai mengisi';
 
         // Nilai awal form: draf yang dilanjutkan menang atas default baru.
         $defaultTanggal = old('tanggal_bimbingan', $draft?->tanggal_bimbingan?->format('Y-m-d') ?? now()->format('Y-m-d'));
@@ -274,11 +275,12 @@ class LogbookController extends Controller
             }
         }
 
-        // Kalimat status gabungan aside (alur + simpan + kirim).
+        // Kalimat status gabungan aside (alur + simpan + kirim), bahasa
+        // pengguna tanpa jargon infrastruktur.
         $workflowLabel = 'Revisi Sedang Dikerjakan';
         $combinedStatus = $draft
             ? (LogbookEntry::STATUS_LABELS[$draft->status] ?? 'Revisi Sedang Dikerjakan').' · tersimpan '.($draft->updated_at?->diffForHumans() ?? 'baru saja').' · belum dikirim'
-            : 'Belum ada simpanan di server';
+            : 'Belum ada simpanan — mulai mengisi';
 
         // Daftar draf revisi program ini untuk kartu Kelola Draf.
         $deletableEntries = $ta->entries()
@@ -1501,6 +1503,7 @@ class LogbookController extends Controller
         $validated = $request->validate([
             'index' => ['required', 'integer', 'min:0'],
             'reply' => ['nullable', 'string', 'max:2000'],
+            'resolve_source' => ['nullable', 'boolean'],
         ]);
 
         $rows = collect($logbook->riwayat_perbaikan ?? [])
@@ -1508,43 +1511,119 @@ class LogbookController extends Controller
             ->values()->all();
         abort_if(! array_key_exists($validated['index'], $rows), 404);
 
-        if (! filled($validated['reply'] ?? null)) {
-            unset($rows[$validated['index']]['dosen_reply'], $rows[$validated['index']]['dosen_reply_at']);
+        // Spasi saja dianggap kosong (hindari bubble berlabel tanpa isi).
+        $replyText = trim((string) ($validated['reply'] ?? ''));
+        if ($replyText === '') {
+            unset($rows[$validated['index']]['dosen_reply'], $rows[$validated['index']]['dosen_reply_at'],
+                $rows[$validated['index']]['dosen_reply_ack'], $rows[$validated['index']]['dosen_reply_ack_at']);
         } else {
-            $rows[$validated['index']]['dosen_reply'] = $validated['reply'];
+            // Balasan baru menggugurkan tanda tindak lanjut yang lama.
+            if (trim((string) ($rows[$validated['index']]['dosen_reply'] ?? '')) !== $replyText) {
+                unset($rows[$validated['index']]['dosen_reply_ack'], $rows[$validated['index']]['dosen_reply_ack_at']);
+            }
+            $rows[$validated['index']]['dosen_reply'] = $replyText;
             $rows[$validated['index']]['dosen_reply_at'] = now()->toIso8601String();
         }
         $logbook->update(['riwayat_perbaikan' => array_values($rows)]);
 
         // Panggil mahasiswa: notifikasi deep-link ke baris yang dibalas.
-        if (filled($validated['reply'] ?? null) && ($owner = $logbook->mahasiswaTa?->mahasiswa)) {
+        if ($replyText !== '' && ($owner = $logbook->mahasiswaTa?->mahasiswa)) {
             $this->bestEffort(fn () => $owner->notify(new ActivityNotification(
-                'Dosen membalas jawaban baris '.($validated['index'] + 1).': "'.mb_strimwidth($validated['reply'], 0, 120, '…').'"',
+                'Dosen membalas jawaban baris '.($validated['index'] + 1).': "'.mb_strimwidth($replyText, 0, 120, '…').'"',
                 route('logbook.show', $logbook).'#jawaban-baris-'.$validated['index'],
                 'Balasan Jawaban',
             )));
         }
 
+        // Opsional: tandai anotasi sumber selesai (terverifikasi milik
+        // entri ini / induknya, hanya reviewer yang lolos authorize di atas).
+        $sourceResolved = false;
+        if (! empty($validated['resolve_source'])) {
+            $source = $this->findRowSourceComment($logbook, $rows[$validated['index']] ?? []);
+            if ($source && $source->resolution_status !== PdfComment::STATUS_RESOLVED) {
+                $source->setResolutionStatus(PdfComment::STATUS_RESOLVED);
+                $source->save();
+                $sourceResolved = true;
+            }
+        }
+
         return response()->json([
             'ok' => true,
             'saved_at' => $logbook->fresh()->updated_at?->toIso8601String(),
+            'source_resolved' => $sourceResolved,
         ]);
+    }
+
+    /**
+     * Cari anotasi sumber satu baris jawaban: id tersimpan dulu (wajib
+     * milik entri ini/induknya), fallback cocok teks. Kembalikan null bila
+     * tak ada — ID palsu dari request tidak pernah dipercaya buta.
+     */
+    private function findRowSourceComment(LogbookEntry $logbook, array $row): ?PdfComment
+    {
+        $pool = $logbook->comments->merge($logbook->parentEntry?->comments ?? collect());
+        if (! empty($row['komentar_comment_id'])) {
+            $found = $pool->firstWhere('id', (int) $row['komentar_comment_id']);
+            if ($found) {
+                return $found;
+            }
+        }
+        $text = trim((string) ($row['komentar_dosen'] ?? ''));
+        if ($text !== '') {
+            return $pool->first(fn ($c) => trim((string) $c->comment) === $text);
+        }
+
+        return null;
+    }
+
+    /**
+     * Tandai balasan dosen sudah ditindaklanjuti oleh pemilik program.
+     * Menutup loop pertanyaan → tindak lanjut di kartu Jawaban.
+     */
+    public function ackJawabanReply(Request $request, LogbookEntry $logbook): JsonResponse
+    {
+        abort_unless($logbook->mahasiswaTa?->user_id === $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'index' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $rows = collect($logbook->riwayat_perbaikan ?? [])
+            ->map(fn ($row) => is_array($row) ? $row : [])
+            ->values()->all();
+        abort_if(! array_key_exists($validated['index'], $rows) || empty($rows[$validated['index']]['dosen_reply']), 404);
+
+        $rows[$validated['index']]['dosen_reply_ack'] = true;
+        $rows[$validated['index']]['dosen_reply_ack_at'] = now()->toIso8601String();
+        $logbook->update(['riwayat_perbaikan' => array_values($rows)]);
+
+        if ($dosenId = $logbook->dosen_id) {
+            $this->bestEffort(fn () => \App\Models\User::find($dosenId)?->notify(new ActivityNotification(
+                'Mahasiswa menindaklanjuti balasan Anda (baris '.($validated['index'] + 1).').',
+                route('logbook.show', $logbook).'#jawaban-baris-'.$validated['index'],
+                'Tindak Lanjut Balasan',
+            )));
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     /**
      * Bersihkan kunci balasan dosen dari baris kiriman mahasiswa (anti
      * injeksi) lalu pertahankan balasan lama per indeks agar kirim ulang
-     * mahasiswa tidak menghapus balasan dosen.
+     * mahasiswa tidak menghapus balasan dosen. Terakhir, runtuhkan baris
+     * yang identik penuh (penambah client tanpa dedupe antar-sumber bisa
+     * menggandakan baris yang sama).
      */
     private function sanitizeRiwayatRows(array $rows, ?array $oldRows = null): array
     {
         $old = array_values($oldRows ?? []);
 
-        return collect($rows)->values()->map(function ($row, $i) use ($old) {
+        $clean = collect($rows)->values()->map(function ($row, $i) use ($old) {
             $row = is_array($row) ? $row : [];
-            unset($row['dosen_reply'], $row['dosen_reply_at']);
+            unset($row['dosen_reply'], $row['dosen_reply_at'], $row['dosen_reply_ack'], $row['dosen_reply_ack_at']);
             if (isset($old[$i]) && is_array($old[$i])) {
-                foreach (['dosen_reply', 'dosen_reply_at'] as $key) {
+                foreach (['dosen_reply', 'dosen_reply_at', 'dosen_reply_ack', 'dosen_reply_ack_at'] as $key) {
                     if (! empty($old[$i][$key])) {
                         $row[$key] = $old[$i][$key];
                     }
@@ -1553,6 +1632,34 @@ class LogbookController extends Controller
 
             return $row;
         })->all();
+
+        // Runtuhkan baris ber-KONTEN sama (halaman + komentar + perbaikan,
+        // abaikan beda spasi/status): penambah client tanpa dedupe antar-sumber
+        // bisa menggandakan baris yang sama dengan status berbeda. Field yang
+        // kosong di kemunculan pertama diisi dari kembarannya (status,
+        // balasan dosen) agar tak ada informasi yang hilang.
+        $byContent = [];
+        foreach ($clean as $row) {
+            $key = implode('￨', [
+                trim((string) ($row['halaman'] ?? '')),
+                trim((string) ($row['komentar_dosen'] ?? '')),
+                trim((string) ($row['perbaikan'] ?? '')),
+            ]);
+            if (! isset($byContent[$key])) {
+                $byContent[$key] = $row;
+                continue;
+            }
+            foreach ($row as $k => $v) {
+                if (in_array($k, ['halaman', 'komentar_dosen', 'perbaikan'], true)) {
+                    continue;
+                }
+                if (($byContent[$key][$k] ?? '') === '' && filled($v)) {
+                    $byContent[$key][$k] = $v;
+                }
+            }
+        }
+
+        return array_values($byContent);
     }
 
     /**
@@ -1798,7 +1905,7 @@ class LogbookController extends Controller
             && LogbookEntry::pendingRevisionsFor($logbook->mahasiswaTa)->isNotEmpty()) {
             $action = LogbookEntry::pendingRevisionActionFor($logbook->mahasiswaTa);
             $link = $action['url'] ?? route('logbook.create-revisi');
-            return back()->with('error', 'Jawab revisinya dulu sebelum mengirim sesi ini. <a href="'.$link.'" class="underline font-semibold">Jawab Revisi →</a>');
+            return back()->with('error', 'Kirim perbaikannya dulu sebelum mengirim sesi ini. <a href="'.$link.'" class="underline font-semibold">Kirim Perbaikan →</a>');
         }
 
         // Alur anotasi-dulu: revisi yang drafnya kosong belum boleh dikirim;
@@ -2346,7 +2453,7 @@ class LogbookController extends Controller
         }
 
         // Konteks kembali ke wizard create logbook (?from=create-logbook):
-        // sama — mendarat di langkah 3 dengan autopull + draft yang dilanjutkan.
+        // sama — mendarat lagi di langkah 3 dengan autopull, bukan di halaman Edit (konteks wizard hilang).
         if ($fromCreateLogbook && $logbook->jenis === LogbookEntry::JENIS_LOGBOOK) {
             $wizardDraftId = $logbook->id;
             $wizardReturnUrl = route('logbook.create', array_filter([
@@ -2357,7 +2464,24 @@ class LogbookController extends Controller
             ]));
         }
 
-        return view('logbook.pdf-viewer', compact('logbook', 'isDraftPdf', 'isCatatanPdf', 'wizardParentId', 'wizardDraftId', 'wizardReturnUrl'));
+        // Mode banding: PDF induk (revisi) bila ada, boleh dilihat user ini,
+        // dan berupa PDF. Viewer memakai ini untuk kolom "Berkas sebelumnya".
+        $parent = $logbook->parentEntry;
+        $parentPdfUrl = null;
+        $parentCommentsUrl = null;
+        $parentTitle = null;
+        $parentEntryId = null;
+        if ($parent && $request->user()->can('view', $parent) && $parent->lampiran_path) {
+            $parentName = (string) ($parent->lampiran_original_name ?? '');
+            if ($parentName === '' || str_ends_with(strtolower($parentName), '.pdf')) {
+                $parentPdfUrl = route('logbook.pdf', $parent);
+                $parentCommentsUrl = route('logbook.pdf.comments', $parent);
+                $parentTitle = $parent->sesi_ke ? 'Sesi '.$parent->sesi_ke : 'Berkas sebelumnya';
+                $parentEntryId = $parent->id;
+            }
+        }
+
+        return view('logbook.pdf-viewer', compact('logbook', 'isDraftPdf', 'isCatatanPdf', 'wizardParentId', 'wizardDraftId', 'wizardReturnUrl', 'parentPdfUrl', 'parentCommentsUrl', 'parentTitle', 'parentEntryId'));
     }
 
     public function comments(Request $request, LogbookEntry $logbook): JsonResponse
@@ -2495,7 +2619,9 @@ class LogbookController extends Controller
      * -> tarik otomatis menjadi isian tanpa tulis manual.
      * Hanya pemilik yang masih bisa edit; isian lama dipertahankan dan
      * anotasi hanya menambah yang baru. Idempoten: anotasi yang sudah
-     * tertarik (ada penanda di payload) tidak ditarik ulang.
+     * tertarik (ada penanda di payload) tidak ditarik ulang. Anotasi yang
+     * sudah dijawab di viewer (ada balasan) juga dilewati — jawabannya
+     * sudah ada di thread, menariknya lagi hanya menduplikasi isi.
      */
     public function pullAnnotations(Request $request, LogbookEntry $logbook): JsonResponse
     {
@@ -2507,6 +2633,7 @@ class LogbookController extends Controller
             ? $logbook->mahasiswaTa->allMembers()->pluck('id')->all()
             : [$logbook->mahasiswaTa?->user_id];
         $comments = $logbook->comments()
+            ->with(['replies' => fn ($q) => $q->select('id', 'pdf_comment_id', 'body')])
             ->where('file_type', PdfComment::FILE_TYPE_DRAFT)
             ->whereIn('user_id', array_filter($memberIds))
             ->where('resolution_status', '!=', PdfComment::STATUS_RESOLVED)
@@ -2516,6 +2643,7 @@ class LogbookController extends Controller
         $pulled = 0;
         $skippedResolved = 0;
         $skippedEmpty = 0;
+        $skippedAnswered = 0;
 
         if ($logbook->jenis === LogbookEntry::JENIS_REVISI) {
             $rows = collect($logbook->riwayat_perbaikan ?? [])->map(fn ($row) => is_array($row) ? $row : [])->values()->all();
@@ -2523,6 +2651,14 @@ class LogbookController extends Controller
             foreach ($comments as $comment) {
                 $payload = is_array($comment->payload) ? $comment->payload : [];
                 if (! empty($payload['pulled_to_riwayat'])) {
+                    continue;
+                }
+                if ($this->commentHasAnswer($comment)) {
+                    $payload['pulled_to_riwayat'] = true;
+                    $payload['pulled_answered'] = true;
+                    $comment->payload = $payload;
+                    $comment->save();
+                    $skippedAnswered++;
                     continue;
                 }
                 if (! filled($comment->comment)) {
@@ -2544,6 +2680,7 @@ class LogbookController extends Controller
                 $newRow = [
                     'halaman' => 'Hal. '.($comment->page_number ?: '—'),
                     'komentar_dosen' => '',
+                    'komentar_comment_id' => $comment->id,
                     'perbaikan' => (string) $comment->comment,
                     'status' => LogbookEntry::PERBAIKAN_DRAF,
                 ];
@@ -2568,6 +2705,7 @@ class LogbookController extends Controller
                 'pulled' => $pulled,
                 'skipped_resolved' => $skippedResolved,
                 'skipped_empty' => $skippedEmpty,
+                'skipped_answered' => $skippedAnswered,
                 'rows' => array_values($logbook->fresh()->riwayat_perbaikan ?? []),
             ]);
         }
@@ -2579,6 +2717,14 @@ class LogbookController extends Controller
         foreach ($comments as $comment) {
             $payload = is_array($comment->payload) ? $comment->payload : [];
             if (! empty($payload['pulled_to_riwayat'])) {
+                continue;
+            }
+            if ($this->commentHasAnswer($comment)) {
+                $payload['pulled_to_riwayat'] = true;
+                $payload['pulled_answered'] = true;
+                $comment->payload = $payload;
+                $comment->save();
+                $skippedAnswered++;
                 continue;
             }
             if (! filled($comment->comment)) {
@@ -2600,6 +2746,7 @@ class LogbookController extends Controller
             $newRow = [
                 'halaman' => 'Hal. '.($comment->page_number ?: '—'),
                 'komentar_dosen' => '',
+                'komentar_comment_id' => $comment->id,
                 'perbaikan' => (string) $comment->comment,
                 'status' => LogbookEntry::PERBAIKAN_DRAF,
             ];
@@ -2624,8 +2771,27 @@ class LogbookController extends Controller
             'pulled' => $pulled,
             'skipped_resolved' => $skippedResolved,
             'skipped_empty' => $skippedEmpty,
+            'skipped_answered' => $skippedAnswered,
             'rows' => array_values($logbook->fresh()->riwayat_perbaikan ?? []),
         ]);
+    }
+
+    /**
+     * Anotasi dianggap sudah ada jawabannya bila punya balasan (model
+     * replies maupun kolom legacy) — menariknya lagi hanya menduplikasi isi.
+     */
+    private function commentHasAnswer(PdfComment $comment): bool
+    {
+        if (filled($comment->reply)) {
+            return true;
+        }
+        foreach ($comment->replies ?? [] as $reply) {
+            if (filled($reply->body ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Resolve current and parent annotations when a review is approved. */

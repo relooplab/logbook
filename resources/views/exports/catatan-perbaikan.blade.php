@@ -44,11 +44,12 @@
     <table class="data">
         <thead>
             <tr>
-                <th style="width:6%">No</th>
-                <th style="width:16%">Halaman/Bagian</th>
-                <th style="width:28%">Komentar Dosen</th>
-                <th style="width:34%">Perbaikan yang Dilakukan</th>
-                <th style="width:16%">Status</th>
+                <th style="width:5%">No</th>
+                <th style="width:12%">Halaman/Bagian</th>
+                <th style="width:22%">Komentar Dosen</th>
+                <th style="width:25%">Perbaikan yang Dilakukan</th>
+                <th style="width:22%">Balasan Dosen</th>
+                <th style="width:14%">Status</th>
             </tr>
         </thead>
         <tbody>
@@ -58,6 +59,7 @@
                     <td>{{ $r['halaman'] ?? '—' }}</td>
                     <td>{{ $r['komentar_dosen'] ?? '—' }}</td>
                     <td>{{ $r['perbaikan'] ?? '—' }}</td>
+                    <td>{{ $r['dosen_reply'] ?? '—' }}</td>
                     <td>
                         @php $status = $r['status'] ?? '—'; @endphp
                         <span class="
@@ -69,7 +71,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="5" style="text-align:center">Tidak ada data perbaikan.</td></tr>
+                <tr><td colspan="6" style="text-align:center">Tidak ada data perbaikan.</td></tr>
             @endforelse
         </tbody>
     </table>

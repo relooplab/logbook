@@ -7,9 +7,11 @@
     @php
         $komentarText = $row['komentar_dosen'] ?? '';
         $komentarManual = $komentarText !== '' && ! collect($commentOptions)->contains('text', $komentarText);
+        $komentarMatchedId = $komentarManual ? null : (collect($commentOptions)->firstWhere('text', $komentarText)['id'] ?? ($row['komentar_comment_id'] ?? null));
     @endphp
     <div>
         <label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-{{ $i }}">Komentar dosen</label>
+        <input type="hidden" name="riwayat_perbaikan[{{ $i }}][komentar_comment_id]" data-komentar-id value="{{ $komentarMatchedId ?? '' }}">
         <select id="riwayat-komentar-{{ $i }}" data-komentar-select @if (! $komentarManual) name="riwayat_perbaikan[{{ $i }}][komentar_dosen]" @endif class="form-control">
             <option value="">— Pilih komentar —</option>
             @foreach ($commentOptions as $c)

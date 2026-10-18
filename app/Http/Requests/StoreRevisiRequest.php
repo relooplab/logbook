@@ -83,6 +83,7 @@ class StoreRevisiRequest extends FormRequest
             'riwayat_perbaikan' => $isSubmit ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
             'riwayat_perbaikan.*.halaman' => [$cell, 'string', 'max:255'],
             'riwayat_perbaikan.*.komentar_dosen' => [$cell, 'string', 'max:1000'],
+            'riwayat_perbaikan.*.komentar_comment_id' => ['nullable', 'integer', 'min:1'],
             'riwayat_perbaikan.*.perbaikan' => [$cell, 'string', 'max:2000'],
             'riwayat_perbaikan.*.status' => [$cell, 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)],
             'lampiran' => [$hasDraftFile ? 'nullable' : 'required', 'file', 'mimes:'.$mimes, 'max:'.$maxKb],

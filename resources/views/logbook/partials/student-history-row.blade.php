@@ -10,6 +10,8 @@
     $threadChild = $threadChild ?? false;
     $parentId = $parentId ?? null;
     $childCount = $childCount ?? 0;
+    $depth = $depth ?? ($threadChild ? 1 : 0);
+    $depthMark = $depth > 0 ? str_repeat('↳ ', $depth) : '';
     $canResume = $threadChild && $isMahasiswa && auth()->user()->can('update', $entry);
 @endphp
 <tr class="border-b border-border last:border-0 hover:bg-bg-panel/50 {{ $needsAction ? 'bg-status-pending/5' : '' }}"
@@ -36,7 +38,7 @@
     <td class="py-3 px-4 font-mono">{{ $entry->jenis === 'revisi' ? '—' : $entry->sesi_ke }}</td>
     <td class="py-3 px-4 table-col-jenis">
         @if ($threadChild)
-            <span title="Jawaban untuk entri #{{ $parentId }}">↳ Revisi</span>
+            <span title="Jawaban untuk entri #{{ $parentId }}">{{ $depthMark }}Revisi</span>
         @else
             {{ ucfirst($entry->jenis) }}
             @if ($entry->parent_entry_id)
@@ -45,7 +47,7 @@
         @endif
     </td>
     <td class="py-3 px-4">
-        @if ($threadChild)<span class="text-text-secondary" aria-hidden="true">↳ </span>@endif{{ $entry->topik ?? 'Revisi' }}
+        @if ($threadChild)<span class="text-text-secondary" aria-hidden="true">{{ $depthMark }}</span>@endif{{ $entry->topik ?? 'Revisi' }}
         @if (!$isMahasiswa && $entry->dosen)
             <span class="block text-[10px] text-text-secondary">
                 → {{ $entry->mahasiswaTa?->dosenRoleLabel($entry->dosen) ?? 'Dosen' }}: {{ $entry->dosen->name }}

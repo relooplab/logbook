@@ -19,11 +19,11 @@
         <x-slot:actions>
             @if ($canCreate)
                 @if (!empty($pendingRevisionAction['url']))
-                    <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi →</a>
+                    <a href="{{ $pendingRevisionAction['url'] }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $pendingRevisionAction['label'] ?? 'Kirim Perbaikan' }} →</a>
                     <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Buat Sesi</a>
                 @else
                     <a href="{{ route('logbook.create', ['program' => $ta->jenis]) }}" class="btn-primary flex flex-1 items-center justify-center px-3 py-2 text-sm font-semibold sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Buat Sesi</a>
-                    <a href="{{ route('logbook.index', ['program' => $ta->jenis, 'status' => 'revisi']) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Jawab Revisi</a>
+                    <a href="{{ route('logbook.index', ['program' => $ta->jenis, 'status' => 'revisi']) }}" class="btn-secondary flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Kirim Perbaikan</a>
                 @endif
             @endif
             <a href="{{ route('logbook.index') }}" class="btn-ghost flex flex-1 items-center justify-center px-3 py-2 text-sm sm:flex-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Semua Entri</a>
@@ -33,12 +33,14 @@
         <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
             <p class="font-semibold text-text-primary">
                 @if (($pendingRevisionThreads ?? collect())->count() > 1)
-                    {{ $pendingRevisionThreads->count() }} sesi menunggu jawabanmu
+                    {{ $pendingRevisionThreads->count() }} revisi menunggu jawabanmu
+                @elseif (($pendingRevisionAction['kind'] ?? null) === 'draft')
+                    {{ $pendingRevisionAction['entry']->shortTitle() }} belum dikirim — lanjutkan sekarang
                 @else
-                    {{ $pendingRevisionAction['entry']->shortTitle() }} menunggu jawabanmu
+                    {{ $pendingRevisionAction['entry']->shortTitle() }} diminta revisi — jawab sekarang
                 @endif
             </p>
-            <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">Jawab Revisi →</a>
+            <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Kirim Perbaikan' }} →</a>
             @if (($pendingRevisionThreads ?? collect())->count() > 1)
                 <ul class="mt-3 space-y-1 text-sm">
                     @foreach ($pendingRevisionThreads as $thread)
@@ -63,7 +65,7 @@
             @if ($selectDosen)
                 <a href="{{ route('profile.select-dosen') }}" class="rounded-control border border-status-pending/40 bg-status-pending/10 p-3 text-sm hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"><strong class="block text-text-primary">Pilih Dosen untuk Memulai Program</strong><span class="break-words text-xs text-text-secondary">@if ($rejectedProgram) Permintaan sebelumnya ditolak{{ $ta->alasan_ditolak ? ': '.$ta->alasan_ditolak : '' }}. @endif Pilih Dosen →</span></a>
             @elseif ($pendingApproval)
-                <div role="status" class="rounded-control border border-status-pending/30 bg-status-pending/10 p-3 text-sm"><strong class="block text-text-primary">Menunggu Persetujuan Dosen</strong><span class="text-xs text-text-secondary">Permintaan bimbingan sedang menunggu persetujuan.</span></div>
+                <div role="status" class="rounded-control border border-status-pending/30 bg-status-pending/10 p-3 text-sm"><strong class="block text-text-primary">Menunggu Persetujuan Dosen</strong><span class="text-xs text-text-secondary">Permintaan bimbingan Anda sedang diproses.</span></div>
             @endif
             @if ($missingDetail)
                 <a href="{{ route('profile.index') }}" class="rounded-control border border-status-danger/40 bg-status-danger/10 p-3 text-sm hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"><strong class="block text-text-primary">Lengkapi {{ $ta->isKp() ? 'Tempat Kerja Praktek' : 'Judul Tugas Akhir' }} Anda</strong><span class="text-xs text-text-secondary">Data wajib diisi agar program dapat diproses · Isi di Profil →</span></a>

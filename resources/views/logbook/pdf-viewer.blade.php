@@ -5,6 +5,10 @@
 <script>
     @php $fromWizard = in_array(request()->query('from'), ['create-revisi', 'create-logbook']) && auth()->user()->can('update', $logbook); @endphp
     window.PDF_VIEWER_DATA = {
+        parentPdfUrl: @json($parentPdfUrl ?? null),
+        parentCommentsUrl: @json($parentCommentsUrl ?? null),
+        parentTitle: @json($parentTitle ?? null),
+        parentEntryId: @json($parentEntryId ?? null),
         title: @json($logbook->jenis === "revisi" ? "Revisi" : "Sesi " . $logbook->sesi_ke),
         draftUrl: @if ($logbook->lampiran_path)
             @json(route("logbook.pdf", $logbook))

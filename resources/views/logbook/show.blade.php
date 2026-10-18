@@ -65,7 +65,7 @@
                 @if ($canReviewOther)
                     <p class="mt-2 text-text-secondary">Lihat dulu sebelum menilai entri ini.</p>
                 @else
-                    <p class="mt-2 text-text-secondary">Selesaikan lewat halaman Jawab Revisi.</p>
+                    <p class="mt-2 text-text-secondary">Selesaikan lewat halaman Kirim Perbaikan.</p>
                 @endif
             </div>
         @endif
@@ -99,8 +99,8 @@
             </div>
         @endif
 
-        @if ($owner && $logbook->status === 'revisi' && !$logbook->isLockedByActiveRevision())
-            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id, 'program' => $logbook->mahasiswaTa?->jenis]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Jawab Revisi</a>
+        @if ($owner && !$logbook->isLockedByActiveRevision() && ($logbook->status === 'revisi' || $logbook->needsFollowUpAnswer()))
+            <a href="{{ route('logbook.create-revisi', ['parent_entry_id' => $logbook->id, 'program' => $logbook->mahasiswaTa?->jenis]) }}" class="block text-center px-4 py-2 rounded-xl bg-brand text-[#0b1420] text-sm font-medium hover:opacity-90">Kirim Perbaikan</a>
         @endif
 
         @if ($logbook->status === \App\Models\LogbookEntry::STATUS_ARCHIVED)

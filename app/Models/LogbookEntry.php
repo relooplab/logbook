@@ -242,7 +242,58 @@ class LogbookEntry extends Model
             ->get()
             ->filter(fn (self $e) => $e->isEditable());
 
-        return $requested->concat($drafts)->unique('id')->values();
+        // Tindak lanjut: jawaban revisi yang sudah dikirim dan dosen
+        // memberi feedback terbuka TANPA keputusan formal — tanpa ini
+        // mahasiswa pathless (bukan draf, bukan 'revisi diminta').
+        $followUps = $ta->entries()
+            ->where('jenis', self::JENIS_REVISI)
+            ->whereNotNull('submitted_at')
+            ->whereIn('status', [self::STATUS_SUBMITTED, self::STATUS_REVISION_IN_PROGRESS])
+            ->whereDoesntHave('revisionChildren', function ($q) use ($activeChildStatuses) {
+                $q->whereIn('status', $activeChildStatuses);
+            })
+            ->whereHas('comments', function ($q) {
+                $q->where('resolution_status', \App\Models\PdfComment::STATUS_OPEN)
+                    ->whereHas('user', fn ($u) => $u->role('dosen'));
+            })
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return $requested->concat($drafts)->concat($followUps)->unique('id')->values();
+    }
+
+    /**
+     * Ada feedback dosen yang masih terbuka pada entri ini.
+     */
+    public function hasOpenDosenFeedback(): bool
+    {
+        return $this->comments()
+            ->where('resolution_status', \App\Models\PdfComment::STATUS_OPEN)
+            ->whereHas('user', fn ($q) => $q->role('dosen'))
+            ->exists();
+    }
+
+    /**
+     * Jawaban revisi yang sudah dikirim tapi dosen memberi feedback
+     * terbuka tanpa keputusan formal: layak dijawab ronde lanjutan
+     * (tanpa anak revisi aktif). Cegah status buntu revision_in_progress
+     * yang sudah submit — bukan draf, bukan 'revisi diminta'.
+     */
+    public function needsFollowUpAnswer(): bool
+    {
+        if ($this->jenis !== self::JENIS_REVISI || $this->submitted_at === null) {
+            return false;
+        }
+        if (! in_array($this->status, [self::STATUS_SUBMITTED, self::STATUS_REVISION_IN_PROGRESS], true)) {
+            return false;
+        }
+        $activeChildStatuses = [self::STATUS_REVISION_IN_PROGRESS, self::STATUS_SUBMITTED];
+        if ($this->revisionChildren()->whereIn('status', $activeChildStatuses)->exists()) {
+            return false;
+        }
+
+        return $this->hasOpenDosenFeedback();
     }
 
     /**
@@ -286,8 +337,9 @@ class LogbookEntry extends Model
 
     /**
      * Satu aksi lanjutan paling relevan untuk revisi pending: lanjutkan draf
-     * bila ada, sonst buat revisi dari induk yang diminta revisi.
-     * Label memakai satu nama: "Jawab Revisi".
+     * bila ada, sonst buat revisi dari induk yang diminta revisi, sonst
+     * jawab tindak lanjut (jawaban terkirim + feedback dosen terbuka).
+     * Label memakai satu nama: "Kirim Perbaikan".
      */
     public static function pendingRevisionActionFor(?MahasiswaTa $ta): ?array
     {
@@ -299,7 +351,7 @@ class LogbookEntry extends Model
         $draft = $pending->first(fn (self $e) => $e->jenis === self::JENIS_REVISI && $e->isEditable());
         if ($draft) {
             return [
-                'label' => 'Jawab Revisi',
+                'label' => 'Kirim Perbaikan',
                 'url' => route('logbook.edit', $draft),
                 'entry' => $draft,
                 'kind' => 'draft',
@@ -309,12 +361,25 @@ class LogbookEntry extends Model
         $parent = $pending->first(fn (self $e) => $e->status === self::STATUS_REVISI);
         if ($parent) {
             return [
-                'label' => 'Jawab Revisi',
+                'label' => 'Kirim Perbaikan',
                 'url' => route('logbook.create-revisi', [
                     'parent_entry_id' => $parent->id,
                     'program' => $parent->mahasiswaTa?->jenis,
                 ]),
                 'entry' => $parent,
+                'kind' => 'parent',
+            ];
+        }
+
+        $followUp = $pending->first(fn (self $e) => $e->needsFollowUpAnswer());
+        if ($followUp) {
+            return [
+                'label' => 'Kirim Perbaikan',
+                'url' => route('logbook.create-revisi', [
+                    'parent_entry_id' => $followUp->id,
+                    'program' => $followUp->mahasiswaTa?->jenis,
+                ]),
+                'entry' => $followUp,
                 'kind' => 'parent',
             ];
         }

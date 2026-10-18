@@ -91,8 +91,10 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->assertSee('Simpan Draf', false)
             ->assertSee('data-draf-saved-at', false)
             ->assertSee('Terakhir disimpan', false)
-            ->assertSee('>draf tersimpan<', false)
-            ->assertDontSee('Simpan Draft', false);
+            ->assertSee('data-status-combined', false)
+            ->assertSee('belum dikirim', false)
+            ->assertDontSee('Simpan Draft', false)
+            ->assertDontSee('Disimpan di server', false);
 
         // Form baru tanpa draf: tombol ada, elemen stempel server kosong
         // dan tersembunyi (teks 'Terakhir disimpan' lain milik autosave browser).
@@ -102,7 +104,8 @@ class RevisionWorkflowTest extends AuditSmokeTest
             ->getContent();
         $this->assertStringContainsString('Simpan Draf', $freshHtml);
         $this->assertStringContainsString('data-draf-saved-at></p>', $freshHtml);
-        $this->assertStringContainsString('>belum tersimpan<', $freshHtml);
+        $this->assertStringContainsString('Belum ada simpanan — mulai mengisi', $freshHtml);
+        $this->assertStringNotContainsString('Disimpan di server', $freshHtml);
 
         // Kirim tanpa upload ulang: file draf dipakai, tanpa baris baru.
         // Step 3 memakai kartu jawaban: kirim wajib minimal 1 kartu lengkap.
@@ -355,7 +358,7 @@ class RevisionWorkflowTest extends AuditSmokeTest
         // Induk pulih: tombol buat revisi muncul lagi.
         $this->actingAs($this->mhs)->get(route('logbook.show', $this->entrySubmitted->id))
             ->assertOk()
-            ->assertSee('Jawab Revisi', false);
+            ->assertSee('Kirim Perbaikan', false);
     }
 
     public function test_bulk_delete_restores_stranded_parent(): void
@@ -822,18 +825,64 @@ class RevisionWorkflowTest extends AuditSmokeTest
         // Form create menampilkan banner + tombol Lanjutkan/Buat Revisi.
         $this->actingAs($this->mhs)->get(route('logbook.create'))
             ->assertOk()
-            ->assertSee('menunggu jawabanmu', false)
+            ->assertSee('revisi menunggu jawabanmu', false)
             ->assertSee('confirm_new_despite_revision', false);
 
         // Dashboard mengangkat CTA revisi jadi primer.
         $this->actingAs($this->mhs)->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('menunggu jawabanmu', false);
+            ->assertSee('revisi menunggu jawabanmu', false);
 
         // Daftar logbook menampilkan banner yang sama.
         $this->actingAs($this->mhs)->get(route('logbook.index'))
             ->assertOk()
-            ->assertSee('menunggu jawabanmu', false);
+            ->assertSee('revisi menunggu jawabanmu', false);
+    }
+
+    public function test_pending_banner_wording_distinguishes_draft_and_parent(): void
+    {
+        // Isolasi penuh: program baru dengan satu induk diminta revisi.
+        $freshMhs = \App\Models\User::create([
+            'name' => 'Mhs Isolasi Banner', 'email' => 'isolasi-banner@test.com',
+            'password' => bcrypt('password'), 'nim' => 'ISOLASI004',
+        ]);
+        $freshMhs->assignRole('mahasiswa');
+        $freshTa = \App\Models\MahasiswaTa::create([
+            'user_id' => $freshMhs->id,
+            'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'Isolasi Banner',
+            'jenis' => \App\Models\MahasiswaTa::JENIS_TA,
+            'status_ta' => \App\Models\MahasiswaTa::STATUS_AKTIF,
+        ]);
+        $parent = LogbookEntry::create([
+            'mahasiswa_ta_id' => $freshTa->id,
+            'dosen_id' => $this->dosen->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'status' => LogbookEntry::STATUS_REVISI,
+            'sesi_ke' => 4,
+            'reviewed_at' => now(),
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Induk banner',
+        ]);
+
+        // Tanpa draf: kalimat untuk induk.
+        $this->actingAs($freshMhs)->get(route('logbook.index'))
+            ->assertOk()
+            ->assertSee('Sesi 4 diminta revisi — jawab sekarang', false);
+
+        // Dengan draf revisi: kalimat untuk lanjutan draf.
+        LogbookEntry::create([
+            'mahasiswa_ta_id' => $freshTa->id,
+            'dosen_id' => $this->dosen->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+            'parent_entry_id' => $parent->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'topik' => 'Jawaban banner',
+        ]);
+        $this->actingAs($freshMhs)->get(route('logbook.index'))
+            ->assertOk()
+            ->assertSee('belum dikirim — lanjutkan sekarang', false);
     }
 
     public function test_draft_submit_is_blocked_while_revision_pending(): void
@@ -1560,6 +1609,104 @@ class RevisionWorkflowTest extends AuditSmokeTest
         // Status Draf belum dihitung lengkap -> submit tetap ditolak.
         $this->actingAs($this->mhs)->post(route('logbook.submit', $draft))
             ->assertRedirect()->assertSessionHas('error');
+    }
+
+    public function test_double_pull_does_not_duplicate_annotation_row(): void
+    {
+        $this->entrySubmitted->update(['status' => LogbookEntry::STATUS_REVISI, 'reviewed_at' => now()]);
+
+        $this->actingAs($this->mhs)->post(route('logbook.store-revisi'), [
+            'parent_entry_id' => $this->entrySubmitted->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'lampiran' => UploadedFile::fake()->create('draft.pdf', 100, 'application/pdf'),
+        ]);
+        $draft = LogbookEntry::where('parent_entry_id', $this->entrySubmitted->id)->latest('id')->firstOrFail();
+
+        $comment = $this->actingAs($this->mhs)->postJson(route('logbook.pdf.store-comment', $draft), [
+            'file_type' => PdfComment::FILE_TYPE_DRAFT,
+            'comment' => 'Satu anotasi.',
+            'page_number' => 1,
+            'pos_x' => 0.1, 'pos_y' => 0.1, 'x2' => 0.3, 'y2' => 0.2,
+        ])->assertCreated()->json();
+
+        // Tarikan ganda (auto-pull + klik Salin) tidak boleh menggandakan baris.
+        $this->actingAs($this->mhs)->postJson(route('logbook.annotations.pull', $draft))
+            ->assertOk()->assertJsonPath('pulled', 1);
+        $this->actingAs($this->mhs)->postJson(route('logbook.annotations.pull', $draft))
+            ->assertOk()->assertJsonPath('pulled', 0);
+
+        $rows = $draft->fresh()->riwayat_perbaikan;
+        $this->assertCount(1, $rows);
+        $this->assertSame($comment['id'], $rows[0]['komentar_comment_id']);
+        $this->assertSame('Satu anotasi.', $rows[0]['perbaikan']);
+    }
+
+    public function test_submitted_revision_with_open_dosen_feedback_is_answerable(): void
+    {
+        // TA fresh agar kebal polusi antar-test: hanya baris milik TA ini.
+        $mhs = \App\Models\User::create([
+            'name' => 'Mhs FollowUp', 'email' => 'followup-mhs@test.com',
+            'password' => bcrypt('password'), 'nim' => 'F001',
+        ]);
+        $mhs->assignRole('mahasiswa');
+        $ta = \App\Models\MahasiswaTa::create([
+            'user_id' => $mhs->id, 'pembimbing_1_id' => $this->dosen->id,
+            'judul_ta' => 'TA FollowUp', 'status_ta' => 'aktif',
+        ]);
+        $parent = LogbookEntry::create([
+            'mahasiswa_ta_id' => $ta->id, 'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'sesi_ke' => 1, 'dosen_id' => $this->dosen->id,
+            'tanggal_bimbingan' => now(), 'topik' => 'sesi followup',
+            'progres_kendala' => 'progres', 'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        // Jawaban revisi terkirim + feedback dosen terbuka tanpa keputusan
+        // formal: tidak buntu — masuk pending, ada aksi, ada tombol.
+        $answer = LogbookEntry::create([
+            'mahasiswa_ta_id' => $ta->id,
+            'parent_entry_id' => $parent->id,
+            'revision_round' => 1,
+            'sesi_ke' => null,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'dosen_id' => $this->dosen->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'submitted_at' => now(),
+            'status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+        ]);
+        $answer->comments()->create([
+            'user_id' => $this->dosen->id,
+            'file_type' => PdfComment::FILE_TYPE_DRAFT,
+            'page_number' => 1,
+            'comment' => 'Perjelas bagian ini.',
+            'resolution_status' => PdfComment::STATUS_OPEN,
+        ]);
+
+        $this->assertTrue($answer->fresh()->needsFollowUpAnswer());
+        $pending = LogbookEntry::pendingRevisionsFor($ta);
+        $this->assertTrue($pending->contains('id', $answer->id));
+
+        $action = LogbookEntry::pendingRevisionActionFor($ta);
+        $this->assertSame('parent', $action['kind']);
+        $this->assertStringContainsString('parent_entry_id='.$answer->id, $action['url']);
+
+        $this->actingAs($mhs)->get(route('logbook.show', $answer))
+            ->assertOk()
+            ->assertSee('Kirim Perbaikan', false);
+
+        // Guard: ada anak revisi aktif -> tidak eligible lagi.
+        LogbookEntry::create([
+            'mahasiswa_ta_id' => $ta->id,
+            'parent_entry_id' => $answer->id,
+            'revision_round' => 2,
+            'sesi_ke' => null,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'dosen_id' => $this->dosen->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+        ]);
+        $this->assertFalse($answer->fresh()->needsFollowUpAnswer());
+        $this->assertFalse(LogbookEntry::pendingRevisionsFor($ta)->contains('id', $answer->id));
     }
 
     public function test_revision_submit_requires_complete_table(): void

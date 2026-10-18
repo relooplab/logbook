@@ -78,13 +78,15 @@
         <div class="mb-5 rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
             <p class="font-semibold text-text-primary">
                 @if (($pendingRevisionThreads ?? collect())->count() > 1)
-                    {{ $pendingRevisionThreads->count() }} sesi menunggu jawabanmu
+                    {{ $pendingRevisionThreads->count() }} revisi menunggu jawabanmu
+                @elseif (($pendingRevisionAction['kind'] ?? null) === 'draft')
+                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} belum dikirim — lanjutkan sekarang
                 @else
-                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} menunggu jawabanmu
+                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} diminta revisi — jawab sekarang
                 @endif
             </p>
             @if (!empty($pendingRevisionAction['url']))
-                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">Jawab Revisi →</a>
+                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Kirim Perbaikan' }} →</a>
             @endif
             @if (($pendingRevisionThreads ?? collect())->count() > 1)
                 <ul class="mt-3 space-y-1 text-sm">
@@ -481,18 +483,6 @@
                 </span>
                 <span class="summary-value">
                     @include('partials.status-badge', ['status' => $draft?->status ?? 'draft', 'entry' => $draft ?? null])
-                </span>
-            </div>
-            <div class="summary-row">
-                <span class="summary-key">
-                    <span class="material-symbols-outlined icon-sm" aria-hidden="true">cloud_done</span> Disimpan di server
-                </span>
-                <span class="summary-value" data-server-save-state role="status" aria-live="polite">
-                    @if ($draft)
-                        <span class="badge badge-draft">draf tersimpan</span>
-                    @else
-                        <span class="badge badge-neutral">belum tersimpan</span>
-                    @endif
                 </span>
             </div>
         @endcomponent
@@ -948,8 +938,6 @@
                 activateAnnotationStep(out.d);
                 var savedAtEl = document.querySelector('[data-draf-saved-at]');
                 if (savedAtEl) { savedAtEl.textContent = 'Terakhir disimpan baru saja'; savedAtEl.classList.remove('hidden'); }
-                var serverStateEl = document.querySelector('[data-server-save-state]');
-                if (serverStateEl) { serverStateEl.innerHTML = '<span class="badge badge-draft">draf tersimpan</span>'; }
                 var combinedEl = document.querySelector('[data-status-combined]');
                 if (combinedEl) { combinedEl.textContent = (combinedEl.dataset.workflow || 'Draf') + ' · tersimpan baru saja · belum dikirim'; }
                 window.open(withFrom(out.d.viewer_url), '_blank');
@@ -999,36 +987,115 @@
         });
         if (isiBtn) isiBtn.addEventListener('click', function () { isiOtomatisFrom(isiBtn.dataset.pullUrl, isiBtn); });
         if (isiBawah) isiBawah.addEventListener('click', function () { isiOtomatisFrom(isiBawah.dataset.pullUrl || draftPullUrl, isiBawah); });
-        function rowKey(r) {
-            return [(r.halaman || '').trim(), (r.komentar_dosen || '').trim(), (r.perbaikan || '').trim()].join('￨');
+        // Gabungkan baris komplementer: kartu hanya-komentar + kartu
+        // hanya-perbaikan pada halaman yang sama digabung ke kartu komentar
+        // (status ikut bila kosong). Cegah pecahan "satu anotasi dua kartu".
+        function consolidateComplementaryCards() {
+            var merged = 0;
+            var list = cards();
+            var used = {};
+            list.forEach(function (card, i) {
+                if (used[i]) return;
+                var d = cardData(card);
+                var hal = (d.halaman || '').trim();
+                if (!hal || !d.komentar_dosen.trim() || d.perbaikan.trim()) return;
+                for (var j = 0; j < list.length; j++) {
+                    if (j === i || used[j]) continue;
+                    var e = cardData(list[j]);
+                    if ((e.halaman || '').trim() !== hal) continue;
+                    if ((e.komentar_dosen || '').trim() || !(e.perbaikan || '').trim()) continue;
+                    var perEl = card.querySelector('textarea[name$="[perbaikan]"]');
+                    if (perEl) perEl.value = e.perbaikan;
+                    var stEl = card.querySelector('[data-card-status]');
+                    var curSt = cardData(card).status;
+                    if (stEl && !curSt && e.status) {
+                        var hasOpt = Array.prototype.some.call(stEl.options, function (o) { return o.value === e.status; });
+                        if (hasOpt) stEl.value = e.status;
+                    }
+                    list[j].remove();
+                    used[j] = true;
+                    merged++;
+                    updateCardSummary(card);
+                    break;
+                }
+            });
+            if (merged > 0) {
+                reindex();
+                updateProgress();
+                updateUploadGate();
+                updateReview();
+                syncSummaryPanel();
+            }
+            return merged;
+        }
+        function rowCommentId(r) {
+            var v = r.komentar_comment_id;
+            return (v === null || v === undefined || v === '') ? null : String(v);
+        }
+        function cardCommentId(card) {
+            var el = card.querySelector('[data-komentar-id]');
+            return (el && el.value) ? String(el.value) : null;
+        }
+        // Isi field kosong kartu dari baris tanpa menimpa isian pengguna.
+        function fillCardGaps(card, r) {
+            var d = cardData(card);
+            var touched = false;
+            var halEl = card.querySelector('[name$="[halaman]"]');
+            if (halEl && !d.halaman.trim() && r.halaman) { halEl.value = r.halaman; touched = true; }
+            var perEl = card.querySelector('textarea[name$="[perbaikan]"]');
+            if (perEl && !cardData(card).perbaikan.trim() && r.perbaikan) { perEl.value = r.perbaikan; touched = true; }
+            var idEl = card.querySelector('[data-komentar-id]');
+            if (idEl && !idEl.value && rowCommentId(r)) { idEl.value = rowCommentId(r); touched = true; }
+            if (touched) updateCardSummary(card);
+            return touched;
         }
         mergePulledRows = function (rows) {
             var added = 0;
             rows.forEach(function (r) {
-                var key = rowKey(r);
+                // 1) Tautan ID anotasi: kartu yang sudah menautkan komentar
+                // yang sama dianggap menyerap baris — cukup isi yang kosong.
+                var rid = rowCommentId(r);
+                if (rid) {
+                    var linked = null;
+                    cards().forEach(function (card) {
+                        if (!linked && cardCommentId(card) === rid) linked = card;
+                    });
+                    if (linked) {
+                        fillCardGaps(linked, r);
+                        return;
+                    }
+                }
                 var exists = cards().some(function (card) {
                     var d = cardData(card);
-                    return [(d.halaman || '').trim(), (d.komentar_dosen || '').trim(), (d.perbaikan || '').trim()].join('￨') === key;
+                    // Baris tarikan selalu berkomentar kosong (isi anotasi
+                    // ada di perbaikan): cukup cocokkan halaman + perbaikan.
+                    // Kalau baris bawa komentar (prefill induk), cocok penuh.
+                    if ([(d.halaman || '').trim(), (d.perbaikan || '').trim()].join('￨') !==
+                        [(r.halaman || '').trim(), (r.perbaikan || '').trim()].join('￨')) return false;
+                    if ((r.komentar_dosen || '').trim()) {
+                        return (d.komentar_dosen || '').trim() === r.komentar_dosen.trim();
+                    }
+                    return true;
                 });
                 if (exists) return;
                 var target = null;
+                var samePage = null;
                 cards().forEach(function (card) {
-                    if (target) return;
-                    if (!cardData(card).perbaikan.trim()) target = card;
+                    var d = cardData(card);
+                    if (d.perbaikan.trim()) return;
+                    if (!target) target = card;
+                    if (!samePage && r.halaman && d.halaman.trim() === r.halaman.trim()) samePage = card;
                 });
+                target = samePage || target;
                 if (target) {
-                    var d = cardData(target);
-                    var halEl = target.querySelector('[name$="[halaman]"]');
-                    var perEl = target.querySelector('[name$="[perbaikan]"]');
-                    if (halEl && !d.halaman.trim() && r.halaman) halEl.value = r.halaman;
-                    if (perEl) perEl.value = r.perbaikan || '';
-                    updateCardSummary(target);
+                    fillCardGaps(target, r);
                     added++;
                 } else {
-                    addKartu({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', perbaikan: r.perbaikan || '', status: '' }, { silentFocus: true });
+                    addKartu({ halaman: r.halaman || '', komentar_dosen: r.komentar_dosen || '', komentar_comment_id: rowCommentId(r), perbaikan: r.perbaikan || '', status: '' }, { silentFocus: true });
                     added++;
                 }
             });
+            consolidateComplementaryCards();
             updateProgress();
             updateUploadGate();
             updateReview();
@@ -1055,6 +1122,7 @@
                     var parts = [];
                     if (out.d.pulled > 0) parts.push(out.d.pulled + ' jawaban tersalin. Lengkapi yang kurang');
                     if (out.d.skipped_empty > 0) parts.push(out.d.skipped_empty + ' tandaan kosong dilewati');
+                    if (out.d.skipped_answered > 0) parts.push(out.d.skipped_answered + ' sudah dijawab di viewer, dilewati');
                     setMsg(parts.length ? parts.join('. ') + '.' : 'Belum ada yang baru — tandai dulu di PDF, lalu klik lagi.', true);
                     updateUploadGate();
                 })
@@ -1118,6 +1186,7 @@
             '</div>' +
             '<div class="perbaikan-body">' +
                 '<div><label class="mb-1 block text-xs text-text-secondary" for="riwayat-komentar-' + seq + '">Komentar dosen <span class="text-status-pending">(wajib bila dari salinan)</span></label>' +
+                '<input type="hidden" name="riwayat_perbaikan[0][komentar_comment_id]" data-komentar-id value="' + escapeAttr(data.komentar_comment_id || '') + '">' +
                 '<input type="text" id="riwayat-komentar-' + seq + '" name="riwayat_perbaikan[0][komentar_dosen]" value="' + escapeAttr(data.komentar_dosen || '') + '" placeholder="mis. Jelaskan dasar pemilihan metode" class="form-control"></div>' +
                 '<div class="flex gap-3">' +
                 '<div class="w-[110px] shrink-0"><label class="mb-1 block text-xs text-text-secondary" for="riwayat-halaman-' + seq + '">Halaman</label>' +

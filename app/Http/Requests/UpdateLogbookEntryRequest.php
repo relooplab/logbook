@@ -33,6 +33,7 @@ class UpdateLogbookEntryRequest extends FormRequest
         $rules['riwayat_perbaikan'] = ['nullable', 'array'];
         $rules['riwayat_perbaikan.*.halaman'] = ['nullable', 'string', 'max:255'];
         $rules['riwayat_perbaikan.*.komentar_dosen'] = ['nullable', 'string', 'max:1000'];
+        $rules['riwayat_perbaikan.*.komentar_comment_id'] = ['nullable', 'integer', 'min:1'];
         $rules['riwayat_perbaikan.*.perbaikan'] = ['nullable', 'string', 'max:2000'];
         $rules['riwayat_perbaikan.*.status'] = ['nullable', 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)];
 

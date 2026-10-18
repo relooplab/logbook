@@ -15,13 +15,15 @@
         <div class="rounded-xl border border-status-danger/40 bg-status-danger/10 p-4" role="alert">
             <p class="font-semibold text-text-primary">
                 @if (($pendingRevisionThreads ?? collect())->count() > 1)
-                    {{ $pendingRevisionThreads->count() }} sesi menunggu jawabanmu
+                    {{ $pendingRevisionThreads->count() }} revisi menunggu jawabanmu
+                @elseif (($pendingRevisionAction['kind'] ?? null) === 'draft')
+                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} belum dikirim — lanjutkan sekarang
                 @else
-                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} menunggu jawabanmu
+                    {{ $pendingRevisionAction['entry']->shortTitle() ?? 'Revisi' }} diminta revisi — jawab sekarang
                 @endif
             </p>
             @if (!empty($pendingRevisionAction['url']))
-                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">Jawab Revisi →</a>
+                <a href="{{ $pendingRevisionAction['url'] }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-[#0b1420] hover:opacity-90">{{ $pendingRevisionAction['label'] ?? 'Kirim Perbaikan' }} →</a>
             @endif
             @if (($pendingRevisionThreads ?? collect())->count() > 1)
                 <ul class="mt-3 space-y-1 text-sm">
@@ -122,6 +124,8 @@
                         // Thread induk-anak: jawaban revisi menempel di bawah induknya
                         // agar hubungan keduanya kelihatan; anak yang induknya tak
                         // sehalaman (filter/paginasi) tampil datar seperti biasa.
+                        // Diratakan depth-first agar rantai dalam (cucu dst.) ikut
+                        // tampil — loop dua tingkat sebelumnya menghilangkan cucu.
                         $byId = $entries->keyBy('id');
                         $threadChildren = [];
                         $threadRoots = [];
@@ -132,12 +136,26 @@
                                 $threadRoots[] = $e;
                             }
                         }
+                        $threadFlat = [];
+                        $threadSeen = [];
+                        $threadStack = [];
+                        foreach (array_reverse($threadRoots) as $root) {
+                            $threadStack[] = ['entry' => $root, 'depth' => 0, 'parentId' => null];
+                        }
+                        while (! empty($threadStack)) {
+                            $node = array_pop($threadStack);
+                            if (isset($threadSeen[$node['entry']->id])) {
+                                continue;
+                            }
+                            $threadSeen[$node['entry']->id] = true;
+                            $threadFlat[] = $node;
+                            foreach (array_reverse($threadChildren[$node['entry']->id] ?? []) as $kid) {
+                                $threadStack[] = ['entry' => $kid, 'depth' => $node['depth'] + 1, 'parentId' => $node['entry']->id];
+                            }
+                        }
                     @endphp
-                    @foreach ($threadRoots as $entry)
-                        @include('logbook.partials.student-history-row', ['entry' => $entry, 'bulkForm' => $bulkForm, 'threadChild' => false, 'childCount' => count($threadChildren[$entry->id] ?? [])])
-                        @foreach ($threadChildren[$entry->id] ?? [] as $child)
-                            @include('logbook.partials.student-history-row', ['entry' => $child, 'bulkForm' => $bulkForm, 'threadChild' => true, 'parentId' => $entry->id])
-                        @endforeach
+                    @foreach ($threadFlat as $node)
+                        @include('logbook.partials.student-history-row', ['entry' => $node['entry'], 'bulkForm' => $bulkForm, 'threadChild' => $node['depth'] > 0, 'parentId' => $node['parentId'], 'childCount' => count($threadChildren[$node['entry']->id] ?? []), 'depth' => $node['depth']])
                     @endforeach
                 </tbody>
             </table>

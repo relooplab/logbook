@@ -38,6 +38,45 @@ class DetailWorkspaceTest extends AuditSmokeTest
         $this->assertSame(1, substr_count($response->getContent(), route('logbook.pdf-viewer', $this->entrySubmitted, false)));
     }
 
+    public function test_viewer_exposes_parent_pdf_for_comparison(): void
+    {
+        $parent = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'dosen_id' => $this->dosen->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'sesi_ke' => 7,
+            'tanggal_bimbingan' => now()->toDateString(),
+            'topik' => 'Induk banding',
+            'lampiran_path' => 'lampiran/induk.pdf',
+            'lampiran_original_name' => 'induk.pdf',
+        ]);
+        $child = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'dosen_id' => $this->dosen->id,
+            'jenis' => LogbookEntry::JENIS_REVISI,
+            'status' => LogbookEntry::STATUS_REVISION_IN_PROGRESS,
+            'parent_entry_id' => $parent->id,
+            'tanggal_pengiriman' => now()->toDateString(),
+            'topik' => 'Jawaban banding',
+            'lampiran_path' => 'lampiran/jawaban.pdf',
+            'lampiran_original_name' => 'jawaban.pdf',
+        ]);
+
+        // Pemilik melihat URL PDF induk untuk mode banding (JSON escape slashes).
+        $esc = fn ($url) => str_replace('/', '\\/', $url);
+        $this->actingAs($this->mhs)->get(route('logbook.pdf-viewer', $child))
+            ->assertOk()
+            ->assertSee($esc(route('logbook.pdf', $parent)), false)
+            ->assertSee($esc(route('logbook.pdf.comments', $parent)), false);
+
+        // Tanpa induk ber-PDF: tidak ada URL pembanding.
+        $this->entryDraft->update(['lampiran_path' => 'lampiran/draf.pdf', 'lampiran_original_name' => 'draf.pdf']);
+        $this->actingAs($this->mhs)->get(route('logbook.pdf-viewer', $this->entryDraft))
+            ->assertOk()
+            ->assertSee('parentPdfUrl: null', false);
+    }
+
     public function test_student_sees_logbook_workspace_without_reviewer_decision(): void
     {
         $response = $this->actingAs($this->mhs)->get(route('logbook.show', $this->entryDraft));

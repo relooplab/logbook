@@ -60,6 +60,7 @@ class StoreLogbookEntryRequest extends FormRequest
             'riwayat_perbaikan' => ['nullable', 'array'],
             'riwayat_perbaikan.*.halaman' => [$submit ? 'required' : 'nullable', 'string', 'max:255'],
             'riwayat_perbaikan.*.komentar_dosen' => [$submit ? 'required' : 'nullable', 'string', 'max:1000'],
+            'riwayat_perbaikan.*.komentar_comment_id' => ['nullable', 'integer', 'min:1'],
             'riwayat_perbaikan.*.perbaikan' => [$submit ? 'required' : 'nullable', 'string', 'max:2000'],
             'riwayat_perbaikan.*.status' => [$submit ? 'required' : 'nullable', 'in:'.implode(',', LogbookEntry::PERBAIKAN_STATUSES)],
             'lampiran' => [$hasDraftFile ? 'nullable' : 'required', 'file', 'mimes:'.$mimes, 'max:'.$maxKb],

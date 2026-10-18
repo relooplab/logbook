@@ -198,6 +198,8 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
 
     // Balasan dosen per baris kartu Jawaban Mahasiswa.
     Route::post('/logbook/{logbook}/jawaban-reply', [LogbookController::class, 'saveJawabanReply'])->middleware('throttle:30,1')->name('logbook.jawaban-reply');
+    // Tanda tindak lanjut balasan oleh pemilik program.
+    Route::post('/logbook/{logbook}/jawaban-ack', [LogbookController::class, 'ackJawabanReply'])->middleware('throttle:30,1')->name('logbook.jawaban-ack');
 
     // ---------------------------------------------------- action items (mahasiswa)
     Route::post('/logbook/{logbook}/action-items', [ActionItemController::class, 'store'])->name('action-items.store');

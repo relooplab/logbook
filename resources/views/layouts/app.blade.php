@@ -237,7 +237,7 @@
                         @endphp
                         <a href="{{ route('logbook.index', array_filter(['program' => $p->jenis, 'status' => 'revisi'])) }}" class="{{ $navLink }} {{ $__jawabCls }}">
                             <span class="material-symbols-outlined icon-md">edit_note</span>
-                            <span class="sidebar-label">Jawab Revisi</span>
+                            <span class="sidebar-label">Kirim Perbaikan</span>
                             @php $pendingThreads = \App\Models\LogbookEntry::pendingRevisionThreadsFor($p); @endphp
                             @if ($pendingThreads->isNotEmpty())
                                 <span class="ml-auto rounded-full bg-status-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-status-danger">{{ $pendingThreads->count() }}</span>
