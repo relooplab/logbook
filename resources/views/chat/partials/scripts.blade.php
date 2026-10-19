@@ -175,9 +175,13 @@
     if (typeof Pusher !== 'undefined') {
         try {
             const key = @json(config('broadcasting.connections.reverb.key'));
-            const host = @json(config('broadcasting.connections.reverb.host'));
-            const port = @json(config('broadcasting.connections.reverb.port'));
-            const scheme = @json(config('broadcasting.connections.reverb.scheme'));
+            // Endpoint WS sisi BROWSER: `options.*` berisi alamat internal
+            // (hanya bisa di-resolve di jaringan Docker), jadi klien memakai
+            // host/port halaman itu sendiri — nginx mem-proxy /app/ ke Reverb.
+            const host = @json(config('broadcasting.connections.reverb.client_host')) || window.location.hostname;
+            const scheme = @json(config('broadcasting.connections.reverb.client_scheme')) || (window.location.protocol === 'https:' ? 'https' : 'http');
+            const port = @json(config('broadcasting.connections.reverb.client_port'))
+                || (window.location.protocol === 'https:' ? 443 : 8080);
             if (key && host) {
                 const pusher = new Pusher(key, { wsHost: host, wsPort: port, wssPort: port, forceTLS: scheme === 'https', enabledTransports: ['ws', 'wss'], authEndpoint: '/broadcasting/auth', auth: { headers: { 'X-CSRF-TOKEN': csrf } } });
                 pusher.subscribe('private-user.' + @json($user->id)).bind('message.sent', refresh);

@@ -33,21 +33,27 @@ class RealtimeWebsocketTest extends TestCase
 
     public function test_layout_memakai_endpoint_publik_untuk_browser_bukan_host_internal(): void
     {
-        $blade = file_get_contents(resource_path('views/layouts/app.blade.php'));
+        // Semua skrip realtime sisi klien harus memakai endpoint publik.
+        // `chat/partials/scripts.blade.php` punya koneksi sendiri, jadi ia
+        // bisa tertinggal walaupun layout sudah diperbaiki.
+        $sources = [
+            'layouts/app.blade.php' => file_get_contents(resource_path('views/layouts/app.blade.php')),
+            'chat/partials/scripts.blade.php' => file_get_contents(resource_path('views/chat/partials/scripts.blade.php')),
+        ];
 
-        // Host/port/scheme browser harus berasal dari config client_* dan
-        // fallback ke lokasi halaman itu sendiri.
-        $this->assertStringContainsString('reverb.client_host', $blade);
-        $this->assertStringContainsString('reverb.client_port', $blade);
-        $this->assertStringContainsString('reverb.client_scheme', $blade);
-        $this->assertStringContainsString('window.location.hostname', $blade);
+        foreach ($sources as $file => $blade) {
+            $this->assertStringContainsString('reverb.client_host', $blade, "{$file}: host klien harus dari client_host.");
+            $this->assertStringContainsString('reverb.client_port', $blade, "{$file}: port klien harus dari client_port.");
+            $this->assertStringContainsString('reverb.client_scheme', $blade, "{$file}: scheme klien harus dari client_scheme.");
+            $this->assertStringContainsString('window.location.hostname', $blade, "{$file}: fallback harus host halaman.");
 
-        // Jangan pernah memakai alamat internal untuk klien.
-        $this->assertStringNotContainsString("reverb.host') }", $blade, 'Host internal tidak boleh dipakai klien.');
-        $this->assertDoesNotMatchRegularExpression(
-            '/var rHost = @json\(config\(\'broadcasting\.connections\.reverb\.host\'\)\)/',
-            $blade,
-        );
+            // Alamat internal tidak boleh dipakai untuk klien.
+            $this->assertDoesNotMatchRegularExpression(
+                '/@json\(config\(\'broadcasting\.connections\.reverb\.(host|port|scheme)\'\)\)/',
+                $blade,
+                "{$file}: alamat internal tidak boleh dipakai klien.",
+            );
+        }
     }
 
     public function test_config_menyediakan_override_endpoint_websocket_klien(): void
