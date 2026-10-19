@@ -548,9 +548,15 @@
         var userId = {{ auth()->id() ?? 'null' }};
         if (!userId) return;
         var rKey = @json(config('broadcasting.connections.reverb.key')) || 'lbta-key';
-        var rHost = @json(config('broadcasting.connections.reverb.host')) || window.location.hostname;
-        var rPort = @json(config('broadcasting.connections.reverb.port')) || 443;
-        var rScheme = @json(config('broadcasting.connections.reverb.scheme')) || 'http';
+        // Endpoint WS sisi BROWSER. `options.host/port/scheme` adalah alamat
+        // internal (mis. logbook-ta-reverb:8080) yang tidak bisa di-resolve dari
+        // komputer user — karena itu default-nya host/port halaman itu sendiri
+        // (nginx mem-proxy /app/ ke Reverb). REVERB_CLIENT_* dipakai hanya bila
+        // WebSocket dilayani domain/port terpisah.
+        var rHost = @json(config('broadcasting.connections.reverb.client_host')) || window.location.hostname;
+        var rScheme = @json(config('broadcasting.connections.reverb.client_scheme')) || (window.location.protocol === 'https:' ? 'https' : 'http');
+        var rPort = @json(config('broadcasting.connections.reverb.client_port'))
+            || (window.location.protocol === 'https:' ? 443 : 8080);
         var pusher;
         try {
             pusher = new Pusher(rKey, {

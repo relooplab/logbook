@@ -41,6 +41,20 @@ return [
                 'scheme' => env('REVERB_SCHEME', 'https'),
                 'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
             ],
+            /*
+             * Endpoint yang dipakai BROWSER (bukan server). `options.*` di atas
+             * menunjuk ke alamat internal (mis. logbook-ta-reverb:8080) yang
+             * hanya bisa di-resolve di dalam jaringan Docker — hostname itu
+             * TIDAK bisa dipakai klien.
+             *
+             * Defaultnya kosong: blok JS di layouts/app.blade.php akan memakai
+             * host/port/scheme halaman itu sendiri (single-host via nginx yang
+             * mem-proxy /app/ ke Reverb). Isi env ini hanya bila WebSocket
+             * dilayani domain/port terpisah.
+             */
+            'client_host' => env('REVERB_CLIENT_HOST'),
+            'client_port' => env('REVERB_CLIENT_PORT'),
+            'client_scheme' => env('REVERB_CLIENT_SCHEME'),
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
             ],
