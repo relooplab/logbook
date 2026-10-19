@@ -22,13 +22,16 @@ export function resolveButtonLabel(meta, canReview) {
   return canReview ? 'Selesai' : 'Sudah dibetulkan';
 }
 
-export function useAnnotationControls(highlight, meta, { canReview, canReply, canDiscuss, currentUserId, onReply, onToggleResolve, onDelete, onSkipNext, hasNext }) {
+export function useAnnotationControls(highlight, meta, { canReview, canReply, canDiscuss, currentUserId, onReply, onToggleResolve, onDelete, onEdit, onSkipNext, hasNext }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(null); // 'reply' | 'resolve' | 'delete' | null
+  const [busy, setBusy] = useState(null); // 'reply' | 'resolve' | 'delete' | 'edit' | null
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const status = STATUS_META[meta?.resolutionStatus] || STATUS_META.open;
   const showReplyBox = canDiscuss;
+  const canEdit = currentUserId != null && meta?.userId != null && String(currentUserId) === String(meta.userId);
 
   async function handleReply() {
     const text = draft.trim();
@@ -56,6 +59,21 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
     setBusy(null);
   }
 
+  function startEdit() {
+    if (!meta || !canEdit) return;
+    setEditText(meta.comment || '');
+    setEditing(true);
+  }
+
+  async function handleEditSave() {
+    const text = editText.trim();
+    if (!text || busy || !meta) return;
+    setBusy('edit');
+    const ok = await onEdit(meta.id, text);
+    setBusy(null);
+    if (ok) setEditing(false);
+  }
+
   const button = (
     <button
       type="button"
@@ -76,7 +94,7 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
 
   const panel = open && meta ? (
     <div
-      className="w-72 max-h-[min(70vh,36rem)] overflow-y-auto rounded-md border border-border bg-bg-surface p-3 text-left shadow-lg"
+      className="min-w-72 max-w-[85vw] max-h-[min(70vh,36rem)] overflow-y-auto rounded-md border border-border bg-bg-surface p-3 text-left shadow-lg"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -88,7 +106,48 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
         </span>
       </div>
       {meta.user && <p className="text-xs text-text-secondary mb-1">{meta.user}</p>}
-      <p className="text-sm mb-2 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">{meta.comment}</p>
+      {editing ? (
+        <div className="mb-2">
+          <textarea
+            rows={3}
+            autoFocus
+            value={editText}
+            maxLength={2000}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleEditSave();
+              } else if (e.key === 'Escape') {
+                setEditing(false);
+              }
+            }}
+            placeholder="Ubah komentar… lalu Enter"
+            className="w-full resize max-h-48 max-w-full rounded-md border border-border bg-bg-surface px-2.5 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
+          />
+          <p className="text-[11px] text-text-secondary">Enter = simpan · Shift+Enter = baris baru · Esc = batal</p>
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              onClick={handleEditSave}
+              disabled={busy === 'edit' || !editText.trim()}
+              className="px-2.5 py-1 rounded-md bg-brand text-white text-xs font-semibold disabled:opacity-50"
+            >
+              {busy === 'edit' ? 'Menyimpan…' : 'Simpan'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={busy === 'edit'}
+              className="px-2.5 py-1 rounded-md bg-bg-panel text-xs disabled:opacity-50"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm mb-2 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">{meta.comment}</p>
+      )}
 
       <AnnotationConversation annotation={meta} currentUserId={currentUserId} />
 
@@ -105,8 +164,8 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
                 handleReply();
               }
             }}
-            placeholder="Tulis balasan… lalu Enter"
-            className="w-full rounded-md border border-border bg-bg-surface px-2.5 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
+                    placeholder="Tulis balasan… lalu Enter"
+                    className="w-full resize max-h-48 max-w-full rounded-md border border-border bg-bg-surface px-2.5 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
           />
           <div className="mt-1 flex items-center gap-2">
             <button
@@ -135,6 +194,16 @@ export function useAnnotationControls(highlight, meta, { canReview, canReply, ca
         >
           {busy === 'resolve' ? '…' : resolveButtonLabel(meta, canReview)}
         </button>
+        {canEdit && !editing && (
+          <button
+            type="button"
+            onClick={startEdit}
+            disabled={!!busy}
+            className="px-2.5 py-1 rounded-md bg-bg-panel text-xs font-semibold disabled:opacity-50"
+          >
+            Ubah
+          </button>
+        )}
         <button
           type="button"
           onClick={handleDelete}

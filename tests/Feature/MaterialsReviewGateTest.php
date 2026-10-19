@@ -88,6 +88,61 @@ class MaterialsReviewGateTest extends TestCase
             ->assertSee('Bimbingan 1');
     }
 
+    public function test_antrean_berjalan_fifo_dari_yang_terlama(): void
+    {
+        $lama = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'sesi_ke' => 11,
+            'dosen_id' => $this->dosen->id,
+            'topik' => 'Urutan lama '.uniqid(),
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now()->subDays(3),
+        ]);
+        $baru = LogbookEntry::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => LogbookEntry::JENIS_LOGBOOK,
+            'sesi_ke' => 12,
+            'dosen_id' => $this->dosen->id,
+            'topik' => 'Urutan baru '.uniqid(),
+            'status' => LogbookEntry::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        $ids = app(\App\Services\MaterialsReviewQueue::class)->pendingLogbook($this->dosen)->pluck('id')->all();
+        $this->assertSame([$lama->id, $baru->id], array_values(array_intersect($ids, [$lama->id, $baru->id])));
+
+        $semLama = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_PROPOSAL,
+            'tanggal' => now()->addDays(7),
+            'waktu' => '09:00',
+            'undangan_path' => 'seminar-materials/undangan.pdf',
+            'undangan_original_name' => 'undangan.pdf',
+            'undangan_kepada' => ['pembimbing_1'],
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+        $semLama->update(['created_at' => now()->subDays(2), 'updated_at' => now()->subDays(2)]);
+        $semBaru = SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_SEMINAR_HASIL,
+            'tanggal' => now()->addDays(8),
+            'waktu' => '10:00',
+            'undangan_path' => 'seminar-materials/undangan2.pdf',
+            'undangan_original_name' => 'undangan2.pdf',
+            'undangan_kepada' => ['pembimbing_1'],
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+
+        $semIds = app(\App\Services\MaterialsReviewQueue::class)->pendingSeminar($this->dosen)->pluck('id')->all();
+        $this->assertSame([$semLama->id, $semBaru->id], array_values(array_intersect($semIds, [$semLama->id, $semBaru->id])));
+
+        // Urutan tampil di halaman ikut FIFO.
+        $html = $this->actingAs($this->dosen)->get(route('materials-review.index'))
+            ->assertOk()->getContent();
+        $this->assertLessThan(strpos($html, $baru->topik), strpos($html, $lama->topik));
+    }
+
     public function test_dashboard_tetap_terbuka_saat_ada_seminar_belum_dibaca(): void
     {
         SeminarSubmission::create([

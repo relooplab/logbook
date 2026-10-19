@@ -101,6 +101,7 @@ export function toAnnotation(item) {
     resolutionStatus,
     isDosen: !!item.is_dosen,
     user: item.user?.name || '',
+    userId: item.user?.id ?? null,
     created: item.created_at,
     type,
     highlight: {

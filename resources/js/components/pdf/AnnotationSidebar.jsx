@@ -49,15 +49,18 @@ function PageGroup({ pageNumber, highlightCount, children, forceOpen }) {
   );
 }
 
-function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, currentUserId, onOpen, onReply, onToggleResolve, onDelete }) {
+function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, currentUserId, onOpen, onReply, onToggleResolve, onDelete, onEdit }) {
   const [replying, setReplying] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const type = TYPE_META[a.type] || TYPE_META.area;
   const Icon = type.icon;
   const status = STATUS_META[a.resolutionStatus] || STATUS_META.open;
   const showReply = canDiscuss;
+  const canEdit = currentUserId != null && a.userId != null && String(currentUserId) === String(a.userId);
 
   async function sendReply() {
     const text = draft.trim();
@@ -76,6 +79,15 @@ function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, current
     setBusy(key);
     await fn(a.id);
     setBusy(null);
+  }
+
+  async function saveEdit() {
+    const text = editText.trim();
+    if (!text || busy) return;
+    setBusy('edit');
+    const ok = await onEdit(a.id, text);
+    setBusy(null);
+    if (ok) setEditing(false);
   }
 
   return (
@@ -104,7 +116,48 @@ function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, current
         <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-secondary" />
         <div className="min-w-0 flex-1">
           {a.user && <p className="text-[11px] font-semibold text-text-secondary">{a.user}</p>}
-          <p className="break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-sm">{a.comment}</p>
+          {editing ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <textarea
+                rows={3}
+                autoFocus
+                value={editText}
+                maxLength={2000}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    saveEdit();
+                  } else if (e.key === 'Escape') {
+                    setEditing(false);
+                  }
+                }}
+                placeholder="Ubah komentar… lalu Enter"
+                className="w-full resize max-h-48 max-w-full rounded-md border border-border bg-bg-surface px-2 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
+              />
+              <p className="text-[11px] text-text-secondary">Enter = simpan · Shift+Enter = baris baru · Esc = batal</p>
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={busy === 'edit' || !editText.trim()}
+                  className="px-2.5 py-1 rounded-md bg-brand text-white text-xs font-semibold disabled:opacity-50"
+                >
+                  {busy === 'edit' ? 'Menyimpan…' : 'Simpan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  disabled={busy === 'edit'}
+                  className="px-2.5 py-1 rounded-md bg-bg-panel text-xs disabled:opacity-50"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-sm">{a.comment}</p>
+          )}
         </div>
       </div>
 
@@ -126,8 +179,8 @@ function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, current
                 setReplying(false);
               }
             }}
-            placeholder="Tulis balasan… lalu Enter"
-            className="w-full rounded-md border border-border bg-bg-surface px-2.5 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
+                    placeholder="Tulis balasan… lalu Enter"
+                    className="w-full resize max-h-48 max-w-full rounded-md border border-border bg-bg-surface px-2.5 py-1.5 text-sm placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand"
           />
           <div className="mt-1 flex gap-2">
             <button
@@ -164,6 +217,17 @@ function HighlightCard({ annotation: a, isActive, canReview, canDiscuss, current
             {a.resolutionStatus === 'open' ? <CheckCheck className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
             {busy === 'resolve' ? '…' : resolveButtonLabel(a, canReview)}
           </button>
+          {canEdit && !editing && (
+            <button
+              type="button"
+              onClick={() => { setEditText(a.comment || ''); setEditing(true); }}
+              disabled={!!busy}
+              title="Ubah komentar ini"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-bg-panel text-xs font-semibold disabled:opacity-50"
+            >
+              Ubah
+            </button>
+          )}
           <button
             type="button"
             onClick={() => run(onDelete, 'delete')}
@@ -191,7 +255,7 @@ export default function AnnotationSidebar({
   onReply,
   onToggleResolve,
   onDelete,
-  onBuildFeedback,
+  onEdit,
   buildFeedbackUrl,
 }) {
   const [query, setQuery] = useState('');
@@ -335,6 +399,7 @@ export default function AnnotationSidebar({
                     onReply={onReply}
                     onToggleResolve={onToggleResolve}
                     onDelete={onDelete}
+                    onEdit={onEdit}
                   />
                 ))}
               </PageGroup>
@@ -350,14 +415,15 @@ export default function AnnotationSidebar({
                   canReply={canReply}
                   canDiscuss={canDiscuss}
                   currentUserId={currentUserId}
-                  onOpen={onOpen}
-                  onReply={onReply}
-                  onToggleResolve={onToggleResolve}
-                  onDelete={onDelete}
-                />
-              ))}
-            </div>
-          )}
+                    onOpen={onOpen}
+                    onReply={onReply}
+                    onToggleResolve={onToggleResolve}
+                    onDelete={onDelete}
+                    onEdit={onEdit}
+                  />
+                ))}
+              </div>
+            )}
         </div>
       </div>
 

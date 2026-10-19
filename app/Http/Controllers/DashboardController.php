@@ -458,12 +458,26 @@ class DashboardController extends Controller
 
         $tab = $request->query('tab', 'upcoming');
         $jenis = $request->query('jenis');
+        $q = trim((string) $request->query('q', ''));
+        $peran = $request->query('peran'); // pembimbing|penguji
 
         $query = SeminarSubmission::whereIn('mahasiswa_ta_id', $taIds)
             ->with(['mahasiswaTa.mahasiswa']);
 
         if ($jenis && in_array($jenis, SeminarSubmission::JENISES, true)) {
             $query->where('jenis', $jenis);
+        }
+
+        if ($q !== '') {
+            $query->whereHas('mahasiswaTa.mahasiswa', fn ($qq) => $qq->where('name', 'like', '%'.$q.'%'));
+        }
+
+        if ($peran === 'pembimbing') {
+            $query->whereHas('mahasiswaTa', fn ($qq) => $qq->where(fn ($w) => $w->where('pembimbing_1_id', $user->id)->orWhere('pembimbing_2_id', $user->id)));
+        } elseif ($peran === 'penguji') {
+            $query->whereHas('mahasiswaTa', fn ($qq) => $qq->where(fn ($w) => $w->where('penguji_1_id', $user->id)->orWhere('penguji_2_id', $user->id)));
+        } else {
+            $peran = null;
         }
 
         $today = now()->toDateString();
@@ -493,6 +507,6 @@ class DashboardController extends Controller
             ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
             ->count();
 
-        return view('dashboard.dosen-seminar-jadwal', compact('submissions', 'readIds', 'unreadCount', 'tab', 'jenis'));
+        return view('dashboard.dosen-seminar-jadwal', compact('submissions', 'readIds', 'unreadCount', 'tab', 'jenis', 'q', 'peran'));
     }
 }

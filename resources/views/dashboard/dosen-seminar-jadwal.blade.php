@@ -15,13 +15,20 @@
     {{-- ===== Filter: tab Akan Datang / Riwayat + jenis ===== --}}
     <div class="card p-4 flex flex-wrap items-center gap-3">
         <div class="flex gap-1">
-            <a href="{{ route('dosen.seminar-jadwal', ['tab' => 'upcoming', 'jenis' => $jenis]) }}"
+            <a href="{{ route('dosen.seminar-jadwal', array_filter(['tab' => 'upcoming', 'jenis' => $jenis, 'q' => $q ?? null, 'peran' => $peran ?? null])) }}"
                 class="px-3 py-1.5 rounded-lg text-sm font-medium {{ $tab !== 'past' ? 'bg-brand text-[#0b1420]' : 'bg-bg-hover text-text-secondary hover:bg-border' }}">Akan Datang</a>
-            <a href="{{ route('dosen.seminar-jadwal', ['tab' => 'past', 'jenis' => $jenis]) }}"
+            <a href="{{ route('dosen.seminar-jadwal', array_filter(['tab' => 'past', 'jenis' => $jenis, 'q' => $q ?? null, 'peran' => $peran ?? null])) }}"
                 class="px-3 py-1.5 rounded-lg text-sm font-medium {{ $tab === 'past' ? 'bg-brand text-[#0b1420]' : 'bg-bg-hover text-text-secondary hover:bg-border' }}">Riwayat</a>
         </div>
-        <form method="GET" action="{{ route('dosen.seminar-jadwal') }}" class="flex items-center gap-2">
+        <form method="GET" action="{{ route('dosen.seminar-jadwal') }}" class="flex flex-wrap items-center gap-2">
             <input type="hidden" name="tab" value="{{ $tab }}">
+            <input type="search" name="q" value="{{ $q ?? '' }}" placeholder="Cari nama mahasiswa…"
+                class="rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-sm w-48">
+            <select name="peran" onchange="this.form.submit()" class="rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-sm">
+                <option value="">Semua Peran</option>
+                <option value="pembimbing" @selected(($peran ?? null) === 'pembimbing')>Pembimbing</option>
+                <option value="penguji" @selected(($peran ?? null) === 'penguji')>Penguji</option>
+            </select>
             <select name="jenis" onchange="this.form.submit()" class="rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-sm">
                 <option value="">Semua Jenis</option>
                 @foreach (\App\Models\SeminarSubmission::JENISES as $j)

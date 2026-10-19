@@ -5,6 +5,7 @@
 <script>
     @php $fromWizard = in_array(request()->query('from'), ['create-revisi', 'create-logbook']) && auth()->user()->can('update', $logbook); @endphp
     window.PDF_VIEWER_DATA = {
+        updateUrl: @json(url("/pdf-comments/{id}")),
         parentPdfUrl: @json($parentPdfUrl ?? null),
         parentCommentsUrl: @json($parentCommentsUrl ?? null),
         parentTitle: @json($parentTitle ?? null),

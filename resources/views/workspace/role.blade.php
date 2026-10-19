@@ -13,7 +13,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="font-heading font-bold text-2xl text-text-primary"><span class="material-symbols-outlined icon-md align-text-bottom">folder</span> Workspace</h1>
+            <h1 class="font-heading font-bold text-2xl text-text-primary">Workspace</h1>
             <p class="text-sm text-text-secondary mt-0.5">
                 @if ($isDosen)
                     File pribadi & workspace bimbingan Anda

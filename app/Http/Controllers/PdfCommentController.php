@@ -102,6 +102,26 @@ class PdfCommentController extends Controller
         ]);
     }
 
+    /**
+     * Ubah isi komentar anotasi. Hanya penulisnya dan hanya selama entri
+     * masih bisa diubah (draft / revisi berjalan) — sejajar aturan hapus
+     * milik non-reviewer. Balasan dan status tidak ikut berubah.
+     */
+    public function update(Request $request, PdfComment $comment): JsonResponse
+    {
+        $this->authorize('view', $comment->entry);
+        abort_unless($request->user()->id === $comment->user_id, 403, 'Hanya penulis komentar yang dapat mengubahnya.');
+        abort_unless($request->user()->can('update', $comment->entry), 403, 'Entri sudah tidak bisa diubah.');
+
+        $validated = $request->validate([
+            'comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $comment->update(['comment' => trim($validated['comment'])]);
+
+        return response()->json(['ok' => true, 'comment' => $comment->comment]);
+    }
+
     public function destroy(Request $request, PdfComment $comment): JsonResponse
     {
         $this->authorize('view', $comment->entry);

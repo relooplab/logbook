@@ -13,7 +13,7 @@ import {
 import SelectionTip from './pdf/SelectionTip.jsx';
 import AnnotationSidebar from './pdf/AnnotationSidebar.jsx';
 import { useAnnotationControls } from './pdf/HighlightToolbar.jsx';
-import { capturePdfPosition, restorePdfPosition } from './pdf/viewPosition.js';
+import { capturePdfPosition, restorePdfPosition, captureSpreadAnchor, centerPdfSpread } from './pdf/viewPosition.js';
 import { correctAreaSelection } from './pdf/areaPosition.js';
 import { parseZoomPercent, ZOOM_OPTIONS } from './pdf/zoom.js';
 import {
@@ -38,7 +38,7 @@ import {
  */
 
 const DATA = window.PDF_VIEWER_DATA || {};
-const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, wizardParentId, wizardDraftId, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf, parentPdfUrl, parentCommentsUrl, parentTitle, parentEntryId } = DATA;
+const { title, draftUrl, catatanUrl, hasCatatan, entryId, csrf, commentsUrl, storeUrl, resolveUrl, replyUrl, deleteUrl, updateUrl, burnUrl, buildFeedbackUrl, canReview, canReply, canDiscuss, currentUserId, returnUrl, quickReviewUrl, returnLabel, fromCreateRevisi, wizardParentId, wizardDraftId, canPullAnnotations, pullAnnotationsUrl, entryKind, isDraftPdf, isCatatanPdf, parentPdfUrl, parentCommentsUrl, parentTitle, parentEntryId } = DATA;
 const canCompare = !!parentPdfUrl;
 
 const parseIdFromHash = () => {
@@ -55,7 +55,7 @@ const resetHash = () => {
 // Mode readOnly (panel berkas sebelumnya): sorotan polos tanpa toolbar,
 // klik (bukan saat memblok teks) menggulir ke anotasi tersebut.
 // ---------------------------------------------------------------------------
-function HighlightContainer({ annotationsById, onReply, onToggleResolve, onDelete, onSkipNext, hasNext, readOnly, onOpenOld }) {
+function HighlightContainer({ annotationsById, onReply, onToggleResolve, onDelete, onEdit, onSkipNext, hasNext, readOnly, onOpenOld }) {
   const { highlight, isScrolledTo } = useHighlightContainerContext();
   const meta = annotationsById[highlight.id];
   const color = statusColor(meta?.resolutionStatus);
@@ -96,6 +96,7 @@ function HighlightContainer({ annotationsById, onReply, onToggleResolve, onDelet
     onReply,
     onToggleResolve,
     onDelete,
+    onEdit,
     onSkipNext,
     hasNext,
   });
@@ -230,6 +231,7 @@ function HighlighterView({
             onReply={actions.reply}
             onToggleResolve={actions.toggleResolve}
             onDelete={actions.remove}
+            onEdit={actions.edit}
             onSkipNext={actions.skipNext}
             hasNext={hasNext}
             readOnly={readOnly}
@@ -276,7 +278,6 @@ function PdfViewerApp() {
   const [compareOpen, setCompareOpen] = useState(() => readPref('pdf-compare-open', false));
   const [compareAnn, setCompareAnn] = useState(() => readPref('pdf-compare-ann', true));
   const [syncOn, setSyncOn] = useState(() => readPref('pdf-compare-sync', true));
-  const [compareTab, setCompareTab] = useState('new');
   const [parentAnnotations, setParentAnnotations] = useState([]);
   const [mainViewerReady, setMainViewerReady] = useState(false);
   const [parentViewerReady, setParentViewerReady] = useState(false);
@@ -292,7 +293,17 @@ function PdfViewerApp() {
     }
   }, [compareOpen]);
   const sidebarCloseRef = useRef(null);
-  const spread = 0; // Selalu satu halaman (mode spread dimatikan agar fokus & stabil).
+  // Mode dua halaman (desktop saja, saling lepas dengan mode banding).
+  const [spreadOn, setSpreadOn] = useState(() => readPref('pdf-spread', false));
+  useEffect(() => { try { window.localStorage.setItem('pdf-spread', spreadOn ? '1' : '0'); } catch (e) {} }, [spreadOn]);
+  useEffect(() => {
+    const viewer = utilsRef.current?.getViewer?.();
+    if (!viewer || typeof viewer.spreadMode === 'undefined') return;
+    if (viewer.spreadMode === (spreadOn ? 1 : 0)) return;
+    const anchor = captureSpreadAnchor(viewer);
+    viewer.spreadMode = spreadOn ? 1 : 0;
+    requestAnimationFrame(() => { centerPdfSpread(viewer, anchor); });
+  }, [spreadOn, mainViewerReady, activeType]);
 
   const searchQueryRef = useRef('');
   searchQueryRef.current = searchQuery;
@@ -506,7 +517,7 @@ function PdfViewerApp() {
     };
   }, [compareOpen, parentCommentsUrl]);
 
-  const noopActions = useMemo(() => ({ reply: () => {}, toggleResolve: () => {}, remove: () => {}, skipNext: () => {} }), []);
+  const noopActions = useMemo(() => ({ reply: () => {}, toggleResolve: () => {}, remove: () => {}, edit: () => {}, skipNext: () => {} }), []);
 
   const parentHighlights = useMemo(() => parentAnnotations.map((a) => a.highlight), [parentAnnotations]);
   const parentById = useMemo(() => {
@@ -722,6 +733,36 @@ function PdfViewerApp() {
     return true;
   }
 
+  async function saveEdit(id, comment) {
+    const text = String(comment || '').trim();
+    if (!updateUrl || !text) return false;
+    try {
+      const res = await fetch(updateUrl.replace('{id}', id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ comment: text }),
+      });
+      if (!res.ok) {
+        alert('Gagal menyimpan perubahan. Status: ' + res.status);
+        return false;
+      }
+      const d = await res.json();
+      setAnnotations((a) => a.map((x) => (x.id === id ? {
+        ...x,
+        comment: d.comment || text,
+        highlight: x.highlight ? {
+          ...x.highlight,
+          content: { ...(x.highlight.content || {}), text: d.comment || text },
+        } : x.highlight,
+      } : x)));
+      return true;
+    } catch (e) {
+      alert('Gagal menyimpan perubahan.');
+      return false;
+    }
+  }
+
   function skipToNext(excludeId) {
     const next = nextUnresponded(excludeId);
     if (next) openAnnotation(next);
@@ -755,6 +796,7 @@ function PdfViewerApp() {
     reply: saveReply,
     toggleResolve,
     remove: removeAnnotation,
+    edit: saveEdit,
     skipNext: skipToNext,
   }), [annotations]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -819,7 +861,7 @@ function PdfViewerApp() {
     ? `absolute inset-y-0 left-0 z-40 w-80 max-w-[85vw] bg-bg-surface border-r border-border transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
     : `flex-shrink-0 border-r border-border transition-all duration-300 overflow-hidden ${sidebarOpen ? 'w-80' : 'w-0 border-r-0'}`;
 
-  const showCompare = compareOpen && canCompare;
+  const showCompare = compareOpen && canCompare && !isMobile;
 
   const mainPane = (
     <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-bg-surface">
@@ -853,6 +895,7 @@ function PdfViewerApp() {
             onReply={saveReply}
             onToggleResolve={toggleResolve}
             onDelete={removeAnnotation}
+            onEdit={saveEdit}
             onBuildFeedback={buildFeedback}
             // Footer feedback sidebar disembunyikan: tombolnya sudah ada di bar compact.
             buildFeedbackUrl={null}
@@ -953,8 +996,8 @@ function PdfViewerApp() {
               initialPage={undefined}
               onPageChange={() => {}}
               onScaleChange={setScale}
-              onSaveSelection={() => {}}
-              onDocumentReady={() => {}}
+                onSaveSelection={() => {}}
+                onDocumentReady={() => {}}
               onTextDetect={() => {}}
               onUtilsReady={() => setParentViewerReady(true)}
               leftOpen={false}
@@ -968,23 +1011,6 @@ function PdfViewerApp() {
       </div>
     </div>
   ) : null;
-
-  const compareTabs = showCompare && isMobile && (
-    <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 self-start shrink-0" role="group" aria-label="Pilih berkas">
-      <button
-        onClick={() => setCompareTab('new')}
-        aria-pressed={compareTab === 'new'}
-        className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareTab === 'new' ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-        Berkas baru
-      </button>
-      <button
-        onClick={() => setCompareTab('old')}
-        aria-pressed={compareTab === 'old'}
-        className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareTab === 'old' ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-        Berkas sebelumnya
-      </button>
-    </div>
-  );
 
   return (
     <div className={isFullscreen
@@ -1031,33 +1057,41 @@ function PdfViewerApp() {
             </button>
           )}
         </div>
-        {canCompare && (
-          <>
-            <span className="w-px h-5 bg-border shrink-0" />
-            <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Banding berkas">
-              <button onClick={() => setCompareOpen((v) => !v)}
-                aria-pressed={compareOpen}
-                title="Tampilkan berkas sebelumnya di samping"
-                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareOpen ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-                Berkas sebelumnya: {compareOpen ? 'Tampil' : 'Sembunyi'}
-              </button>
-              <button onClick={() => compareOpen && setCompareAnn((v) => !v)}
-                disabled={!compareOpen}
-                aria-pressed={compareAnn}
-                title="Tampilkan anotasi pada berkas sebelumnya"
-                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${compareAnn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-                Anotasi lama: {compareAnn ? 'Tampil' : 'Sembunyi'}
-              </button>
-              <button onClick={() => compareOpen && setSyncOn((v) => !v)}
-                disabled={!compareOpen}
-                aria-pressed={syncOn}
-                title="Gulir kedua berkas berbarengan"
-                className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${syncOn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-                Scroll Sync: {syncOn ? 'Aktif' : 'Nonaktif'}
-              </button>
-            </div>
-          </>
-        )}
+      {canCompare && !isMobile && (
+        <>
+          <span className="w-px h-5 bg-border shrink-0" />
+          <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Banding berkas">
+            <button onClick={() => { if (!compareOpen) setSpreadOn(false); setCompareOpen((v) => !v); }}
+              aria-pressed={compareOpen}
+              title="Tampilkan berkas sebelumnya di samping"
+              className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${compareOpen ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+              Berkas sebelumnya: {compareOpen ? 'Tampil' : 'Sembunyi'}
+            </button>
+            <button onClick={() => compareOpen && setCompareAnn((v) => !v)}
+              disabled={!compareOpen}
+              aria-pressed={compareAnn}
+              title="Tampilkan anotasi pada berkas sebelumnya"
+              className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${compareAnn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+              Anotasi lama: {compareAnn ? 'Tampil' : 'Sembunyi'}
+            </button>
+            <button onClick={() => compareOpen && setSyncOn((v) => !v)}
+              disabled={!compareOpen}
+              aria-pressed={syncOn}
+              title="Gulir kedua berkas berbarengan"
+              className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${syncOn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+              Scroll Sync: {syncOn ? 'Aktif' : 'Nonaktif'}
+            </button>
+          </div>
+        </>
+      )}
+      {!isMobile && (
+        <button onClick={() => { if (!spreadOn) setCompareOpen(false); setSpreadOn((v) => !v); }}
+          aria-pressed={spreadOn}
+          title={showCompare ? 'Matikan mode banding dulu untuk memakai dua halaman' : 'Tampilkan dua halaman berdampingan'}
+          className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 ${spreadOn ? 'bg-brand text-white' : 'bg-bg-panel hover:bg-bg-hover'}`}>
+          Dua halaman: {spreadOn ? 'Aktif' : 'Nonaktif'}
+        </button>
+      )}
         <span className="w-px h-5 bg-border shrink-0" />
         <div className="flex items-center gap-1 rounded-md bg-bg-panel p-0.5 shrink-0" role="search">
           <Search className="h-3.5 w-3.5 mx-1 text-text-secondary" />
@@ -1152,7 +1186,7 @@ function PdfViewerApp() {
           {buildFeedbackUrl && (
             <button onClick={buildFeedback}
               className="flex items-center gap-1 px-2 py-1 rounded-md bg-brand-fill hover:bg-brand-fill-hover text-white text-xs font-semibold whitespace-nowrap">
-              <Zap className="h-3.5 w-3.5" /><span className="hidden md:inline">Buat Pesan</span>
+              <Zap className="h-3.5 w-3.5" /><span className="hidden md:inline" title="Susun draf umpan balik dari anotasi yang belum selesai">Jadikan Umpan Balik</span>
             </button>
           )}
           {canPullAnnotations && (
@@ -1208,16 +1242,13 @@ function PdfViewerApp() {
         </div>
       )}
 
-      {compareTabs}
-      {showCompare && !isMobile ? (
+      {showCompare ? (
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden">
           {mainPane}
           {comparePane}
         </div>
       ) : (
-        <>
-          {(!showCompare || !isMobile || compareTab === 'new') ? mainPane : comparePane}
-        </>
+        mainPane
       )}
     </div>
   );

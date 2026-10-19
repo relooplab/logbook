@@ -336,6 +336,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::post('/pdf-comments/{comment}/resolve', [PdfCommentController::class, 'resolve'])->name('pdf-comments.resolve');
     Route::post('/pdf-comments/{comment}/reply', [PdfCommentController::class, 'reply'])->name('pdf-comments.reply');
     Route::delete('/pdf-comments/{comment}', [PdfCommentController::class, 'destroy'])->name('pdf-comments.destroy');
+    Route::patch('/pdf-comments/{comment}', [PdfCommentController::class, 'update'])->name('pdf-comments.update');
 
     // ---------------------------------------------------------- export
     Route::get('/logbook/export/pdf/{mahasiswaTa}', [ExportController::class, 'exportPdf'])->name('logbook.export.pdf');

@@ -45,7 +45,9 @@ class MaterialsReviewQueue
             })
             ->whereHas('mahasiswaTa', fn ($q) => $q->whereNotIn('status_ta', [MahasiswaTa::STATUS_PENDING_APPROVAL, MahasiswaTa::STATUS_DITOLAK]))
             ->with(['mahasiswaTa.mahasiswa'])
-            ->orderByDesc('submitted_at')
+            // Antrean dilayani FIFO (tertua dulu), selaras urutan quick-review.
+            ->orderBy('submitted_at')
+            ->orderBy('id')
             ->get();
     }
 
@@ -65,7 +67,9 @@ class MaterialsReviewQueue
             })
             ->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))
             ->with(['mahasiswaTa.mahasiswa'])
-            ->orderByDesc('created_at')
+            // Antrean dilayani FIFO (tertua dulu).
+            ->orderBy('created_at')
+            ->orderBy('id')
             ->get();
     }
 
