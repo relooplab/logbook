@@ -548,11 +548,10 @@
         var userId = {{ auth()->id() ?? 'null' }};
         if (!userId) return;
         var rKey = @json(config('broadcasting.connections.reverb.key')) || 'lbta-key';
-        // Endpoint WS sisi BROWSER. `options.host/port/scheme` adalah alamat
-        // internal (mis. logbook-ta-reverb:8080) yang tidak bisa di-resolve dari
-        // komputer user — karena itu default-nya host/port halaman itu sendiri
-        // (nginx mem-proxy /app/ ke Reverb). REVERB_CLIENT_* dipakai hanya bila
-        // WebSocket dilayani domain/port terpisah.
+        // Endpoint WS sisi BROWSER. `options.host/port/scheme` menunjuk alamat
+        // internal yang hanya bisa di-resolve di jaringan Docker — bukan untuk
+        // klien. Default-nya host/port halaman itu sendiri (nginx mem-proxy
+        // /app/ ke Reverb); REVERB_CLIENT_* dipakai bila WS beda domain/port.
         var rHost = @json(config('broadcasting.connections.reverb.client_host')) || window.location.hostname;
         var rScheme = @json(config('broadcasting.connections.reverb.client_scheme')) || (window.location.protocol === 'https:' ? 'https' : 'http');
         var rPort = @json(config('broadcasting.connections.reverb.client_port'))
