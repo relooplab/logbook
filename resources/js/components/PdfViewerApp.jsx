@@ -300,9 +300,51 @@ function PdfViewerApp() {
     const viewer = utilsRef.current?.getViewer?.();
     if (!viewer || typeof viewer.spreadMode === 'undefined') return;
     if (viewer.spreadMode === (spreadOn ? 1 : 0)) return;
+    // Layout PDF.js (render halaman + hitung ulang skala) berjalan asinkron
+    // setelah spreadMode diganti, jadi pemusatan sekali-tebak basi.
+    // Pusatkan ulang sampai layout stabil / batas waktu tercapai.
     const anchor = captureSpreadAnchor(viewer);
     viewer.spreadMode = spreadOn ? 1 : 0;
-    requestAnimationFrame(() => { centerPdfSpread(viewer, anchor); });
+    const bus = utilsRef.current?.getEventBus?.();
+    const t0 = Date.now();
+    const TIME_BUDGET_MS = 2000;
+    const MAX_FRAMES = 15;
+    let settled = false;
+    let frames = 0;
+    let raf = 0;
+    function cleanup() {
+      settled = true;
+      cancelAnimationFrame(raf);
+      if (bus) {
+        try { bus.off('pagerendered', onRendered); } catch (e) {}
+        try { bus.off('pagesloaded', onRendered); } catch (e) {}
+      }
+    }
+    function recenter() {
+      if (settled) return false;
+      if (centerPdfSpread(viewer, anchor)) return true;
+      if (!spreadOn && anchor) {
+        try { utilsRef.current?.goToPage?.(anchor.page); return true; } catch (e) { /* abaikan */ }
+      }
+      return false;
+    }
+    function onRendered() {
+      if (settled || Date.now() - t0 > TIME_BUDGET_MS) { cleanup(); return; }
+      recenter();
+    }
+    function tick() {
+      if (settled) return;
+      if (frames++ > MAX_FRAMES || Date.now() - t0 > TIME_BUDGET_MS) { cleanup(); return; }
+      recenter();
+      raf = requestAnimationFrame(tick);
+    }
+    recenter();
+    if (bus) {
+      try { bus.on('pagerendered', onRendered); } catch (e) {}
+      try { bus.on('pagesloaded', onRendered); } catch (e) {}
+    }
+    raf = requestAnimationFrame(tick);
+    return cleanup;
   }, [spreadOn, mainViewerReady, activeType]);
 
   const searchQueryRef = useRef('');
