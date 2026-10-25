@@ -45,6 +45,20 @@ const parseIdFromHash = () => {
   const m = (document.location.hash || '').match(/^#highlight-(.+)$/);
   return m ? m[1] : null;
 };
+
+// Posisi scroll agar atas halaman `page` tepat di atas viewport.
+function pageTopScroll(viewer, page) {
+  try {
+    const div = viewer?.getPageView?.(page - 1)?.div;
+    const c = viewer?.container;
+    if (!div || !c || !Number.isInteger(page) || page < 1) return null;
+    const r = div.getBoundingClientRect();
+    const cr = c.getBoundingClientRect();
+    return c.scrollTop + (r.top - cr.top);
+  } catch (e) {
+    return null;
+  }
+}
 const resetHash = () => {
   if (document.location.hash) document.location.hash = '';
 };
@@ -290,8 +304,49 @@ function PdfViewerApp() {
     if (!compareOpen) {
       setParentViewerReady(false);
       parentUtilsRef.current = null;
+      setPageLock(null);
     }
   }, [compareOpen]);
+  // Kunci halaman: {aPage, bPage, scrollA, scrollB} — snapshot posisi kedua
+  // kontainer saat dikunci. Mode longgar: pengikut yang mentok berhenti,
+  // lalu tersambung lagi begitu kembali ke jangkauan.
+  const [pageLock, setPageLock] = useState(null);
+  const [pageA, setPageA] = useState(1);
+  const [pageB, setPageB] = useState(1);
+  const [parentNumPages, setParentNumPages] = useState(0);
+  const [lockInputA, setLockInputA] = useState('');
+  const [lockInputB, setLockInputB] = useState('');
+  const [lockLoose, setLockLoose] = useState(false);
+  const lockLooseRef = useRef(false);
+  const setLoose = (v) => {
+    if (lockLooseRef.current === v) return;
+    lockLooseRef.current = v;
+    setLockLoose(v);
+  };
+  // Ganti berkas utama membatalkan kunci (offset lama tak lagi valid).
+  const fileEpochRef = useRef(activeType);
+  useEffect(() => {
+    setPageLock(null);
+    setLoose(false);
+  }, [activeType]);
+  // Zoom mengubah tinggi halaman: kunci di-rebase ke atas halaman terkunci.
+  // Lewati bila kunci baru saja dibatalkan oleh ganti berkas.
+  useEffect(() => {
+    if (fileEpochRef.current !== activeType) {
+      fileEpochRef.current = activeType;
+      return;
+    }
+    if (!pageLock) return;
+    const va = utilsRef.current?.getViewer?.();
+    const vb = parentUtilsRef.current?.getViewer?.();
+    if (!va || !vb) return;
+    const sa = pageTopScroll(va, pageLock.aPage);
+    const sb = pageTopScroll(vb, pageLock.bPage);
+    if (sa === null || sb === null) return;
+    setPageLock({ aPage: pageLock.aPage, bPage: pageLock.bPage, scrollA: sa, scrollB: sb });
+    setLoose(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, activeType]);
   const sidebarCloseRef = useRef(null);
   // Mode dua halaman (desktop saja, saling lepas dengan mode banding).
   const [spreadOn, setSpreadOn] = useState(() => readPref('pdf-spread', false));
@@ -584,32 +639,95 @@ function PdfViewerApp() {
     handleUtilsReady();
   }, [handleUtilsReady]);
 
-  // Sinkron gulir proporsional dua arah; toleransi 2px cegah pantulan.
+  // Sinkron gulir dua arah; toleransi 2px cegah pantulan.
+  // Tanpa kunci: proporsional. Dengan kunci: offset relatif terhadap snapshot
+  // (longgar — pengikut yang mentok berhenti lalu tersambung lagi).
   useEffect(() => {
     if (!compareOpen || !syncOn) return;
     const a = utilsRef.current?.getViewer?.()?.container;
     const b = parentUtilsRef.current?.getViewer?.()?.container;
     if (!a || !b || a === b) return;
-    const apply = (from, to) => {
+    const lock = pageLock;
+    const apply = (from, to, fromLock, toLock) => {
       if (syncingRef.current) return;
-      const fMax = from.scrollHeight - from.clientHeight;
-      const tMax = to.scrollHeight - to.clientHeight;
-      if (fMax <= 0 || tMax <= 0) return;
-      const target = (from.scrollTop / fMax) * tMax;
-      if (Math.abs(to.scrollTop - target) < 2) return;
+      let target;
+      let slipped = false;
+      if (lock && fromLock !== null && toLock !== null) {
+        target = toLock + (from.scrollTop - fromLock);
+      } else {
+        const fMax = from.scrollHeight - from.clientHeight;
+        const tMax = to.scrollHeight - to.clientHeight;
+        if (fMax <= 0 || tMax <= 0) return;
+        target = (from.scrollTop / fMax) * tMax;
+      }
+      const max = to.scrollHeight - to.clientHeight;
+      const clamped = Math.max(0, Math.min(max < 0 ? 0 : max, target));
+      slipped = Math.abs(clamped - target) > 2;
+      if (Math.abs(to.scrollTop - clamped) < 2 && !slipped) { setLoose(false); return; }
+      setLoose(lock ? slipped : false);
+      if (Math.abs(to.scrollTop - clamped) < 2) return;
       syncingRef.current = true;
-      to.scrollTop = target;
+      to.scrollTop = clamped;
       requestAnimationFrame(() => { syncingRef.current = false; });
     };
-    const onA = () => apply(a, b);
-    const onB = () => apply(b, a);
+    const onA = () => apply(a, b, lock ? lock.scrollA : null, lock ? lock.scrollB : null);
+    const onB = () => apply(b, a, lock ? lock.scrollB : null, lock ? lock.scrollA : null);
     a.addEventListener('scroll', onA, { passive: true });
     b.addEventListener('scroll', onB, { passive: true });
     return () => {
       a.removeEventListener('scroll', onA);
       b.removeEventListener('scroll', onB);
     };
-  }, [compareOpen, syncOn, mainViewerReady, parentViewerReady, activeType]);
+  }, [compareOpen, syncOn, mainViewerReady, parentViewerReady, activeType, pageLock]);
+
+  const scrollToPageTop = (utils, page) => {
+    try {
+      const viewer = utils?.current?.getViewer?.();
+      if (!viewer || !Number.isInteger(page) || page < 1) return null;
+      const top = pageTopScroll(viewer, page);
+      if (top === null) return null;
+      viewer.container.scrollTop = top;
+      return top;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const lockCurrentPair = () => {
+    const va = utilsRef.current?.getViewer?.();
+    const vb = parentUtilsRef.current?.getViewer?.();
+    if (!va || !vb) return;
+    const pa = va.currentPageNumber || pageA || 1;
+    const pb = vb.currentPageNumber || pageB || 1;
+    if (!syncOn) setSyncOn(true);
+    setPageLock({ aPage: pa, bPage: pb, scrollA: va.container.scrollTop, scrollB: vb.container.scrollTop });
+    setLoose(false);
+    setLockInputA('');
+    setLockInputB('');
+  };
+
+  const lockManualPair = () => {
+    const va = utilsRef.current?.getViewer?.();
+    const vb = parentUtilsRef.current?.getViewer?.();
+    if (!va || !vb) return;
+    const pa = parseInt(lockInputA, 10);
+    const pb = parseInt(lockInputB, 10);
+    if (!Number.isInteger(pa) || pa < 1 || (numPages > 0 && pa > numPages)) return;
+    if (!Number.isInteger(pb) || pb < 1 || (parentNumPages > 0 && pb > parentNumPages)) return;
+    const sa = scrollToPageTop(utilsRef, pa);
+    const sb = scrollToPageTop(parentUtilsRef, pb);
+    if (sa === null || sb === null) return;
+    if (!syncOn) setSyncOn(true);
+    setPageLock({ aPage: pa, bPage: pb, scrollA: sa, scrollB: sb });
+    setLoose(false);
+    setLockInputA('');
+    setLockInputB('');
+  };
+
+  const unlockPair = () => {
+    setPageLock(null);
+    setLoose(false);
+  };
 
   // ---------------------------------------------------------------- navigasi hash ala demo
   const scrollToAnnotation = useCallback((a) => {
@@ -945,7 +1063,13 @@ function PdfViewerApp() {
         </div>
       </div>
 
-      <div className="relative min-w-0 flex-1">
+      <div className="relative min-w-0 flex-1 flex flex-col">
+        {showCompare && (
+          <p className="shrink-0 border-b border-border bg-bg-panel px-3 py-1 text-xs">
+            <span className="font-semibold">Berkas baru</span>
+          </p>
+        )}
+        <div className="relative min-w-0 flex-1">
         {error === 'NON_PDF' ? (
           <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-sm">
             <p className="font-semibold">File ini bukan PDF sehingga tidak bisa dianotasi di sini.</p>
@@ -984,8 +1108,8 @@ function PdfViewerApp() {
                 hasNext={unrespondedDosen.length > 0}
                 areaMode={areaMode}
                 scale={scale}
-                initialPage={positionsRef.current[activeType]?.page}
-                onPageChange={restorePending}
+                    initialPage={positionsRef.current[activeType]?.page}
+                    onPageChange={(p) => { setPageA(p); restorePending(p); }}
                 onScaleChange={setScale}
                 onSaveSelection={saveAnnotation}
                 onDocumentReady={setNumPages}
@@ -999,15 +1123,15 @@ function PdfViewerApp() {
             )}
           </PdfLoader>
         )}
+        </div>
       </div>
     </div>
   );
 
   const comparePane = showCompare ? (
     <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-bg-surface">
-      <p className="shrink-0 border-b border-border bg-bg-panel px-3 py-1.5 text-xs">
-        <span className="font-semibold">Ini berkas sebelumnya dari {parentTitle || 'revisi'}</span>
-        <span className="text-text-secondary"> — hanya bisa dilihat</span>
+      <p className="shrink-0 border-b border-border bg-bg-panel px-3 py-1 text-xs">
+        <span className="font-semibold">Berkas sebelumnya</span>
       </p>
       <div className="relative min-h-0 flex-1">
         <PdfLoader
@@ -1036,10 +1160,10 @@ function PdfViewerApp() {
               areaMode={false}
               scale={scale}
               initialPage={undefined}
-              onPageChange={() => {}}
+                onPageChange={(p) => setPageB(p)}
               onScaleChange={setScale}
                 onSaveSelection={() => {}}
-                onDocumentReady={() => {}}
+                                  onDocumentReady={(n) => setParentNumPages(n || 0)}
               onTextDetect={() => {}}
               onUtilsReady={() => setParentViewerReady(true)}
               leftOpen={false}
@@ -1102,7 +1226,7 @@ function PdfViewerApp() {
       {canCompare && !isMobile && (
         <>
           <span className="w-px h-5 bg-border shrink-0" />
-          <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Banding berkas">
+                    <div className="flex items-center gap-0.5 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Banding berkas baru dan berkas sebelumnya">
             <button onClick={() => { if (!compareOpen) setSpreadOn(false); setCompareOpen((v) => !v); }}
               aria-pressed={compareOpen}
               title="Tampilkan berkas sebelumnya di samping"
@@ -1116,14 +1240,64 @@ function PdfViewerApp() {
               className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${compareAnn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
               Anotasi lama: {compareAnn ? 'Tampil' : 'Sembunyi'}
             </button>
-            <button onClick={() => compareOpen && setSyncOn((v) => !v)}
-              disabled={!compareOpen}
-              aria-pressed={syncOn}
-              title="Gulir kedua berkas berbarengan"
-              className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${syncOn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
-              Scroll Sync: {syncOn ? 'Aktif' : 'Nonaktif'}
-            </button>
-          </div>
+              <button onClick={() => { if (!compareOpen) return; if (syncOn) unlockPair(); setSyncOn(!syncOn); }}
+                      disabled={!compareOpen}
+                      aria-pressed={syncOn}
+                      title="Gulir kedua berkas berbarengan"
+                      className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 ${syncOn ? 'bg-brand text-white shadow' : 'hover:bg-bg-hover'}`}>
+                      Scroll Sync: {syncOn ? 'Aktif' : 'Nonaktif'}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-md bg-bg-panel p-0.5 shrink-0" role="group" aria-label="Kunci halaman">
+                    <span className="px-2 py-1 text-xs text-text-secondary whitespace-nowrap" aria-live="off">
+                      Hal. {pageA}{numPages ? `/${numPages}` : ''} ↔ {pageB}{parentNumPages ? `/${parentNumPages}` : ''}
+                    </span>
+                    {pageLock ? (
+                      <>
+                        <span className="px-1 py-1 text-xs font-semibold whitespace-nowrap" title={lockLoose ? 'Salah satu sisi mentok — akan tersambung lagi saat kembali ke jangkauan' : 'Halaman terkunci mengikuti scroll'}>
+                          Terkunci: {pageLock.aPage} ↔ {pageLock.bPage}{lockLoose ? ' • longgar' : ''}
+                        </span>
+                        <button onClick={unlockPair}
+                          title="Lepas kunci halaman"
+                          className="px-2 py-1 rounded text-xs font-semibold whitespace-nowrap hover:bg-bg-hover">
+                          Buka
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => compareOpen && lockCurrentPair()}
+                          disabled={!compareOpen}
+                          title="Kunci pasangan halaman yang sedang tampil"
+                          className="px-2 py-1 rounded text-xs font-semibold whitespace-nowrap disabled:opacity-40 hover:bg-bg-hover">
+                          Kunci pasangan ini
+                        </button>
+                        <input value={lockInputA} onChange={(e) => setLockInputA(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                          disabled={!compareOpen}
+                          aria-label="Nomor halaman berkas baru"
+                          title="Nomor halaman berkas baru"
+                          placeholder={`${pageA}`}
+                          inputMode="numeric"
+                          className="w-10 rounded bg-bg-surface px-1 py-1 text-center text-xs outline-none focus:ring-2 focus:ring-brand disabled:opacity-40" />
+                        <input value={lockInputB} onChange={(e) => setLockInputB(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                          disabled={!compareOpen}
+                          aria-label="Nomor halaman berkas sebelumnya"
+                          title="Nomor halaman berkas sebelumnya"
+                          placeholder={`${pageB}`}
+                          inputMode="numeric"
+                          className="w-10 rounded bg-bg-surface px-1 py-1 text-center text-xs outline-none focus:ring-2 focus:ring-brand disabled:opacity-40" />
+                        <button onClick={() => compareOpen && lockManualPair()}
+                          disabled={!compareOpen || (() => {
+                            const pa = parseInt(lockInputA, 10);
+                            const pb = parseInt(lockInputB, 10);
+                            return !(Number.isInteger(pa) && pa >= 1 && (numPages <= 0 || pa <= numPages) && Number.isInteger(pb) && pb >= 1 && (parentNumPages <= 0 || pb <= parentNumPages));
+                          })()}
+                          title="Kunci ke nomor halaman yang diketik"
+                          className="px-2 py-1 rounded text-xs font-semibold whitespace-nowrap bg-brand text-white shadow disabled:opacity-40 disabled:bg-bg-panel disabled:text-text-secondary disabled:shadow-none">
+                          Kunci
+                        </button>
+                      </>
+                    )}
+                  </div>
         </>
       )}
       {!isMobile && (

@@ -141,6 +141,59 @@ class SeminarSubmission extends Model
     }
 
     /**
+     * Fase program yang sepadan dengan sebuah jenis submission (invers dari
+     * jenisFromFase). Dipakai agar fase mengikuti jenis yang dikirim/dikoreksi.
+     */
+    public static function faseFromJenis(string $jenis): ?string
+    {
+        return match ($jenis) {
+            self::JENIS_PROPOSAL => 'proposal',
+            self::JENIS_SEMINAR_HASIL => 'seminar_hasil',
+            self::JENIS_SIDANG => 'sidang',
+            self::JENIS_SEMINAR_KP => 'seminar_kp',
+            default => null,
+        };
+    }
+
+    /**
+     * Opsi jenis bahan yang boleh dipilih untuk sebuah program
+     * ([value => label]). TA: proposal/hasil/sidang; KP: hanya seminar KP.
+     */
+    public static function jenisOptionsFor(\App\Models\MahasiswaTa $ta): array
+    {
+        $allowed = $ta->isKp()
+            ? [self::JENIS_SEMINAR_KP]
+            : [self::JENIS_PROPOSAL, self::JENIS_SEMINAR_HASIL, self::JENIS_SIDANG];
+
+        $options = [];
+        $probe = new self(['mahasiswa_ta_id' => $ta->id]);
+        foreach ($allowed as $jenis) {
+            $probe->setAttribute('jenis', $jenis);
+            $probe->setRelation('mahasiswaTa', $ta);
+            $options[$jenis] = $probe->jenisLabel();
+        }
+
+        return $options;
+    }
+
+    /**
+     * Indeks urutan sebuah fase dalam daftar fase programnya
+     * (untuk perbandingan maju/mundur). -1 bila tak dikenal.
+     */
+    public static function faseIndexOf(\App\Models\MahasiswaTa $ta, ?string $fase): int
+    {
+        if ($fase === null || $fase === '') {
+            return -1;
+        }
+        $keys = $ta->isKp()
+            ? array_keys(\App\Models\MahasiswaTa::FASES_KP)
+            : array_keys(\App\Models\MahasiswaTa::FASES);
+        $i = array_search($fase, $keys, true);
+
+        return $i === false ? -1 : $i;
+    }
+
+    /**
      * Apakah mahasiswa masih boleh memperbarui dokumen submission ini.
      * Boleh selama belum dikonversi ke riwayat sidang DAN jadwal belum lewat.
      */

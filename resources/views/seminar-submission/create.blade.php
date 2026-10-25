@@ -23,6 +23,44 @@
         @csrf
 
         <div class="form-workspace-column">
+            {{-- ===== 0. Jenis Bahan ===== --}}
+            <section class="card form-workspace-card p-6" aria-labelledby="seminar-jenis-title">
+                <div class="form-card-head">
+                    <span class="icon-chip h-10 w-10" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-md text-brand">category</span>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <h2 id="seminar-jenis-title" class="font-heading font-semibold text-text-primary">Jenis Bahan</h2>
+                        <p class="text-caption text-text-secondary">Otomatis mengikuti fase Anda; ubah bila perlu.</p>
+                    </div>
+                </div>
+                <div class="form-field mt-4">
+                    <label class="form-field-label" for="jenis">Jenis Bahan <span class="text-status-danger" aria-hidden="true">*</span></label>
+                    <div class="form-field-body">
+                        <select name="jenis" id="jenis" required class="form-control" data-jenis-labels='@json($jenisOptions)'>
+                            @foreach ($jenisOptions as $value => $label)
+                                <option value="{{ $value }}" @selected(old('jenis', $jenis) === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <p class="form-field-hint">Anda akan mengajukan: <strong data-jenis-sekarang>{{ $jenisOptions[old('jenis', $jenis)] ?? $jenisLabel }}</strong>.</p>
+                        @error('jenis') <p class="form-field-error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            </section>
+
+            <script>
+                (function () {
+                    var sel = document.getElementById('jenis');
+                    if (!sel) return;
+                    var out = document.querySelector('[data-jenis-sekarang]');
+                    var map = {};
+                    try { map = JSON.parse(sel.dataset.jenisLabels || '{}'); } catch (e) { map = {}; }
+                    sel.addEventListener('change', function () {
+                        if (out) out.textContent = map[sel.value] || sel.value;
+                    });
+                })();
+            </script>
+
             {{-- ===== 1. Jadwal Seminar ===== --}}
             <section class="card form-workspace-card p-6" aria-labelledby="seminar-jadwal-title">
                 <div class="form-card-head">

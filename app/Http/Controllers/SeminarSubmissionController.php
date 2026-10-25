@@ -13,6 +13,7 @@ use App\Services\StorageUsageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SeminarSubmissionController extends Controller
@@ -43,7 +44,11 @@ class SeminarSubmissionController extends Controller
         abort_unless($mahasiswaTa->isMember($request->user()), 403);
         $this->authorize('viewWorkspace', $mahasiswaTa);
 
-        $jenis = $this->jenisFromFase($mahasiswaTa);
+        $jenis = old('jenis', $this->jenisFromFase($mahasiswaTa));
+        $jenisOptions = SeminarSubmission::jenisOptionsFor($mahasiswaTa);
+        if (! array_key_exists($jenis, $jenisOptions)) {
+            $jenis = $this->jenisFromFase($mahasiswaTa);
+        }
         $jenisLabel = (new SeminarSubmission(['jenis' => $jenis]))->jenisLabel();
         $institution = Institution::current();
         $defaultCatatan = (string) ($institution->seminar_hardcopy_note ?: '');
@@ -65,7 +70,7 @@ class SeminarSubmissionController extends Controller
         $tautanMaxLinks = self::TAUTAN_MAX_LINKS;
 
         return view('seminar-submission.create', compact(
-            'mahasiswaTa', 'jenis', 'jenisLabel', 'defaultCatatan',
+            'mahasiswaTa', 'jenis', 'jenisLabel', 'jenisOptions', 'defaultCatatan',
             'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept',
             'tambahanMaxFiles', 'tambahanMaxTotalMb', 'tautanMaxLinks'
         ));
@@ -84,7 +89,10 @@ class SeminarSubmissionController extends Controller
         $allowedTypes = $institution->allowedFileTypes();
         $mimes = implode(',', array_map(fn ($t) => $t === 'pdf' ? 'pdf' : $t, $allowedTypes));
 
+        $allowedJenis = array_keys(SeminarSubmission::jenisOptionsFor($mahasiswaTa));
+
         $data = $request->validate([
+            'jenis' => ['sometimes', 'nullable', 'string', Rule::in($allowedJenis)],
             'tanggal' => ['required', 'date', 'after_or_equal:today'],
             'waktu' => ['required', 'date_format:H:i'],
             'lokasi' => ['nullable', 'string', 'max:255'],
@@ -101,6 +109,23 @@ class SeminarSubmissionController extends Controller
             'tautan.*' => ['nullable', 'url', 'max:2048'],
         ]);
 
+        // Form selalu mengirim jenis eksplisit; bila tidak ada (klien lama),
+        // jatuh kembali ke derivasi fase seperti perilaku sebelumnya.
+        $jenis = $data['jenis'] ?? $this->jenisFromFase($mahasiswaTa);
+
+        // Tolak kirim ganda: sudah ada submission sejenis yang masih aktif
+        // (belum dikonversi ke sidang dan jadwal belum lewat).
+        $duplikatAktif = SeminarSubmission::where('mahasiswa_ta_id', $mahasiswaTa->id)
+            ->where('jenis', $jenis)
+            ->whereNull('sidang_id')
+            ->whereDate('tanggal', '>=', now()->toDateString())
+            ->exists();
+        if ($duplikatAktif) {
+            return back()->withErrors([
+                'jenis' => 'Sudah ada pengajuan '.(SeminarSubmission::jenisOptionsFor($mahasiswaTa)[$jenis] ?? $jenis).' yang masih aktif.',
+            ])->withInput();
+        }
+
         // Dokumen tambahan: total seluruh file maks TAMBAHAN_MAX_TOTAL_MB.
         $tambahanFiles = array_values(array_filter((array) $request->file('dokumen_tambahan')));
         $tambahanSize = array_sum(array_map(fn ($f) => $f->getSize(), $tambahanFiles));
@@ -115,7 +140,6 @@ class SeminarSubmissionController extends Controller
             return back()->withErrors(['materi_upload' => 'Pilih salah satu: upload file materi atau ambil dari workspace.'])->withInput();
         }
 
-        $jenis = $this->jenisFromFase($mahasiswaTa);
         $defaultCatatan = (string) ($institution->seminar_hardcopy_note ?: '');
 
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
@@ -173,6 +197,15 @@ class SeminarSubmissionController extends Controller
             $submission = $createSubmission();
         }
 
+        // Fase mengikuti jenis yang dikirim — hanya maju, tidak pernah mundur
+        // otomatis (kirim jenis lama saat fase sudah di depan = perbaikan berkas,
+        // bukan penurunan fase).
+        $faseBaru = SeminarSubmission::faseFromJenis($submission->jenis);
+        if ($faseBaru !== null
+            && SeminarSubmission::faseIndexOf($mahasiswaTa, $faseBaru) > SeminarSubmission::faseIndexOf($mahasiswaTa, $mahasiswaTa->fase)) {
+            $mahasiswaTa->update(['fase' => $faseBaru]);
+        }
+
         // Notifikasi ke dosen terkait.
         $this->notifyDosen($mahasiswaTa, $submission);
 
@@ -207,8 +240,14 @@ class SeminarSubmissionController extends Controller
 
         $meetingLink = $submission->effectiveMeetingLink();
         $locationText = $submission->locationText();
+        $jenisOptions = SeminarSubmission::jenisOptionsFor($submission->mahasiswaTa);
+        $jenisFaseIndex = [];
+        foreach (array_keys($jenisOptions) as $j) {
+            $jenisFaseIndex[$j] = SeminarSubmission::faseIndexOf($submission->mahasiswaTa, SeminarSubmission::faseFromJenis($j));
+        }
+        $faseIndexNow = SeminarSubmission::faseIndexOf($submission->mahasiswaTa, $submission->mahasiswaTa->fase);
 
-        return view('seminar-submission.show', compact('submission', 'isDosen', 'isMember', 'meetingLink', 'locationText'));
+        return view('seminar-submission.show', compact('submission', 'isDosen', 'isMember', 'meetingLink', 'locationText', 'jenisOptions', 'jenisFaseIndex', 'faseIndexNow'));
     }
 
     /**
@@ -367,6 +406,43 @@ class SeminarSubmissionController extends Controller
 
         return redirect()->route('seminar-submission.show', $submission)
             ->with('success', 'Bahan seminar/sidang berhasil diperbarui.');
+    }
+
+    /**
+     * Dosen mengoreksi jenis bahan. Fase program diset persis mengikuti
+     * jenis baru (boleh maju maupun mundur — keputusan eksplisit reviewer).
+     */
+    public function koreksiJenis(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        if ($r = $this->authorizeDosen($request->user(), $submission)) {
+            return $r;
+        }
+
+        $ta = $submission->mahasiswaTa;
+        $allowed = array_keys(SeminarSubmission::jenisOptionsFor($ta));
+        $data = $request->validate([
+            'jenis' => ['required', 'string', Rule::in($allowed)],
+        ]);
+
+        if ($data['jenis'] === $submission->jenis) {
+            return back()->with('success', 'Jenis bahan tidak berubah.');
+        }
+
+        $jenisLamaLabel = $submission->jenisLabel();
+        $submission->update(['jenis' => $data['jenis']]);
+
+        $faseBaru = SeminarSubmission::faseFromJenis($data['jenis']);
+        if ($faseBaru !== null && $faseBaru !== $ta->fase) {
+            $ta->update(['fase' => $faseBaru]);
+        }
+
+        $labelBaru = $submission->fresh()->jenisLabel();
+        $this->notifyDosen($ta, $submission->fresh(), true, ['Jenis bahan ('.$jenisLamaLabel.' → '.$labelBaru.')']);
+        if ($mahasiswa = $ta->mahasiswa) {
+            $this->bestEffort(fn () => $mahasiswa->notify(new SeminarSubmissionNotification($submission->fresh(), 'mahasiswa', true, ['Jenis bahan ('.$jenisLamaLabel.' → '.$labelBaru.')'])));
+        }
+
+        return back()->with('success', 'Jenis bahan dikoreksi menjadi '.$labelBaru.'.');
     }
 
     /**

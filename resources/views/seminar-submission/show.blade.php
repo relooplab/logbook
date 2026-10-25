@@ -193,6 +193,42 @@
                 @endif
             </section>
 
+            @if ($isDosen)
+                <section class="card p-5 detail-workspace-card">
+                    <h2 class="font-heading font-semibold text-text-primary mb-1">Jenis Bahan</h2>
+                    <p class="text-sm text-text-secondary mb-3">Koreksi bila jenis yang dikirim mahasiswa tidak tepat. Fase program ikut disesuaikan.</p>
+                    <form method="POST" action="{{ route('seminar-submission.koreksi-jenis', $submission) }}" data-koreksi-jenis data-fase-now="{{ $faseIndexNow ?? -1 }}">
+                        @csrf
+                        @method('PUT')
+                        <label for="koreksi-jenis" class="sr-only">Jenis Bahan</label>
+                        <select id="koreksi-jenis" name="jenis" class="form-control" data-jenis-fase-index='@json($jenisFaseIndex ?? [])'>
+                            @foreach (($jenisOptions ?? []) as $value => $label)
+                                <option value="{{ $value }}" data-fase-index="{{ ($jenisFaseIndex ?? [])[$value] ?? -1 }}" @selected($submission->jenis === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        @error('jenis') <p class="text-status-danger text-xs mt-1">{{ $message }}</p> @enderror
+                        <button type="submit" class="mt-3 px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Simpan Jenis</button>
+                    </form>
+                    <script>
+                        (function () {
+                            var form = document.querySelector('[data-koreksi-jenis]');
+                            if (!form) return;
+                            var sel = form.querySelector('#koreksi-jenis');
+                            form.addEventListener('submit', function (e) {
+                                var now = parseInt(form.dataset.faseNow, 10);
+                                var opt = sel && sel.selectedOptions ? sel.selectedOptions[0] : null;
+                                var next = opt ? parseInt(opt.dataset.faseIndex, 10) : NaN;
+                                if (!isNaN(now) && !isNaN(next) && next >= 0 && next < now) {
+                                    if (!confirm('Jenis baru ini memundurkan fase program. Lanjutkan?')) {
+                                        e.preventDefault();
+                                    }
+                                }
+                            });
+                        })();
+                    </script>
+                </section>
+            @endif
+
             @if ($isDosen && !$submission->sidang_id)
                 <section class="card p-5 detail-workspace-card">
                     <h2 class="font-heading font-semibold text-text-primary mb-2">Setelah Seminar</h2>

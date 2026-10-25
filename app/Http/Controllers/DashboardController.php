@@ -408,12 +408,18 @@ class DashboardController extends Controller
             : collect();
 
         // ---- Submission untuk fase aktif (agar tombol "Kirim Bahan" muncul
-        // lagi saat mahasiswa pindah ke milestone seminar berikutnya) ----
+        // lagi saat mahasiswa pindah ke milestone berikutnya) ----
         $seminarSubmission = $ta
             ? $ta->seminarSubmissions()
                 ->where('jenis', SeminarSubmission::jenisFromFase($ta))
                 ->latest()
                 ->first()
+            : null;
+        // ---- Submission terbaru apa pun jenisnya: agar bahan berjenis
+        // pilihan mahasiswa (yang mungkin beda dari fase) tetap terlihat
+        // dan tidak tertutup tombol kirim.
+        $seminarLatest = $ta
+            ? $ta->seminarSubmissions()->latest()->first()
             : null;
 
         // ---- Status mahasiswa (aktif/verified) untuk banner ----
@@ -435,7 +441,7 @@ class DashboardController extends Controller
             'stats', 'timeline', 'heatmap', 'regularity', 'regularityTooltip',
             'unreadAnnouncements',
             'draftCount', 'revisiCount', 'unresolvedActionItems', 'pendingRevisionAction', 'pendingRevisionThreads',
-            'university', 'nilai', 'sidangs', 'agendaTerdekat', 'seminarSubmission',
+            'university', 'nilai', 'sidangs', 'agendaTerdekat', 'seminarSubmission', 'seminarLatest',
             'mahasiswaStatus', 'pendingApproval', 'rejectedProgram', 'profileIncomplete'
         ));
     }

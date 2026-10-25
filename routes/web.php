@@ -249,6 +249,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::get('/seminar-submission/{submission}/edit', [SeminarSubmissionController::class, 'edit'])->name('seminar-submission.edit');
     Route::put('/seminar-submission/{submission}', [SeminarSubmissionController::class, 'update'])->name('seminar-submission.update');
     Route::put('/seminar-submission/{submission}/hardcopy-note', [SeminarSubmissionController::class, 'updateHardcopyNote'])->name('seminar-submission.hardcopy-note');
+    Route::put('/seminar-submission/{submission}/koreksi-jenis', [SeminarSubmissionController::class, 'koreksiJenis'])->name('seminar-submission.koreksi-jenis');
     Route::get('/seminar-submission/{submission}/undangan/download', [SeminarSubmissionController::class, 'downloadUndangan'])->name('seminar-submission.undangan-download');
     Route::get('/seminar-submission/{submission}/materi/download', [SeminarSubmissionController::class, 'downloadMateri'])->name('seminar-submission.materi-download');
     Route::get('/seminar-submission/{submission}/dokumen/{document}/download', [SeminarSubmissionController::class, 'downloadDokumen'])->name('seminar-submission.dokumen-download');
