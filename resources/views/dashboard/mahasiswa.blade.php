@@ -136,7 +136,7 @@
                                 @endif
                                 <a href="{{ $primaryHref }}" class="{{ $hasOtherSubmission ? 'px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover' : 'btn-primary px-3 py-2 text-xs font-semibold' }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $seminarSubmission ? 'Lihat Detail' : 'Kirim Bahan' }}</a>
                                 @if ($canSubmitAnotherJenis)
-                                    <a href="{{ route('seminar-submission.create', $ta) }}" class="px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Ajukan Jenis Lain</a>
+                                    <a href="{{ route('seminar-submission.create', $ta) }}" class="px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Kirim Bahan Seminar/Sidang</a>
                                 @endif
                             </div>
                         </div>
