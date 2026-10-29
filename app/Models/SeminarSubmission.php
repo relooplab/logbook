@@ -177,6 +177,48 @@ class SeminarSubmission extends Model
     }
 
     /**
+     * Catatan singkat per jenis: hubungannya dengan fase program saat ini.
+     *
+     * Dipakai form pengajuan agar mahasiswa paham bahwa jenis yang lebih maju
+     * (mis. Sidang saat masih di Seminar Hasil) memang boleh dipilih, dan apa
+     * efeknya terhadap fase. Tanpa ini, default yang mengikuti fase membuat
+     * mahasiswa mengira hanya jenis itu yang boleh dikirim.
+     *
+     * @return array<string,string> jenis => catatan (kosong bila tak relevan)
+     */
+    public static function jenisNotesFor(\App\Models\MahasiswaTa $ta): array
+    {
+        $options = self::jenisOptionsFor($ta);
+        // Satu jenis = tidak ada pilihan yang perlu dijelaskan (mis. KP).
+        if (count($options) <= 1) {
+            return [];
+        }
+
+        $nowIndex = self::faseIndexOf($ta, $ta->fase);
+        $notes = [];
+
+        foreach (array_keys($options) as $jenis) {
+            $jenisFase = self::faseFromJenis($jenis);
+            $jenisIndex = self::faseIndexOf($ta, $jenisFase);
+
+            if ($jenisFase === null || $jenisIndex < 0 || $nowIndex < 0) {
+                $notes[$jenis] = '';
+
+                continue;
+            }
+
+            $label = self::staticLabel($jenis);
+            $notes[$jenis] = match (true) {
+                $jenisIndex === $nowIndex => 'sesuai fase saat ini',
+                $jenisIndex > $nowIndex => 'memajukan fase ke '.$label,
+                default => 'perbaikan berkas, fase tidak berubah',
+            };
+        }
+
+        return $notes;
+    }
+
+    /**
      * Indeks urutan sebuah fase dalam daftar fase programnya
      * (untuk perbandingan maju/mundur). -1 bila tak dikenal.
      */

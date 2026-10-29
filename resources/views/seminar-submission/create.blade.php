@@ -37,12 +37,20 @@
                 <div class="form-field mt-4">
                     <label class="form-field-label" for="jenis">Jenis Bahan <span class="text-status-danger" aria-hidden="true">*</span></label>
                     <div class="form-field-body">
-                        <select name="jenis" id="jenis" required class="form-control" data-jenis-labels='@json($jenisOptions)'>
+                        <select name="jenis" id="jenis" required class="form-control" data-jenis-labels='@json($jenisOptions)' data-jenis-notes='@json($jenisNotes ?? [])'>
                             @foreach ($jenisOptions as $value => $label)
-                                <option value="{{ $value }}" @selected(old('jenis', $jenis) === $value)>{{ $label }}</option>
+                                @php $note = ($jenisNotes ?? [])[$value] ?? ''; @endphp
+                                <option value="{{ $value }}" @selected(old('jenis', $jenis) === $value)>{{ $label }}{{ $note !== '' ? ' — '.$note : '' }}</option>
                             @endforeach
                         </select>
-                        <p class="form-field-hint">Anda akan mengajukan: <strong data-jenis-sekarang>{{ $jenisOptions[old('jenis', $jenis)] ?? $jenisLabel }}</strong>.</p>
+                        @php
+                            $selectedJenis = old('jenis', $jenis);
+                            $selectedNote = ($jenisNotes ?? [])[$selectedJenis] ?? '';
+                        @endphp
+                        <p class="form-field-hint">Anda akan mengajukan: <strong data-jenis-sekarang>{{ $jenisOptions[$selectedJenis] ?? $jenisLabel }}</strong><span data-jenis-catatan>{{ $selectedNote !== '' ? ' — '.$selectedNote : '' }}</span>.</p>
+                        @if (count($jenisOptions) > 1)
+                            <p class="form-field-hint text-text-secondary">Default mengikuti fase program Anda. Boleh pilih jenis lain bila sudah siap lebih awal — memilih jenis yang lebih maju akan memajukan fase program secara otomatis, sedangkan jenis sebelumnya hanya memperbaiki berkas.</p>
+                        @endif
                         @error('jenis') <p class="form-field-error">{{ $message }}</p> @enderror
                     </div>
                 </div>
@@ -53,10 +61,17 @@
                     var sel = document.getElementById('jenis');
                     if (!sel) return;
                     var out = document.querySelector('[data-jenis-sekarang]');
+                    var catatan = document.querySelector('[data-jenis-catatan]');
                     var map = {};
+                    var notes = {};
                     try { map = JSON.parse(sel.dataset.jenisLabels || '{}'); } catch (e) { map = {}; }
+                    try { notes = JSON.parse(sel.dataset.jenisNotes || '{}'); } catch (e) { notes = {}; }
                     sel.addEventListener('change', function () {
                         if (out) out.textContent = map[sel.value] || sel.value;
+                        if (catatan) {
+                            var n = notes[sel.value] || '';
+                            catatan.textContent = n ? ' — ' + n : '';
+                        }
                     });
                 })();
             </script>

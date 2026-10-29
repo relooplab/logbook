@@ -49,6 +49,9 @@ class SeminarSubmissionController extends Controller
         if (! array_key_exists($jenis, $jenisOptions)) {
             $jenis = $this->jenisFromFase($mahasiswaTa);
         }
+        // Catatan per jenis (sesuai fase / memajukan fase / perbaikan berkas)
+        // supaya mahasiswa tahu bahwa jenis lain selain default memang boleh.
+        $jenisNotes = SeminarSubmission::jenisNotesFor($mahasiswaTa);
         $jenisLabel = (new SeminarSubmission(['jenis' => $jenis]))->jenisLabel();
         $institution = Institution::current();
         $defaultCatatan = (string) ($institution->seminar_hardcopy_note ?: '');
@@ -70,7 +73,7 @@ class SeminarSubmissionController extends Controller
         $tautanMaxLinks = self::TAUTAN_MAX_LINKS;
 
         return view('seminar-submission.create', compact(
-            'mahasiswaTa', 'jenis', 'jenisLabel', 'jenisOptions', 'defaultCatatan',
+            'mahasiswaTa', 'jenis', 'jenisLabel', 'jenisOptions', 'jenisNotes', 'defaultCatatan',
             'undanganOptions', 'workspaceFiles', 'maxMb', 'allowedTypes', 'fileAccept',
             'tambahanMaxFiles', 'tambahanMaxTotalMb', 'tautanMaxLinks'
         ));
