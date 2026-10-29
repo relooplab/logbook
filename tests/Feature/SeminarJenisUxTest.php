@@ -152,7 +152,7 @@ class SeminarJenisUxTest extends TestCase
         // Sebelum perbaikan: tombol berubah "Lihat Detail" dan link create hilang
         // sama sekali, sehingga mahasiswa tidak bisa mengajukan bahan sidang.
         $this->assertStringContainsString($createUrl, $html);
-        $this->assertStringContainsString('Ajukan Jenis Lain', $html);
+        $this->assertStringContainsString('Kirim Bahan Seminar/Sidang', $html);
         $this->assertStringContainsString('Lihat Detail', $html);
         $this->assertStringContainsString('Bisa juga mengajukan jenis lain', $html);
     }
@@ -174,7 +174,7 @@ class SeminarJenisUxTest extends TestCase
         $html = $this->actingAs($this->mhs->fresh())->get(route('dashboard'))->assertOk()->getContent();
 
         // KP hanya satu jenis → tidak perlu tombol/hint pilihan jenis lain.
-        $this->assertStringNotContainsString('Ajukan Jenis Lain', $html);
+        $this->assertStringNotContainsString('Kirim Bahan Seminar/Sidang', $html);
         $this->assertStringNotContainsString('Bisa juga mengajukan jenis lain', $html);
     }
 }
