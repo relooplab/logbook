@@ -100,7 +100,49 @@
                 <p class="mt-2 text-xs text-text-secondary">Fase ditetapkan oleh dosen pembimbing.</p>
                 <div class="mt-4 rounded-control border border-brand/20 bg-brand/5 p-3 sm:p-4"><p class="text-xs font-semibold text-brand">{{ $seminarPhase ? 'Milestone Berikutnya' : 'Konteks Program' }}</p>
                     @if ($seminarPhase)
-                        <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><div class="min-w-0"><h3 class="font-semibold text-text-primary">{{ $seminarSubmission ? 'Bahan '.$seminarSubmission->jenisLabel().': '.$seminarSubmission->statusLabel() : (($seminarLatest ?? null) ? 'Bahan '.$seminarLatest->jenisLabel().': '.$seminarLatest->statusLabel() : 'Kirim Bahan '.$ta->faseLabel()) }}</h3><p class="text-xs text-text-secondary">@php $seminarShown = $seminarSubmission ?? ($seminarLatest ?? null); @endphp{{ $seminarShown ? 'Jadwal: '.$seminarShown->tanggal->format('d M Y').' · '.($seminarShown->waktu?->format('H:i') ?? 'Belum ditentukan') : 'Unggah dokumen yang diminta untuk '.$ta->faseLabel().'.' }}</p></div><div class="flex flex-wrap gap-2">@if (($seminarLatest ?? null) && (!$seminarSubmission || $seminarLatest->id !== $seminarSubmission->id))<a href="{{ route('seminar-submission.show', $seminarLatest) }}" class="btn-primary px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Lihat {{ $seminarLatest->jenisLabel() }}</a>@endif<a href="{{ $seminarSubmission ? route('seminar-submission.show', $seminarSubmission) : route('seminar-submission.create', $ta) }}" class="{{ ($seminarLatest ?? null) && (!$seminarSubmission || $seminarLatest->id !== $seminarSubmission->id) ? 'px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover' : 'btn-primary px-3 py-2 text-xs font-semibold' }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $seminarSubmission ? 'Lihat Detail' : 'Kirim Bahan' }}</a></div>@if ($ta->isTa() && ! $seminarSubmission)<p class="mt-2 text-[11px] text-text-secondary">Bisa juga mengajukan jenis lain (mis. <strong>Sidang</strong>) bila sudah siap lebih awal — pilih di bagian “Jenis Bahan” pada formulir.</p>@endif</div>
+                        @php
+                            $seminarShown = $seminarSubmission ?? ($seminarLatest ?? null);
+                            $hasOtherSubmission = $seminarLatest && (! $seminarSubmission || $seminarLatest->id !== $seminarSubmission->id);
+                            $primaryHref = $seminarSubmission
+                                ? route('seminar-submission.show', $seminarSubmission)
+                                : route('seminar-submission.create', $ta);
+                            // TA punya beberapa jenis bahan (proposal/hasil/sidang): mahasiswa
+                            // harus tetap bisa mengajukan jenis lain walau submission fase
+                            // ini sudah ada — tanpa ini tidak ada jalan dari UI ke form.
+                            $canSubmitAnotherJenis = $ta->isTa() && $seminarSubmission !== null;
+                        @endphp
+                        <div class="mt-1 flex flex-wrap items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <h3 class="font-semibold text-text-primary">
+                                    @if ($seminarSubmission)
+                                        Bahan {{ $seminarSubmission->jenisLabel() }}: {{ $seminarSubmission->statusLabel() }}
+                                    @elseif ($seminarLatest)
+                                        Bahan {{ $seminarLatest->jenisLabel() }}: {{ $seminarLatest->statusLabel() }}
+                                    @else
+                                        Kirim Bahan {{ $ta->faseLabel() }}
+                                    @endif
+                                </h3>
+                                <p class="text-xs text-text-secondary">
+                                    @if ($seminarShown)
+                                        Jadwal: {{ $seminarShown->tanggal->format('d M Y') }} · {{ $seminarShown->waktu?->format('H:i') ?? 'Belum ditentukan' }}
+                                    @else
+                                        Unggah dokumen yang diminta untuk {{ $ta->faseLabel() }}.
+                                    @endif
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                @if ($hasOtherSubmission)
+                                    <a href="{{ route('seminar-submission.show', $seminarLatest) }}" class="btn-primary px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Lihat {{ $seminarLatest->jenisLabel() }}</a>
+                                @endif
+                                <a href="{{ $primaryHref }}" class="{{ $hasOtherSubmission ? 'px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover' : 'btn-primary px-3 py-2 text-xs font-semibold' }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $seminarSubmission ? 'Lihat Detail' : 'Kirim Bahan' }}</a>
+                                @if ($canSubmitAnotherJenis)
+                                    <a href="{{ route('seminar-submission.create', $ta) }}" class="px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Ajukan Jenis Lain</a>
+                                @endif
+                            </div>
+                        </div>
+                        @if ($ta->isTa())
+                            <p class="mt-2 text-[11px] text-text-secondary">Bisa juga mengajukan jenis lain (mis. <strong>Sidang</strong>) bila sudah siap lebih awal — pilih di bagian “Jenis Bahan” pada formulir.</p>
+                        @endif
                     @else
                         <p class="mt-1 text-sm font-semibold text-text-primary">{{ $ta->faseLabel() }}</p><p class="text-xs text-text-secondary">Lanjutkan bimbingan pada fase ini.</p>
                     @endif

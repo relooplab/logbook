@@ -114,4 +114,67 @@ class SeminarJenisUxTest extends TestCase
             ->assertSee('Bisa juga mengajukan jenis lain', false)
             ->assertSee('Sidang', false);
     }
+
+    public function test_dashboard_tidak_membocorkan_kode_blade(): void
+    {
+        // Regresi: `@php ... @endphp` yang ditulis menyambung di tengah baris HTML
+        // membuat Blade mengeluarkan placeholder @__raw_block_N__ dan echo
+        // sesudahnya tidak dieksekusi — mahasiswa melihat kode mentah.
+        $html = $this->actingAs($this->mhs)->get(route('dashboard'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('@__raw_block', $html);
+        $this->assertStringNotContainsString('@endphp', $html);
+        $this->assertStringNotContainsString('@php', $html);
+        $this->assertStringNotContainsString("{{", $html);
+    }
+
+    private function submissionForCurrentPhase(): SeminarSubmission
+    {
+        return SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_SEMINAR_HASIL,
+            'tanggal' => now()->addWeek()->toDateString(),
+            'waktu' => '09:00',
+            'undangan_path' => 'seminar-materials/undangan.pdf',
+            'undangan_original_name' => 'undangan.pdf',
+            'undangan_kepada' => ['pembimbing_1'],
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+    }
+
+    public function test_dashboard_menyediakan_jalan_ke_form_saat_submission_fase_ini_sudah_ada(): void
+    {
+        $this->submissionForCurrentPhase();
+        $createUrl = route('seminar-submission.create', $this->ta);
+
+        $html = $this->actingAs($this->mhs)->get(route('dashboard'))->assertOk()->getContent();
+
+        // Sebelum perbaikan: tombol berubah "Lihat Detail" dan link create hilang
+        // sama sekali, sehingga mahasiswa tidak bisa mengajukan bahan sidang.
+        $this->assertStringContainsString($createUrl, $html);
+        $this->assertStringContainsString('Ajukan Jenis Lain', $html);
+        $this->assertStringContainsString('Lihat Detail', $html);
+        $this->assertStringContainsString('Bisa juga mengajukan jenis lain', $html);
+    }
+
+    public function test_kp_tidak_mendapat_tombol_ajukan_jenis_lain(): void
+    {
+        $this->ta->update(['jenis' => MahasiswaTa::JENIS_KP, 'fase' => 'laporan']);
+        SeminarSubmission::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'jenis' => SeminarSubmission::JENIS_SEMINAR_KP,
+            'tanggal' => now()->addWeek()->toDateString(),
+            'waktu' => '09:00',
+            'undangan_path' => 'seminar-materials/undangan.pdf',
+            'undangan_original_name' => 'undangan.pdf',
+            'undangan_kepada' => ['pembimbing_1'],
+            'status' => SeminarSubmission::STATUS_SUBMITTED,
+        ]);
+
+        $html = $this->actingAs($this->mhs->fresh())->get(route('dashboard'))->assertOk()->getContent();
+
+        // KP hanya satu jenis → tidak perlu tombol/hint pilihan jenis lain.
+        $this->assertStringNotContainsString('Ajukan Jenis Lain', $html);
+        $this->assertStringNotContainsString('Bisa juga mengajukan jenis lain', $html);
+    }
 }
