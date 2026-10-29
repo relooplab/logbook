@@ -110,6 +110,10 @@
                             // harus tetap bisa mengajukan jenis lain walau submission fase
                             // ini sudah ada — tanpa ini tidak ada jalan dari UI ke form.
                             $canSubmitAnotherJenis = $ta->isTa() && $seminarSubmission !== null;
+                            // Gaya tombol: aksi mengirim bahan yang ditonjolkan (filled),
+                            // tombol melihat/riwayat cukup outline.
+                            $btnFilled = 'btn-primary px-3 py-2 text-xs font-semibold';
+                            $btnOutline = 'px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover';
                         @endphp
                         <div class="mt-1 flex flex-wrap items-center justify-between gap-3">
                             <div class="min-w-0">
@@ -132,11 +136,11 @@
                             </div>
                             <div class="flex flex-wrap gap-2">
                                 @if ($hasOtherSubmission)
-                                    <a href="{{ route('seminar-submission.show', $seminarLatest) }}" class="btn-primary px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Lihat {{ $seminarLatest->jenisLabel() }}</a>
+                                    <a href="{{ route('seminar-submission.show', $seminarLatest) }}" class="{{ $btnOutline }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Lihat {{ $seminarLatest->jenisLabel() }}</a>
                                 @endif
-                                <a href="{{ $primaryHref }}" class="{{ $hasOtherSubmission ? 'px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover' : 'btn-primary px-3 py-2 text-xs font-semibold' }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $seminarSubmission ? 'Lihat Detail' : 'Kirim Bahan' }}</a>
+                                <a href="{{ $primaryHref }}" class="{{ $seminarSubmission ? $btnOutline : $btnFilled }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ $seminarSubmission ? 'Lihat Detail' : 'Kirim Bahan' }}</a>
                                 @if ($canSubmitAnotherJenis)
-                                    <a href="{{ route('seminar-submission.create', $ta) }}" class="px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Kirim Bahan Seminar/Sidang</a>
+                                    <a href="{{ route('seminar-submission.create', $ta) }}" class="{{ $btnFilled }} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Kirim Bahan Seminar/Sidang</a>
                                 @endif
                             </div>
                         </div>

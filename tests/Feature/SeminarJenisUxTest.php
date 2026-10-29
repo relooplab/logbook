@@ -157,6 +157,23 @@ class SeminarJenisUxTest extends TestCase
         $this->assertStringContainsString('Bisa juga mengajukan jenis lain', $html);
     }
 
+    public function test_tombol_kirim_bahan_lebih_ditonjolkan_daripada_lihat_detail(): void
+    {
+        $this->submissionForCurrentPhase();
+        $html = $this->actingAs($this->mhs)->get(route('dashboard'))->assertOk()->getContent();
+
+        // "Kirim Bahan Seminar/Sidang" = filled (btn-primary)
+        $this->assertMatchesRegularExpression(
+            '/class="[^"]*btn-primary[^"]*"[^>]*>\s*Kirim Bahan Seminar\/Sidang/s',
+            $html,
+            'Tombol kirim bahan harus memakai gaya filled (btn-primary).'
+        );
+
+        // "Lihat Detail" = outline, tanpa btn-primary
+        $this->assertSame(1, preg_match('/class="([^"]*)"[^>]*>\s*Lihat Detail/s', $html, $m));
+        $this->assertStringNotContainsString('btn-primary', $m[1], 'Tombol Lihat Detail harus outline, bukan filled.');
+    }
+
     public function test_kp_tidak_mendapat_tombol_ajukan_jenis_lain(): void
     {
         $this->ta->update(['jenis' => MahasiswaTa::JENIS_KP, 'fase' => 'laporan']);
