@@ -174,6 +174,47 @@ class SeminarJenisUxTest extends TestCase
         $this->assertStringNotContainsString('btn-primary', $m[1], 'Tombol Lihat Detail harus outline, bukan filled.');
     }
 
+    public function test_sidebar_mahasiswa_punya_link_seminar_sidang_di_bawah_jadwalkan_bimbingan(): void
+    {
+        $html = $this->actingAs($this->mhs)->get(route('dashboard'))->assertOk()->getContent();
+
+        // link ada, menunjuk ke form pengajuan program aktif
+        $this->assertStringContainsString('Seminar/sidang', $html);
+        $this->assertStringContainsString(route('seminar-submission.create', $this->ta), $html);
+
+        // urutan: setelah "Jadwalkan Bimbingan"
+        $posJadwal = strpos($html, 'Jadwalkan Bimbingan');
+        $posSeminar = strpos($html, 'Seminar/sidang');
+        $this->assertNotFalse($posJadwal);
+        $this->assertNotFalse($posSeminar);
+        $this->assertGreaterThan($posJadwal, $posSeminar, 'Link Seminar/sidang harus berada setelah Jadwalkan Bimbingan.');
+    }
+
+    public function test_sidebar_dosen_tidak_punya_link_seminar_sidang(): void
+    {
+        $html = $this->actingAs($this->dosen)->get(route('dashboard'))->assertOk()->getContent();
+
+        // "Seminar/sidang" hanya untuk mahasiswa (dosen punya menu jadwal seminar sendiri)
+        $this->assertStringNotContainsString('Seminar/sidang</span>', $html);
+    }
+
+    public function test_sidebar_mahasiswa_tanpa_program_tidak_dapat_link_seminar_sidang(): void
+    {
+        $baru = User::create([
+            'name' => 'Mhs Tanpa Program',
+            'email' => 'mhs-noprog-'.uniqid().'@t.test',
+            'password' => bcrypt('password'),
+            'nim' => 'NIM'.substr(md5(uniqid()), 0, 8),
+            'whatsapp' => '6281234567891',
+            'registration_status' => 'active',
+        ]);
+        $baru->assignRole('mahasiswa');
+
+        $html = $this->actingAs($baru)->get(route('dashboard'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('Seminar/sidang</span>', $html);
+    }
+
     public function test_kp_tidak_mendapat_tombol_ajukan_jenis_lain(): void
     {
         $this->ta->update(['jenis' => MahasiswaTa::JENIS_KP, 'fase' => 'laporan']);

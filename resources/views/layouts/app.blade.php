@@ -151,6 +151,17 @@
                 <span class="material-symbols-outlined icon-md text-status-info">calendar_month</span>
                 <span class="sidebar-label">Jadwalkan Bimbingan</span>
             </a>
+            @php
+                // Program yang sedang aktif (TA/KP) — dipakai untuk membuka form
+                // pengajuan bahan seminar/sidang. Tanpa program, link disembunyikan.
+                $seminarProgram = \App\Support\ProgramContext::resolve($user, request());
+            @endphp
+            @if ($seminarProgram)
+            <a href="{{ route('seminar-submission.create', $seminarProgram) }}" class="{{ $navLink }} {{ $active('seminar-submission.*') }}">
+                <span class="material-symbols-outlined icon-md text-status-info">co_present</span>
+                <span class="sidebar-label">Seminar/sidang</span>
+            </a>
+            @endif
             @endif
 
             @if ($user->isMahasiswa())
