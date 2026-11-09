@@ -306,7 +306,10 @@ class SeminarSubmission extends Model
             return false;
         }
 
-        return $this->selesaiOtomatisPada()?->isPast() === true;
+        $batas = $this->selesaiOtomatisPada();
+
+        // Tepat pada detik batas (H+2 pukul 00:00) status sudah dianggap selesai.
+        return $batas !== null && ! $batas->isFuture();
     }
 
     /**

@@ -59,6 +59,12 @@ class SeminarSelesaiEditTest extends TestCase
         ]);
     }
 
+    protected function tearDown(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow();
+        parent::tearDown();
+    }
+
     private function makeUser(string $name, string $role, array $extra = []): User
     {
         $user = User::create(array_merge([
@@ -376,5 +382,20 @@ class SeminarSelesaiEditTest extends TestCase
         $this->assertStringContainsString(route('seminar-submission.ikuti-otomatis', $sub), $html2);
         // Tombol pelepas penahanan kini berlabel "Selesai"
         $this->assertSame(1, preg_match('/task_alt<\/span>\s*Selesai/', $html2), 'Tombol pelepas penahanan harus berlabel Selesai.');
+    }
+
+    public function test_batas_persis_selesai_pada_h_plus_2_tengah_malam(): void
+    {
+        // Hari H = 12 Nov 2026 → selesai otomatis 14 Nov 2026 00:00.
+        $sub = $this->submission();
+        $sub->forceFill(['tanggal' => '2026-11-12'])->save();
+
+        \Illuminate\Support\Carbon::setTestNow('2026-11-13 23:59:59');
+        $this->assertFalse($sub->fresh()->isSelesai(), 'Detik terakhir H+1 masih belum selesai.');
+
+        \Illuminate\Support\Carbon::setTestNow('2026-11-14 00:00:00');
+        $this->assertTrue($sub->fresh()->isSelesai(), 'Tepat H+2 00:00 sudah selesai.');
+        $this->assertFalse($sub->fresh()->isUpdatableByStudent());
+        $this->assertTrue($sub->fresh()->bisaMintaEdit());
     }
 }
