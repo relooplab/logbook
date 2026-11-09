@@ -84,8 +84,15 @@
     @else
         @foreach ($grouped as $bab => $files)
             <div class="card p-0 overflow-hidden">
-                <div class="px-4 py-3 bg-bg-panel/50 border-b border-border font-semibold text-sm text-text-primary">
-                    {{ $bab }}</div>
+                <div class="px-4 py-3 bg-bg-panel/50 border-b border-border">
+                    <span class="font-semibold text-sm text-text-primary">{{ $bab }}</span>
+                    @if ($bab === \App\Models\WorkspaceFile::BAB_ARSIP)
+                        <p class="mt-0.5 text-xs text-text-secondary">
+                            Menyimpan maksimal {{ \App\Models\WorkspaceFile::MAX_ARSIP_PER_FIELD }} berkas historis per jenis berkas —
+                            berkas paling lama otomatis tertimpa. Hanya dosen yang dapat menghapus.
+                        </p>
+                    @endif
+                </div>
                 <div class="divide-y divide-border">
                         @foreach ($files as $file)
                             @php $canEdit = $file->canBeEditedBy($user); $canDelete = $file->canBeDeletedBy($user); $isArsip = $file->isArchived(); @endphp <div class="px-4 py-3 flex items-start gap-3"> <span

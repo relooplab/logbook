@@ -13,6 +13,18 @@ class WorkspaceFile extends Model
     /** Nama grup arsip di workspace (berkas lama yang diganti, tidak dihapus). */
     public const BAB_ARSIP = 'Arsip';
 
+    /**
+     * Batas berkas historis yang disimpan per field form. Saat mahasiswa
+     * mengganti berkas lagi dan batas terlampaui, berkas terlama ditimpa.
+     */
+    public const MAX_ARSIP_PER_FIELD = 4;
+
+    public const FIELD_UNDANGAN = 'undangan';
+
+    public const FIELD_MATERI = 'materi';
+
+    public const FIELD_DOKUMEN_TAMBAHAN = 'dokumen_tambahan';
+
     protected $fillable = [
         'user_id',
         'mahasiswa_ta_id',
@@ -26,6 +38,7 @@ class WorkspaceFile extends Model
         'is_archived',
         'archived_at',
         'archive_note',
+        'archive_field',
     ];
 
     protected function casts(): array
@@ -45,6 +58,11 @@ class WorkspaceFile extends Model
     public function scopeNotArchived($query)
     {
         return $query->where('is_archived', false);
+    }
+
+    public function scopeArchivedOfField($query, string $field)
+    {
+        return $query->where('is_archived', true)->where('archive_field', $field);
     }
 
     public function isArchived(): bool

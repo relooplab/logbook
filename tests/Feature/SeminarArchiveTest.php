@@ -130,13 +130,18 @@ class SeminarArchiveTest extends TestCase
         $oldPath = 'seminar-materials/'.$this->ta->id.'/undangan-lama.pdf';
         Storage::disk('local')->put($oldPath, 'isi-pdf-lama');
 
+        // Tanggal kegiatan sudah lewat → berkas lama masuk arsip.
+        $tanggalLewat = now()->subDays(3)->toDateString();
+
         $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => $tanggalLewat,
             'undangan_path' => $oldPath,
             'undangan_original_name' => 'undangan-lama.pdf',
         ]);
 
+        // Tanggal yang sudah lewat boleh dipertahankan saat memperbaiki berkas.
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
-            'tanggal' => now()->addDays(3)->toDateString(),
+            'tanggal' => $tanggalLewat,
             'waktu' => '10:00',
             'undangan_kepada' => ['pembimbing_1'],
             'undangan' => UploadedFile::fake()->create('undangan-baru.pdf', 120, 'application/pdf'),
@@ -254,5 +259,183 @@ class SeminarArchiveTest extends TestCase
         // (URL download berbagi prefiks, jadi yang dicek adalah atribut action form)
         $arsip = WorkspaceFile::where('is_archived', true)->firstOrFail();
         $this->assertStringNotContainsString('action="'.route('workspace.destroy', $arsip).'"', $html);
+    }
+
+    // ------------------------------------------------ batas 4 berkas historis per field
+
+    public function test_arsip_dibatasi_empat_per_field_dan_yang_terlama_tertimpa(): void
+    {
+        $awal = 'seminar-materials/'.$this->ta->id.'/undangan-0.pdf';
+        Storage::disk('local')->put($awal, 'v0');
+
+        $tanggalLewat = now()->subDays(3)->toDateString();
+
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => $tanggalLewat,
+            'undangan_path' => $awal,
+            'undangan_original_name' => 'undangan-0.pdf',
+        ]);
+
+        $pathLama = [$awal];
+
+        // Ganti undangan 6 kali → total 6 berkas historis, batas 4.
+        for ($i = 1; $i <= 6; $i++) {
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
+                'tanggal' => $tanggalLewat,
+                'waktu' => '10:00',
+                'undangan_kepada' => ['pembimbing_1'],
+                'undangan' => UploadedFile::fake()->create("undangan-{$i}.pdf", 20, 'application/pdf'),
+            ])->assertRedirect();
+
+            $pathLama[] = $s->fresh()->undangan_path;
+        }
+
+        $arsip = WorkspaceFile::where('mahasiswa_ta_id', $this->ta->id)
+            ->archivedOfField(WorkspaceFile::FIELD_UNDANGAN)
+            ->get();
+
+        $this->assertCount(
+            WorkspaceFile::MAX_ARSIP_PER_FIELD,
+            $arsip,
+            'Riwayat arsip per field harus dibatasi '.WorkspaceFile::MAX_ARSIP_PER_FIELD.' berkas.'
+        );
+
+        // Berkas paling lama sudah ditimpa (fisik & baris), yang terbaru tetap ada.
+        Storage::disk('local')->assertMissing($awal);
+        $this->assertDatabaseMissing('workspace_files', ['path' => $awal]);
+        foreach ($arsip as $a) {
+            Storage::disk('local')->assertExists($a->path);
+        }
+
+        // Yang tersisa adalah 4 arsip TERBARU (terbaru lebih dulu).
+        // $pathLama berisi: berkas awal + tiap berkas baru tiap iterasi;
+        // yang diarsipkan = semua kecuali berkas terakhir (yang aktif).
+        $diarsipkan = array_slice($pathLama, 0, count($pathLama) - 1);
+        $harapan = array_reverse(array_slice($diarsipkan, -WorkspaceFile::MAX_ARSIP_PER_FIELD));
+
+        $this->assertSame(
+            $harapan,
+            $arsip->sortByDesc('id')->pluck('path')->values()->all()
+        );
+    }
+
+    public function test_batas_arsip_dihitung_terpisah_per_field(): void
+    {
+        $undanganAwal = 'seminar-materials/'.$this->ta->id.'/undangan-awal.pdf';
+        $materiAwal = 'seminar-materials/'.$this->ta->id.'/materi-awal.pdf';
+        Storage::disk('local')->put($undanganAwal, 'u');
+        Storage::disk('local')->put($materiAwal, 'm');
+
+        $tanggalLewat = now()->subDays(3)->toDateString();
+
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => $tanggalLewat,
+            'undangan_path' => $undanganAwal,
+            'undangan_original_name' => 'undangan-awal.pdf',
+            'materi_path' => $materiAwal,
+            'materi_original_name' => 'materi-awal.pdf',
+        ]);
+
+        // 3x ganti undangan + 2x ganti materi — dua-duanya masih di bawah batas.
+        for ($i = 1; $i <= 3; $i++) {
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
+                'tanggal' => $tanggalLewat,
+                'waktu' => '10:00',
+                'undangan_kepada' => ['pembimbing_1'],
+                'undangan' => UploadedFile::fake()->create("u-{$i}.pdf", 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+
+        for ($i = 1; $i <= 2; $i++) {
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
+                'tanggal' => $tanggalLewat,
+                'waktu' => '10:00',
+                'undangan_kepada' => ['pembimbing_1'],
+                'materi_upload' => UploadedFile::fake()->create("m-{$i}.pdf", 10, 'application/pdf'),
+            ])->assertRedirect();
+        }
+
+        $this->assertSame(3, WorkspaceFile::archivedOfField(WorkspaceFile::FIELD_UNDANGAN)->count());
+        $this->assertSame(2, WorkspaceFile::archivedOfField(WorkspaceFile::FIELD_MATERI)->count());
+        // tidak saling menghapus antar field
+        Storage::disk('local')->assertExists($undanganAwal);
+        Storage::disk('local')->assertExists($materiAwal);
+    }
+
+    public function test_berkas_arsip_yang_masih_dipakai_tidak_ditimpa(): void
+    {
+        // Materi diambil dari workspace: berkasnya masih dirujuk workspace aktif.
+        $path = 'workspace/'.$this->ta->id.'/materi-ws.pdf';
+        Storage::disk('local')->put($path, 'locked');
+        $ws = WorkspaceFile::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'uploaded_by' => $this->mhs->id,
+            'bab' => 'Bab 1',
+            'original_name' => 'materi-ws.pdf',
+            'path' => $path,
+            'mime_type' => 'application/pdf',
+            'size' => 6,
+            'is_archived' => false,
+        ]);
+
+        $this->assertTrue($ws->canBeDeletedBy($this->mhs));
+        Storage::disk('local')->assertExists($path);
+    }
+
+    // ------------------------------------------------ sebelum tanggal kegiatan: tanpa arsip
+
+    public function test_edit_sebelum_tanggal_kegiatan_tidak_membuat_arsip(): void
+    {
+        $lama = 'seminar-materials/'.$this->ta->id.'/undangan-belum-acara.pdf';
+        Storage::disk('local')->put($lama, 'lama');
+
+        // Tanggal kegiatan masih di depan.
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => now()->addDays(5)->toDateString(),
+            'undangan_path' => $lama,
+            'undangan_original_name' => 'undangan-belum-acara.pdf',
+        ]);
+
+        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
+            'tanggal' => now()->addDays(5)->toDateString(),
+            'waktu' => '10:00',
+            'undangan_kepada' => ['pembimbing_1'],
+            'undangan' => UploadedFile::fake()->create('undangan-revisi.pdf', 30, 'application/pdf'),
+        ])->assertRedirect();
+
+        // Berkas lama langsung diganti, tidak menyisakan arsip.
+        Storage::disk('local')->assertMissing($lama);
+        $this->assertSame(0, WorkspaceFile::where('is_archived', true)->count());
+        $this->assertSame('undangan-revisi.pdf', $s->fresh()->undangan_original_name);
+    }
+
+    public function test_tanggal_kegiatan_lampau_boleh_dipertahankan_saat_edit(): void
+    {
+        $tanggalLewat = now()->subDays(2)->toDateString();
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => $tanggalLewat]);
+
+        // Tanpa menggeser jadwal: tidak boleh gagal validasi.
+        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
+            'tanggal' => $tanggalLewat,
+            'waktu' => '11:00',
+            'undangan_kepada' => ['pembimbing_1'],
+            'catatan_keterangan' => 'perbaikan berkas',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame($tanggalLewat, $s->fresh()->tanggal->toDateString());
+    }
+
+    public function test_tanggal_lampau_yang_berbeda_tetap_ditolak(): void
+    {
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => now()->subDays(2)->toDateString()]);
+
+        // Menggeser ke tanggal lampau LAIN (bukan mempertahankan) harus ditolak.
+        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
+            'tanggal' => now()->subDays(10)->toDateString(),
+            'waktu' => '11:00',
+            'undangan_kepada' => ['pembimbing_1'],
+        ])->assertSessionHasErrors('tanggal');
+
+        $this->assertSame(now()->subDays(2)->toDateString(), $s->fresh()->tanggal->toDateString());
     }
 }
