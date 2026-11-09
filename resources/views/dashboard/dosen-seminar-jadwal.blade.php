@@ -122,7 +122,7 @@
                                     </form>
                                 @else
                                     <form method="POST" action="{{ route('seminar-submission.batal-selesai', $sub) }}"
-                                          onsubmit="return confirm('Tandai BELUM selesai? Status otomatis (selesai 2 hari setelah kegiatan) akan ditahan sampai Anda melepasnya.')">
+                                          onsubmit="return confirm('Tandai BELUM selesai? Status otomatis (selesai 1 hari setelah kegiatan) akan ditahan sampai Anda melepasnya.')">
                                         @csrf
                                         <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover"
                                                 title="Tahan status otomatis supaya mahasiswa masih bisa memperbaiki berkas">

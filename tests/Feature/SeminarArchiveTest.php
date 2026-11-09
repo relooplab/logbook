@@ -83,7 +83,7 @@ class SeminarArchiveTest extends TestCase
         ], $override));
     }
 
-    /** Submission dianggap selesai otomatis (kegiatan > 2 hari lalu). */
+    /** Submission dianggap selesai otomatis (kegiatan > 1 hari lalu). */
     private function selesaikan(SeminarSubmission $sub): SeminarSubmission
     {
         $sub->forceFill([
@@ -166,8 +166,8 @@ class SeminarArchiveTest extends TestCase
         $s = $this->izinkanEdit($this->selesaikan($s));
 
         // Tanggal yang sudah lewat boleh dipertahankan saat memperbaiki berkas.
-        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
-            'tanggal' => $tanggalLewat,
+        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
+            'tanggal' => $s->fresh()->tanggal->toDateString(),
             'waktu' => '10:00',
             'undangan_kepada' => ['pembimbing_1'],
             'undangan' => UploadedFile::fake()->create('undangan-baru.pdf', 120, 'application/pdf'),
@@ -309,7 +309,7 @@ class SeminarArchiveTest extends TestCase
         for ($i = 1; $i <= 6; $i++) {
             // Izin edit bersifat sekali pakai → setujui ulang tiap iterasi.
             $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
-                'tanggal' => $tanggalLewat,
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'undangan' => UploadedFile::fake()->create("undangan-{$i}.pdf", 20, 'application/pdf'),
@@ -368,7 +368,7 @@ class SeminarArchiveTest extends TestCase
         // 3x ganti undangan + 2x ganti materi — dua-duanya masih di bawah batas.
         for ($i = 1; $i <= 3; $i++) {
             $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
-                'tanggal' => $tanggalLewat,
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'undangan' => UploadedFile::fake()->create("u-{$i}.pdf", 10, 'application/pdf'),
@@ -377,7 +377,7 @@ class SeminarArchiveTest extends TestCase
 
         for ($i = 1; $i <= 2; $i++) {
             $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
-                'tanggal' => $tanggalLewat,
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'materi_upload' => UploadedFile::fake()->create("m-{$i}.pdf", 10, 'application/pdf'),

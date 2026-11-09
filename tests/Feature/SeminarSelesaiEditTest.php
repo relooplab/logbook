@@ -87,7 +87,7 @@ class SeminarSelesaiEditTest extends TestCase
         return SeminarSubmission::create([
             'mahasiswa_ta_id' => $this->ta->id,
             'jenis' => SeminarSubmission::JENIS_SEMINAR_HASIL,
-            // Hari ini: aturan otomatis (2 hari setelah kegiatan) belum berlaku.
+            // Hari ini (hari H): aturan otomatis (1 hari setelah kegiatan) belum berlaku.
             'tanggal' => now()->toDateString(),
             'waktu' => '09:00',
             'undangan_path' => $path,
@@ -112,7 +112,7 @@ class SeminarSelesaiEditTest extends TestCase
         return $data;
     }
 
-    /** Jadikan selesai lewat aturan otomatis (kegiatan > 2 hari lalu). */
+    /** Jadikan selesai lewat aturan otomatis (kegiatan > 1 hari lalu). */
     private function buatSelesai(SeminarSubmission $sub): SeminarSubmission
     {
         $sub->forceFill([
@@ -296,22 +296,23 @@ class SeminarSelesaiEditTest extends TestCase
             ->assertForbidden();
     }
 
-    // ------------------------------------------------ selesai otomatis 2 hari
+    // ------------------------------------------------ selesai otomatis 1 hari
 
-    public function test_otomatis_selesai_dua_hari_setelah_kegiatan(): void
+    public function test_otomatis_selesai_sehari_setelah_kegiatan(): void
     {
         $sub = $this->submission();
         $sub->forceFill(['tanggal' => now()->subDays(3)->toDateString()])->save();
         $sub->refresh();
 
-        $this->assertTrue($sub->isSelesai(), 'Lewat 2 hari dari kegiatan → otomatis selesai.');
+        $this->assertTrue($sub->isSelesai(), 'Lewat 1 hari dari kegiatan → otomatis selesai.');
         $this->assertFalse($sub->isUpdatableByStudent(), 'Setelah selesai, edit perlu izin dosen.');
     }
 
-    public function test_belum_otomatis_sebelum_dua_hari(): void
+    public function test_pada_hari_h_masih_belum_selesai(): void
     {
+        // Pada hari H sendiri: belum selesai, masih bebas edit.
         $sub = $this->submission();
-        $sub->forceFill(['tanggal' => now()->subDay()->toDateString()])->save();
+        $sub->forceFill(['tanggal' => now()->toDateString()])->save();
         $sub->refresh();
 
         $this->assertFalse($sub->isSelesai());
@@ -384,17 +385,17 @@ class SeminarSelesaiEditTest extends TestCase
         $this->assertSame(1, preg_match('/task_alt<\/span>\s*Selesai/', $html2), 'Tombol pelepas penahanan harus berlabel Selesai.');
     }
 
-    public function test_batas_persis_selesai_pada_h_plus_2_tengah_malam(): void
+    public function test_batas_persis_selesai_pada_h_plus_1_tengah_malam(): void
     {
-        // Hari H = 12 Nov 2026 → selesai otomatis 14 Nov 2026 00:00.
+        // Hari H = 12 Nov 2026 → selesai otomatis 13 Nov 2026 00:00.
         $sub = $this->submission();
         $sub->forceFill(['tanggal' => '2026-11-12'])->save();
 
-        \Illuminate\Support\Carbon::setTestNow('2026-11-13 23:59:59');
-        $this->assertFalse($sub->fresh()->isSelesai(), 'Detik terakhir H+1 masih belum selesai.');
+        \Illuminate\Support\Carbon::setTestNow('2026-11-12 23:59:59');
+        $this->assertFalse($sub->fresh()->isSelesai(), 'Detik terakhir hari H masih belum selesai.');
 
-        \Illuminate\Support\Carbon::setTestNow('2026-11-14 00:00:00');
-        $this->assertTrue($sub->fresh()->isSelesai(), 'Tepat H+2 00:00 sudah selesai.');
+        \Illuminate\Support\Carbon::setTestNow('2026-11-13 00:00:00');
+        $this->assertTrue($sub->fresh()->isSelesai(), 'Tepat H+1 00:00 sudah selesai (terkunci).');
         $this->assertFalse($sub->fresh()->isUpdatableByStudent());
         $this->assertTrue($sub->fresh()->bisaMintaEdit());
     }

@@ -483,7 +483,7 @@ class SeminarSubmissionController extends Controller
     {
         $this->authorizeDosenPengampu($request->user(), $submission);
 
-        // Satu-satunya aksi dosen: menahan status otomatis (selesai 2 hari
+        // Satu-satunya aksi dosen: menahan status otomatis (selesai 1 hari
         // setelah kegiatan) sampai dilepas kembali.
         $submission->forceFill([
             'selesai_dikecualikan' => true,
@@ -499,7 +499,7 @@ class SeminarSubmissionController extends Controller
     }
 
     /**
-     * Dosen melepas penahanan: status mengikuti aturan otomatis (selesai 2 hari
+     * Dosen melepas penahanan: status mengikuti aturan otomatis (selesai 1 hari
      * setelah kegiatan).
      */
     public function ikutiOtomatis(Request $request, SeminarSubmission $submission): RedirectResponse
@@ -512,7 +512,7 @@ class SeminarSubmissionController extends Controller
             'selesai_dikecualikan_by' => null,
         ])->save();
 
-        return back()->with('success', 'Status mengikuti aturan otomatis (selesai 2 hari setelah kegiatan).');
+        return back()->with('success', 'Status mengikuti aturan otomatis (selesai 1 hari setelah kegiatan).');
     }
 
     /**

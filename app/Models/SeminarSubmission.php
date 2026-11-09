@@ -28,7 +28,7 @@ class SeminarSubmission extends Model
     public const STATUSES = [self::STATUS_DRAFT, self::STATUS_SUBMITTED];
 
     /** Jumlah hari setelah kegiatan sampai status otomatis menjadi selesai. */
-    public const AUTO_SELESAI_HARI = 2;
+    public const AUTO_SELESAI_HARI = 1;
 
     /** Masa berlaku izin edit setelah disetujui dosen (dalam hari). */
     public const EDIT_APPROVAL_DAYS = 7;
@@ -295,7 +295,8 @@ class SeminarSubmission extends Model
 
     /**
      * Seminar/sidang dianggap selesai bila sudah lewat AUTO_SELESAI_HARI hari
-     * dari tanggal kegiatan — KECUALI dosen menahannya (selesai_dikecualikan).
+     * (1 hari: begitu hari H berakhir) — KECUALI dosen menahannya
+     * (selesai_dikecualikan).
      *
      * Tidak ada penandaan selesai manual; satu-satunya aksi dosen adalah
      * menahan atau melepas penahanan.
@@ -313,7 +314,7 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Kapan status otomatis menjadi selesai (tanggal kegiatan + 2 hari).
+     * Kapan status otomatis menjadi selesai (tanggal kegiatan + 1 hari).
      */
     public function selesaiOtomatisPada(): ?\Illuminate\Support\Carbon
     {
