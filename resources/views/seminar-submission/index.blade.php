@@ -103,12 +103,5 @@
             </div>
         @endif
     </section>
-
-    @if ($isMember)
-        <p class="text-xs text-text-secondary">
-            Mahasiswa dapat mengedit bahan selama fase program belum maju. Menambah bahan untuk jenis lain
-            (mis. Sidang saat masih di Seminar Hasil) tetap bisa lewat tombol <strong>Kirim Bahan Seminar/Sidang</strong>.
-        </p>
-    @endif
 </div>
 @endsection
