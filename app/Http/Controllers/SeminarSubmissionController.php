@@ -353,7 +353,7 @@ class SeminarSubmissionController extends Controller
         $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList) {
             // Ganti undangan bila ada file baru.
             if ($request->file('undangan')) {
-                Storage::disk('local')->delete($submission->undangan_path);
+                $this->archiveUndangan($submission);
                 $payload['undangan_path'] = $request->file('undangan')->store('seminar-materials/'.$submission->mahasiswa_ta_id, 'local');
                 $payload['undangan_original_name'] = $request->file('undangan')->getClientOriginalName();
             }
@@ -362,13 +362,13 @@ class SeminarSubmissionController extends Controller
             if ($request->filled('materi_workspace_id') && $request->file('materi_upload') === null) {
                 $file = WorkspaceFile::find($request->input('materi_workspace_id'));
                 if ($file && $file->mahasiswa_ta_id === $submission->mahasiswa_ta_id) {
-                    $this->deleteMateriFile($submission);
+                    $this->archiveMateri($submission);
                     $payload['materi_path'] = $file->path;
                     $payload['materi_original_name'] = $file->original_name;
                     $payload['materi_workspace_file_id'] = $file->id;
                 }
             } elseif ($request->file('materi_upload')) {
-                $this->deleteMateriFile($submission);
+                $this->archiveMateri($submission);
                 $payload['materi_path'] = $request->file('materi_upload')->store('seminar-materials/'.$submission->mahasiswa_ta_id, 'local');
                 $payload['materi_original_name'] = $request->file('materi_upload')->getClientOriginalName();
                 $payload['materi_workspace_file_id'] = null;
@@ -376,10 +376,10 @@ class SeminarSubmissionController extends Controller
 
             $submission->update($payload);
 
-            // Dokumen tambahan: hapus yang dicentang, tambah file baru,
-            // tautan diganti seluruhnya dengan daftar yang dikirim.
+            // Dokumen tambahan: yang dicentang diarsipkan (tidak dimusnahkan),
+            // file baru ditambahkan, tautan diganti seluruhnya.
             foreach ($submission->documents()->whereIn('id', $hapusIds)->get() as $doc) {
-                $this->deleteTambahanDocument($doc);
+                $this->archiveTambahanDocument($submission, $doc);
             }
             if (! empty($newFiles)) {
                 $this->storeTambahanDocuments($submission, $newFiles, []);
@@ -687,13 +687,84 @@ class SeminarSubmissionController extends Controller
     }
 
     /**
-     * Hapus file materi (jika bukan dari workspace).
+     * Arsipkan berkas yang diganti: TIDAK dihapus, tapi dicatat sebagai berkas
+     * workspace di grup "Arsip" milik mahasiswa. Berkas fisik yang sama
+     * diadopsi (tidak digandakan), sehingga riwayat tetap utuh dan hanya dosen
+     * pembimbing/penguji (atau admin) yang boleh memusnahkannya.
      */
-    private function deleteMateriFile(SeminarSubmission $submission): void
+    private function archiveFile(SeminarSubmission $submission, ?string $path, ?string $originalName, string $label): ?WorkspaceFile
     {
-        if (!$submission->materiFromWorkspace() && $submission->materi_path) {
-            Storage::disk('local')->delete($submission->materi_path);
+        if (! $path) {
+            return null;
         }
+
+        $note = sprintf(
+            '%s %s #%d — diganti %s',
+            $label,
+            $submission->jenisLabel(),
+            $submission->id,
+            now()->format('d M Y H:i')
+        );
+
+        // Berkas yang sudah tercatat di workspace (materi dari workspace) cukup
+        // ditandai arsip, tidak dibuatkan baris baru.
+        $existing = WorkspaceFile::where('path', $path)->first();
+
+        if ($existing) {
+            $existing->update([
+                'is_archived' => true,
+                'archived_at' => now(),
+                'archive_note' => $note,
+                'bab' => WorkspaceFile::BAB_ARSIP,
+            ]);
+
+            return $existing;
+        }
+
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        return WorkspaceFile::create([
+            'mahasiswa_ta_id' => $submission->mahasiswa_ta_id,
+            'uploaded_by' => $submission->mahasiswaTa?->user_id ?? $submission->mahasiswaTa?->mahasiswa?->id,
+            'bab' => WorkspaceFile::BAB_ARSIP,
+            'original_name' => $originalName ?: basename($path),
+            'path' => $path,
+            'mime_type' => $disk->mimeType($path) ?: 'application/octet-stream',
+            'size' => (int) $disk->size($path),
+            'is_archived' => true,
+            'archived_at' => now(),
+            'archive_note' => $note,
+        ]);
+    }
+
+    /**
+     * Arsipkan undangan lama sebelum diganti.
+     */
+    private function archiveUndangan(SeminarSubmission $submission): void
+    {
+        $this->archiveFile(
+            $submission,
+            $submission->undangan_path,
+            $submission->undangan_original_name,
+            'Undangan'
+        );
+    }
+
+    /**
+     * Arsipkan materi lama sebelum diganti.
+     */
+    private function archiveMateri(SeminarSubmission $submission): void
+    {
+        $this->archiveFile(
+            $submission,
+            $submission->materi_path,
+            $submission->materi_original_name,
+            'Materi'
+        );
     }
 
     /**
@@ -724,10 +795,12 @@ class SeminarSubmissionController extends Controller
     /**
      * Hapus satu dokumen tambahan file (record + berkas fisik).
      */
-    private function deleteTambahanDocument(SeminarSubmissionDocument $document): void
+    private function archiveTambahanDocument(SeminarSubmission $submission, SeminarSubmissionDocument $document): void
     {
+        // Berkasnya diarsipkan (tidak dimusnahkan); tautan tidak punya berkas
+        // sehingga cukup catatannya yang dihapus.
         if ($document->isFile() && $document->path) {
-            Storage::disk('local')->delete($document->path);
+            $this->archiveFile($submission, $document->path, $document->original_name, 'Dokumen tambahan');
         }
         $document->delete();
     }

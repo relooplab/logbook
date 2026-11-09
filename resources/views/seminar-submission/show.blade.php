@@ -22,6 +22,10 @@
         <div class="flex flex-wrap gap-2">
             @if ($isMember && $submission->isUpdatableByStudent())
                 <a href="{{ route('seminar-submission.edit', $submission) }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Edit</a>
+            @elseif ($isMember)
+                <span class="self-center text-xs text-text-secondary">
+                    Bahan {{ $submission->jenisLabel() }} sudah melewati fase program saat ini — hanya dapat dilihat.
+                </span>
             @endif
             <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">← Dashboard</a>
         </div>
