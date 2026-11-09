@@ -44,6 +44,12 @@ class SeminarSubmission extends Model
         'catatan_keterangan',
         'status',
         'sidang_id',
+        'selesai_at',
+        'selesai_by',
+        'edit_requested_at',
+        'edit_request_note',
+        'edit_approved_at',
+        'edit_approved_by',
     ];
 
     protected function casts(): array
@@ -52,6 +58,9 @@ class SeminarSubmission extends Model
             'tanggal' => 'date',
             'waktu' => 'datetime:H:i',
             'undangan_kepada' => 'array',
+            'selesai_at' => 'datetime',
+            'edit_requested_at' => 'datetime',
+            'edit_approved_at' => 'datetime',
         ];
     }
 
@@ -236,13 +245,14 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Mahasiswa boleh mengedit bahan selama submission belum dikonversi menjadi
-     * riwayat sidang DAN jenisnya bukan fase program yang sudah lewat.
+     * Mahasiswa boleh mengedit bahan selama:
+     *  - belum dikonversi menjadi riwayat sidang,
+     *  - jenisnya bukan fase program yang sudah lewat (patokan FASE, bukan
+     *    tanggal — jadwal lewat pun tetap boleh diperbaiki), dan
+     *  - belum ditandai SELESAI oleh dosen; setelah selesai, edit hanya boleh
+     *    bila salah satu dosen menyetujui permintaan edit mahasiswa.
      *
-     * Patokannya FASE, bukan tanggal: jadwal yang sudah lewat tetap boleh
-     * diperbaiki selama fase program belum maju. Begitu fase maju (mis. dari
-     * Seminar Hasil ke Sidang), bahan fase sebelumnya menjadi read-only dan
-     * berkas lama tersimpan di grup "Arsip" workspace mahasiswa.
+     * Berkas lama baru diarsipkan setelah submission dinyatakan selesai.
      */
     public function isUpdatableByStudent(): bool
     {
@@ -260,11 +270,65 @@ class SeminarSubmission extends Model
         $jenisIndex = self::faseIndexOf($ta, self::faseFromJenis($this->jenis));
 
         // Fase tak dikenal → jangan kunci, supaya bukan read-only permanen.
-        if ($nowIndex < 0 || $jenisIndex < 0) {
-            return true;
+        $lolosFase = $nowIndex < 0 || $jenisIndex < 0 || $jenisIndex >= $nowIndex;
+
+        if (! $lolosFase) {
+            return false;
         }
 
-        return $jenisIndex >= $nowIndex;
+        // Sudah ditandai SELESAI oleh dosen → hanya boleh diedit bila salah satu
+        // dosen sudah menyetujui permintaan edit mahasiswa.
+        if ($this->isSelesai()) {
+            return $this->isEditApproved();
+        }
+
+        return true;
+    }
+
+    /**
+     * Seminar/sidang sudah ditandai selesai oleh dosen.
+     */
+    public function isSelesai(): bool
+    {
+        return $this->selesai_at !== null;
+    }
+
+    /**
+     * Salah satu dosen sudah menyetujui permintaan edit mahasiswa.
+     */
+    public function isEditApproved(): bool
+    {
+        return $this->edit_approved_at !== null;
+    }
+
+    /**
+     * Permintaan edit sudah dikirim mahasiswa dan menunggu keputusan dosen.
+     */
+    public function isMenungguPersetujuanEdit(): bool
+    {
+        return $this->isSelesai()
+            && $this->edit_requested_at !== null
+            && ! $this->isEditApproved();
+    }
+
+    /**
+     * Mahasiswa boleh mengirim permintaan edit (belum disetujui & belum ada
+     * permintaan yang menggantung).
+     */
+    public function bisaMintaEdit(): bool
+    {
+        return $this->isSelesai()
+            && ! $this->isEditApproved()
+            && ! $this->isMenungguPersetujuanEdit();
+    }
+
+    /**
+     * Berkas lama diarsipkan hanya ketika submission sudah dinyatakan SELESAI.
+     * Sebelum itu mahasiswa bebas mengganti berkas tanpa meninggalkan arsip.
+     */
+    public function arsipkanSaatDiganti(): bool
+    {
+        return $this->isSelesai();
     }
 
     /**

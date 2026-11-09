@@ -408,10 +408,9 @@ class SeminarSubmissionController extends Controller
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $submission->mahasiswaTa->storageChargeTarget();
 
-        // Arsip hanya berlaku setelah tanggal kegiatan LEWAT. Sebelum tanggal
-        // kegiatan, berkas lama langsung diganti tanpa menyimpan riwayat.
-        $arsipkan = $submission->tanggal !== null
-            && $submission->tanggal->startOfDay()->lt(now()->startOfDay());
+        // Arsip hanya berlaku setelah dosen menandai seminar/sidang SELESAI.
+        // Sebelum itu mahasiswa bebas mengganti berkas tanpa meninggalkan arsip.
+        $arsipkan = $submission->arsipkanSaatDiganti();
 
         $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList, $arsipkan) {
             // Ganti undangan bila ada file baru.
@@ -465,6 +464,18 @@ class SeminarSubmissionController extends Controller
 
         $submission->refresh();
 
+        // Persetujuan edit bersifat sekali pakai: setelah perubahan tersimpan,
+        // izin dikonsumsi agar edit berikutnya perlu persetujuan lagi.
+        if ($submission->isSelesai() && $submission->isEditApproved()) {
+            $submission->forceFill([
+                'edit_requested_at' => null,
+                'edit_request_note' => null,
+                'edit_approved_at' => null,
+                'edit_approved_by' => null,
+            ])->save();
+            $submission->refresh();
+        }
+
         // Notifikasi perubahan ke dosen terkait + salinan ke mahasiswa pengirim,
         // dibedakan dari notifikasi kiriman pertama (subject/isi "Perubahan").
         $this->notifyDosen($submission->mahasiswaTa, $submission, true, $changedFields);
@@ -474,6 +485,116 @@ class SeminarSubmissionController extends Controller
 
         return redirect()->route('seminar-submission.show', $submission)
             ->with('success', 'Bahan seminar/sidang berhasil diperbarui.');
+    }
+
+    /**
+     * Dosen menandai seminar/sidang selesai. Setelah selesai, mahasiswa hanya
+     * bisa mengedit bila salah satu dosen menyetujui permintaan edit.
+     */
+    public function selesaikan(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+
+        $submission->forceFill([
+            'selesai_at' => now(),
+            'selesai_by' => $request->user()->id,
+        ])->save();
+
+        return back()->with('success', 'Seminar/sidang ditandai selesai.');
+    }
+
+    /**
+     * Dosen membatalkan status selesai (mahasiswa bisa mengedit bebas lagi).
+     */
+    public function batalSelesai(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+
+        $submission->forceFill([
+            'selesai_at' => null,
+            'selesai_by' => null,
+            'edit_requested_at' => null,
+            'edit_request_note' => null,
+            'edit_approved_at' => null,
+            'edit_approved_by' => null,
+        ])->save();
+
+        return back()->with('success', 'Status selesai dibatalkan.');
+    }
+
+    /**
+     * Mahasiswa meminta izin mengedit bahan yang sudah dinyatakan selesai.
+     */
+    public function mintaEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        abort_unless($submission->mahasiswaTa?->isMember($request->user()), 403);
+        abort_unless($submission->bisaMintaEdit(), 403, 'Permintaan edit tidak dapat dikirim sekarang.');
+
+        $data = $request->validate([
+            'edit_request_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $submission->forceFill([
+            'edit_requested_at' => now(),
+            'edit_request_note' => $data['edit_request_note'] ?? null,
+        ])->save();
+
+        $this->bestEffort(fn () => $this->notifyDosen($submission->mahasiswaTa, $submission, true, ['permintaan izin edit']));
+
+        return back()->with('success', 'Permintaan izin edit dikirim ke dosen.');
+    }
+
+    /**
+     * Salah satu dosen menyetujui permintaan edit (cukup satu).
+     */
+    public function setujuiEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+        abort_unless($submission->isMenungguPersetujuanEdit(), 403, 'Tidak ada permintaan edit yang menunggu.');
+
+        $submission->forceFill([
+            'edit_approved_at' => now(),
+            'edit_approved_by' => $request->user()->id,
+        ])->save();
+
+        if ($mahasiswa = $submission->mahasiswaTa?->mahasiswa) {
+            $this->bestEffort(fn () => $mahasiswa->notify(
+                new SeminarSubmissionNotification($submission, 'mahasiswa', true, ['izin edit disetujui'])
+            ));
+        }
+
+        return back()->with('success', 'Permintaan edit disetujui.');
+    }
+
+    /**
+     * Dosen menolak permintaan edit; mahasiswa dapat mengajukan lagi.
+     */
+    public function tolakEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+        abort_unless($submission->isMenungguPersetujuanEdit(), 403, 'Tidak ada permintaan edit yang menunggu.');
+
+        $submission->forceFill([
+            'edit_requested_at' => null,
+            'edit_request_note' => null,
+        ])->save();
+
+        return back()->with('success', 'Permintaan edit ditolak.');
+    }
+
+    /**
+     * Hanya dosen pembimbing/penguji program tersebut (atau admin).
+     */
+    private function authorizeDosenPengampu($user, SeminarSubmission $submission): void
+    {
+        $ta = $submission->mahasiswaTa;
+
+        abort_unless($user && $user->isDosen(), 403);
+        abort_unless(
+            $user->isAdmin() || ($ta && ($ta->isPembimbing($user) || $ta->isPenguji($user))),
+            403,
+            'Anda bukan pembimbing/penguji program ini.'
+        );
     }
 
     /**
