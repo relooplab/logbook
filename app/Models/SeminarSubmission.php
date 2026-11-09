@@ -50,8 +50,6 @@ class SeminarSubmission extends Model
         'catatan_keterangan',
         'status',
         'sidang_id',
-        'selesai_at',
-        'selesai_by',
         'selesai_dikecualikan',
         'selesai_dikecualikan_at',
         'selesai_dikecualikan_by',
@@ -67,7 +65,6 @@ class SeminarSubmission extends Model
             'tanggal' => 'date',
             'waktu' => 'datetime:H:i',
             'undangan_kepada' => 'array',
-            'selesai_at' => 'datetime',
             'selesai_dikecualikan' => 'boolean',
             'selesai_dikecualikan_at' => 'datetime',
             'edit_requested_at' => 'datetime',
@@ -297,17 +294,14 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Seminar/sidang dianggap selesai bila:
-     *  1. dosen menandainya selesai secara manual, ATAU
-     *  2. sudah lewat AUTO_SELESAI_HARI hari dari tanggal kegiatan —
-     *     kecuali dosen menahannya (selesai_dikecualikan).
+     * Seminar/sidang dianggap selesai bila sudah lewat AUTO_SELESAI_HARI hari
+     * dari tanggal kegiatan — KECUALI dosen menahannya (selesai_dikecualikan).
+     *
+     * Tidak ada penandaan selesai manual; satu-satunya aksi dosen adalah
+     * menahan atau melepas penahanan.
      */
     public function isSelesai(): bool
     {
-        if ($this->selesai_at !== null) {
-            return true;
-        }
-
         if ($this->selesai_dikecualikan) {
             return false;
         }
@@ -321,16 +315,6 @@ class SeminarSubmission extends Model
     public function selesaiOtomatisPada(): ?\Illuminate\Support\Carbon
     {
         return $this->tanggal?->copy()->startOfDay()->addDays(self::AUTO_SELESAI_HARI);
-    }
-
-    /**
-     * Selesai karena aturan otomatis (bukan ditandai manual oleh dosen).
-     */
-    public function isSelesaiOtomatis(): bool
-    {
-        return $this->selesai_at === null
-            && ! $this->selesai_dikecualikan
-            && $this->isSelesai();
     }
 
     /**

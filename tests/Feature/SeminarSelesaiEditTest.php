@@ -106,44 +106,18 @@ class SeminarSelesaiEditTest extends TestCase
         return $data;
     }
 
-    // ------------------------------------------------ tandai selesai
-
-    public function test_dosen_pembimbing_dapat_menandai_selesai(): void
+    /** Jadikan selesai lewat aturan otomatis (kegiatan > 2 hari lalu). */
+    private function buatSelesai(SeminarSubmission $sub): SeminarSubmission
     {
-        $sub = $this->submission();
+        $sub->forceFill([
+            'tanggal' => now()->subDays(SeminarSubmission::AUTO_SELESAI_HARI + 1)->toDateString(),
+            'selesai_dikecualikan' => false,
+        ])->save();
 
-        $this->actingAs($this->pembimbing)
-            ->post(route('seminar-submission.selesai', $sub))
-            ->assertRedirect();
-
-        $sub->refresh();
-        $this->assertTrue($sub->isSelesai());
-        $this->assertSame($this->pembimbing->id, $sub->selesai_by);
+        return $sub->fresh();
     }
 
-    public function test_penguji_juga_dapat_menandai_selesai(): void
-    {
-        $sub = $this->submission();
-
-        $this->actingAs($this->penguji)
-            ->post(route('seminar-submission.selesai', $sub))
-            ->assertRedirect();
-
-        $this->assertTrue($sub->fresh()->isSelesai());
-    }
-
-    public function test_dosen_bukan_pengampu_tidak_boleh_menandai_selesai(): void
-    {
-        $sub = $this->submission();
-
-        $this->actingAs($this->dosenLain)
-            ->post(route('seminar-submission.selesai', $sub))
-            ->assertForbidden();
-
-        $this->assertFalse($sub->fresh()->isSelesai());
-    }
-
-    // ------------------------------------------------ belum selesai = bebas
+    // ------------------------------------------------ status otomatis
 
     public function test_sebelum_selesai_mahasiswa_bebas_ganti_berkas_tanpa_arsip(): void
     {
@@ -164,8 +138,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_setelah_selesai_mahasiswa_tidak_bisa_edit_tanpa_izin(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
 
         $sub->refresh();
         $this->assertFalse($sub->isUpdatableByStudent());
@@ -176,8 +149,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_mahasiswa_meminta_izin_edit_dan_salah_satu_dosen_menyetujui(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
 
         // minta izin
         $this->actingAs($this->mhs)
@@ -205,7 +177,7 @@ class SeminarSelesaiEditTest extends TestCase
         $awal = 'seminar-materials/'.$this->ta->id.'/undangan-sebelum-selesai.pdf';
         $sub = $this->submission($awal);
 
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($sub);
         $this->actingAs($this->mhs)->post(route('seminar-submission.minta-edit', $sub));
         $this->actingAs($this->pembimbing)->post(route('seminar-submission.setujui-edit', $sub));
 
@@ -240,8 +212,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_izin_kedaluwarsa_setelah_7_hari_dan_bisa_diajukan_lagi(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
 
         // izin disetujui 8 hari lalu → sudah kedaluwarsa
         $sub->forceFill([
@@ -269,8 +240,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_dosen_menolak_permintaan_edit(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
         $this->actingAs($this->mhs)->post(route('seminar-submission.minta-edit', $sub));
 
         $this->actingAs($this->dosenLain)
@@ -291,8 +261,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_batal_selesai_membuat_mahasiswa_bebas_edit_lagi(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
 
         $this->actingAs($this->pembimbing)
             ->post(route('seminar-submission.batal-selesai', $sub))
@@ -312,8 +281,7 @@ class SeminarSelesaiEditTest extends TestCase
 
     public function test_mahasiswa_bukan_anggota_tidak_bisa_minta_izin(): void
     {
-        $sub = $this->submission();
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+        $sub = $this->buatSelesai($this->submission());
 
         $orangLain = $this->makeUser('Mhs Lain', 'mahasiswa', ['nim' => 'NIM'.substr(md5(uniqid()), 0, 8)]);
 
@@ -331,7 +299,6 @@ class SeminarSelesaiEditTest extends TestCase
         $sub->refresh();
 
         $this->assertTrue($sub->isSelesai(), 'Lewat 2 hari dari kegiatan → otomatis selesai.');
-        $this->assertTrue($sub->isSelesaiOtomatis());
         $this->assertFalse($sub->isUpdatableByStudent(), 'Setelah selesai, edit perlu izin dosen.');
     }
 
@@ -389,21 +356,7 @@ class SeminarSelesaiEditTest extends TestCase
         $sub->refresh();
         $this->assertFalse($sub->selesai_dikecualikan);
         $this->assertTrue($sub->isSelesai());
-        $this->assertTrue($sub->isSelesaiOtomatis());
     }
 
-    public function test_dosen_dapat_menandai_selesai_lebih_awal(): void
-    {
-        $sub = $this->submission();
-        $sub->forceFill(['tanggal' => now()->addDays(3)->toDateString()])->save();
-        $sub->refresh();
-        $this->assertFalse($sub->isSelesai());
 
-        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub))->assertRedirect();
-
-        $sub->refresh();
-        $this->assertTrue($sub->isSelesai());
-        $this->assertFalse($sub->isSelesaiOtomatis(), 'Ini selesai manual, bukan otomatis.');
-        $this->assertNotNull($sub->selesai_at);
-    }
 }

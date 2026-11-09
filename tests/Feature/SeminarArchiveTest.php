@@ -83,10 +83,13 @@ class SeminarArchiveTest extends TestCase
         ], $override));
     }
 
-    /** Dosen menandai submission selesai (syarat berkas diarsipkan). */
+    /** Submission dianggap selesai otomatis (kegiatan > 2 hari lalu). */
     private function selesaikan(SeminarSubmission $sub): SeminarSubmission
     {
-        $sub->forceFill(['selesai_at' => now(), 'selesai_by' => $this->dosen->id])->save();
+        $sub->forceFill([
+            'tanggal' => now()->subDays(SeminarSubmission::AUTO_SELESAI_HARI + 1)->toDateString(),
+            'selesai_dikecualikan' => false,
+        ])->save();
 
         return $sub->fresh();
     }

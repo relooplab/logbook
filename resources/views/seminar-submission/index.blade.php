@@ -74,7 +74,7 @@
                                 <span class="badge {{ $submission->status === \App\Models\SeminarSubmission::STATUS_SUBMITTED ? 'badge-info' : 'badge-warning' }}">{{ $submission->statusLabel() }}</span>
                                 @if ($submission->isSelesai())
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">
-                                        Selesai{{ $submission->isSelesaiOtomatis() ? ' · otomatis' : '' }}
+                                        Selesai
                                     </span>
                                 @elseif ($sudahLewat)
                                     <span class="text-[11px] text-text-secondary">· kegiatan sudah lewat</span>

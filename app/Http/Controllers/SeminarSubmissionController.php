@@ -476,36 +476,16 @@ class SeminarSubmissionController extends Controller
     }
 
     /**
-     * Dosen menandai seminar/sidang selesai. Setelah selesai, mahasiswa hanya
-     * bisa mengedit bila salah satu dosen menyetujui permintaan edit.
-     */
-    public function selesaikan(Request $request, SeminarSubmission $submission): RedirectResponse
-    {
-        $this->authorizeDosenPengampu($request->user(), $submission);
-
-        $submission->forceFill([
-            'selesai_at' => now(),
-            'selesai_by' => $request->user()->id,
-            'selesai_dikecualikan' => false,
-            'selesai_dikecualikan_at' => null,
-            'selesai_dikecualikan_by' => null,
-        ])->save();
-
-        return back()->with('success', 'Seminar/sidang ditandai selesai.');
-    }
-
-    /**
-     * Dosen membatalkan status selesai (mahasiswa bisa mengedit bebas lagi).
+     * Dosen menahan status otomatis: seminar/sidang dianggap BELUM selesai
+     * sampai penahanan dilepas (mahasiswa bisa mengedit bebas lagi).
      */
     public function batalSelesai(Request $request, SeminarSubmission $submission): RedirectResponse
     {
         $this->authorizeDosenPengampu($request->user(), $submission);
 
-        // Menahan status otomatis: tanpa pengecualian, submission yang sudah
-        // lewat 2 hari akan langsung dianggap selesai lagi.
+        // Satu-satunya aksi dosen: menahan status otomatis (selesai 2 hari
+        // setelah kegiatan) sampai dilepas kembali.
         $submission->forceFill([
-            'selesai_at' => null,
-            'selesai_by' => null,
             'selesai_dikecualikan' => true,
             'selesai_dikecualikan_at' => now(),
             'selesai_dikecualikan_by' => $request->user()->id,
@@ -527,8 +507,6 @@ class SeminarSubmissionController extends Controller
         $this->authorizeDosenPengampu($request->user(), $submission);
 
         $submission->forceFill([
-            'selesai_at' => null,
-            'selesai_by' => null,
             'selesai_dikecualikan' => false,
             'selesai_dikecualikan_at' => null,
             'selesai_dikecualikan_by' => null,
