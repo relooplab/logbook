@@ -358,5 +358,23 @@ class SeminarSelesaiEditTest extends TestCase
         $this->assertTrue($sub->isSelesai());
     }
 
+    public function test_label_tombol_agenda_dosen(): void
+    {
+        $sub = $this->submission();
 
+        // Belum selesai → tombol 'Belum Selesai'
+        $html = $this->actingAs($this->pembimbing)->get(route('dosen.seminar-jadwal'))->assertOk()->getContent();
+        $this->assertStringContainsString('Belum Selesai', $html);
+        $this->assertStringNotContainsString('Ikuti Otomatis', $html);
+        $this->assertStringContainsString(route('seminar-submission.batal-selesai', $sub), $html);
+
+        // Ditahan dosen → tombol 'Selesai' (bukan 'Ikuti Otomatis')
+        $this->actingAs($this->pembimbing)->post(route('seminar-submission.batal-selesai', $sub));
+
+        $html2 = $this->actingAs($this->pembimbing)->get(route('dosen.seminar-jadwal'))->assertOk()->getContent();
+        $this->assertStringNotContainsString('Ikuti Otomatis', $html2, 'Label lama tidak boleh muncul lagi.');
+        $this->assertStringContainsString(route('seminar-submission.ikuti-otomatis', $sub), $html2);
+        // Tombol pelepas penahanan kini berlabel "Selesai"
+        $this->assertSame(1, preg_match('/task_alt<\/span>\s*Selesai/', $html2), 'Tombol pelepas penahanan harus berlabel Selesai.');
+    }
 }

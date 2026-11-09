@@ -113,11 +113,11 @@
 
                                 @if ($sub->selesai_dikecualikan)
                                     <form method="POST" action="{{ route('seminar-submission.ikuti-otomatis', $sub) }}"
-                                          onsubmit="return confirm('Aktifkan lagi status otomatis (selesai 2 hari setelah kegiatan)?')">
+                                          onsubmit="return confirm('Tandai seminar/sidang ini selesai? Setelah selesai, mahasiswa perlu izin dosen untuk mengedit.')">
                                         @csrf
-                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover"
-                                                title="Lepas penahanan; status kembali mengikuti aturan otomatis">
-                                            <span class="material-symbols-outlined icon-sm">autorenew</span> Ikuti Otomatis
+                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-status-success/15 text-status-success text-xs font-semibold hover:bg-status-success/25"
+                                                title="Tandai selesai (status otomatis aktif kembali)">
+                                            <span class="material-symbols-outlined icon-sm">task_alt</span> Selesai
                                         </button>
                                     </form>
                                 @else
