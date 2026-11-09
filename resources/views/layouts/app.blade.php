@@ -157,7 +157,7 @@
                 $seminarProgram = \App\Support\ProgramContext::resolve($user, request());
             @endphp
             @if ($seminarProgram)
-            <a href="{{ route('seminar-submission.create', $seminarProgram) }}" class="{{ $navLink }} {{ $active('seminar-submission.*') }}">
+            <a href="{{ route('seminar-submission.index') }}" class="{{ $navLink }} {{ $active('seminar-submission.*') }}">
                 <span class="material-symbols-outlined icon-md text-status-info">co_present</span>
                 <span class="sidebar-label">Seminar/sidang</span>
             </a>

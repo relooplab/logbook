@@ -10,6 +10,7 @@ use App\Models\Sidang;
 use App\Models\WorkspaceFile;
 use App\Notifications\SeminarSubmissionNotification;
 use App\Services\StorageUsageService;
+use App\Support\ProgramContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,57 @@ class SeminarSubmissionController extends Controller
     /**
      * Form isi pemberian bahan seminar/sidang.
      */
+    /**
+     * Riwayat/rekap bahan seminar/sidang mahasiswa untuk program aktif:
+     * daftar pengajuan + status, jalan ke detail/edit, dan tombol tambah bahan.
+     */
+    public function index(Request $request): View|RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($user->isMahasiswa()) {
+            $program = ProgramContext::resolve($user, $request);
+
+            if (! $program) {
+                return redirect()->route('dashboard')
+                    ->with('warning', 'Anda belum memiliki program TA/KP, jadi belum ada riwayat seminar/sidang.');
+            }
+        } else {
+            // Dosen: riwayat dibuka per mahasiswa (mis. dari workspace bimbingan).
+            $program = $request->filled('mahasiswa_ta')
+                ? MahasiswaTa::find($request->integer('mahasiswa_ta'))
+                : null;
+
+            if (! $program) {
+                return redirect()->route('workspace.role')
+                    ->with('warning', 'Pilih mahasiswa terlebih dahulu untuk melihat riwayat seminar/sidangnya.');
+            }
+        }
+
+        $isMember = $program->isMember($user);
+        $isDosen = $program->isPembimbing($user)
+            || $program->isPenguji($user)
+            || $user->isAdmin();
+
+        abort_unless($isMember || $isDosen, 403);
+
+        $submissions = $program->seminarSubmissions()
+            ->withCount('documents')
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
+            ->get();
+
+        // Rekap ringkas untuk kartu di atas daftar.
+        $rekap = [
+            'total' => $submissions->count(),
+            'dikirim' => $submissions->where('status', SeminarSubmission::STATUS_SUBMITTED)->count(),
+            'terjadwal' => $submissions->filter(fn ($s) => $s->tanggal && $s->tanggal->isFuture())->count(),
+            'arsip' => WorkspaceFile::where('mahasiswa_ta_id', $program->id)->archived()->count(),
+        ];
+
+        return view('seminar-submission.index', compact('program', 'submissions', 'rekap', 'isMember', 'isDosen'));
+    }
+
     public function create(Request $request, MahasiswaTa $mahasiswaTa): View
     {
         abort_unless($mahasiswaTa->isMember($request->user()), 403);

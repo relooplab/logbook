@@ -178,9 +178,9 @@ class SeminarJenisUxTest extends TestCase
     {
         $html = $this->actingAs($this->mhs)->get(route('dashboard'))->assertOk()->getContent();
 
-        // link ada, menunjuk ke form pengajuan program aktif
+        // link ada dan menunjuk ke halaman riwayat (bukan langsung form pengajuan)
         $this->assertStringContainsString('Seminar/sidang', $html);
-        $this->assertStringContainsString(route('seminar-submission.create', $this->ta), $html);
+        $this->assertStringContainsString('href="'.route('seminar-submission.index').'"', $html);
 
         // urutan: setelah "Jadwalkan Bimbingan"
         $posJadwal = strpos($html, 'Jadwalkan Bimbingan');
