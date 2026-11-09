@@ -80,7 +80,9 @@
                                 @if ($submission->isMenungguPersetujuanEdit())
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-pending/15 text-status-pending">Menunggu izin dosen</span>
                                 @elseif ($submission->isEditApproved())
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">Izin edit disetujui</span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">
+                                        Izin edit s/d {{ $submission->editApprovalExpiresAt()?->format('d M Y') }}
+                                    </span>
                                 @endif
                             </div>
                             <p class="mt-0.5 text-xs text-text-secondary">

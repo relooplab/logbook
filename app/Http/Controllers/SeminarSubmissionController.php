@@ -464,18 +464,6 @@ class SeminarSubmissionController extends Controller
 
         $submission->refresh();
 
-        // Persetujuan edit bersifat sekali pakai: setelah perubahan tersimpan,
-        // izin dikonsumsi agar edit berikutnya perlu persetujuan lagi.
-        if ($submission->isSelesai() && $submission->isEditApproved()) {
-            $submission->forceFill([
-                'edit_requested_at' => null,
-                'edit_request_note' => null,
-                'edit_approved_at' => null,
-                'edit_approved_by' => null,
-            ])->save();
-            $submission->refresh();
-        }
-
         // Notifikasi perubahan ke dosen terkait + salinan ke mahasiswa pengirim,
         // dibedakan dari notifikasi kiriman pertama (subject/isi "Perubahan").
         $this->notifyDosen($submission->mahasiswaTa, $submission, true, $changedFields);
@@ -534,9 +522,13 @@ class SeminarSubmissionController extends Controller
             'edit_request_note' => ['nullable', 'string', 'max:500'],
         ]);
 
+        // Permintaan baru membatalkan izin lama (mis. izin yang sudah kedaluwarsa)
+        // agar tidak otomatis memberi akses sebelum dosen memutuskan.
         $submission->forceFill([
             'edit_requested_at' => now(),
             'edit_request_note' => $data['edit_request_note'] ?? null,
+            'edit_approved_at' => null,
+            'edit_approved_by' => null,
         ])->save();
 
         $this->bestEffort(fn () => $this->notifyDosen($submission->mahasiswaTa, $submission, true, ['permintaan izin edit']));
@@ -545,7 +537,8 @@ class SeminarSubmissionController extends Controller
     }
 
     /**
-     * Salah satu dosen menyetujui permintaan edit (cukup satu).
+     * Salah satu dosen menyetujui permintaan edit (cukup satu). Izin berlaku
+     * EDIT_APPROVAL_DAYS hari; setelah itu mahasiswa perlu mengajukan lagi.
      */
     public function setujuiEdit(Request $request, SeminarSubmission $submission): RedirectResponse
     {

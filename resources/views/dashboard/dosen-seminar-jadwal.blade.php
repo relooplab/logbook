@@ -80,7 +80,9 @@
                                         @if ($sub->isMenungguPersetujuanEdit())
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-pending/15 text-status-pending">Minta izin edit</span>
                                         @elseif ($sub->isEditApproved())
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">Edit disetujui</span>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">
+                                                Edit disetujui s/d {{ $sub->editApprovalExpiresAt()?->format('d M Y') }}
+                                            </span>
                                         @endif
                                     </div>
                                     <p class="text-sm text-text-secondary mt-0.5">{{ $sub->mahasiswaTa?->mahasiswa?->name ?? 'Mahasiswa' }}</p>

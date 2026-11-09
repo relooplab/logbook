@@ -199,7 +199,7 @@ class SeminarSelesaiEditTest extends TestCase
         $this->actingAs($this->mhs)->get(route('seminar-submission.edit', $sub))->assertOk();
     }
 
-    public function test_edit_setelah_disetujui_mengarsipkan_berkas_dan_mengonsumsi_izin(): void
+    public function test_edit_setelah_disetujui_mengarsipkan_berkas_dan_izin_berlaku_7_hari(): void
     {
         $awal = 'seminar-materials/'.$this->ta->id.'/undangan-sebelum-selesai.pdf';
         $sub = $this->submission($awal);
@@ -219,12 +219,51 @@ class SeminarSelesaiEditTest extends TestCase
         $this->assertTrue($arsip->isArchived());
         $this->assertSame(WorkspaceFile::FIELD_UNDANGAN, $arsip->archive_field);
 
-        // izin sekali pakai → setelah dipakai, harus minta lagi
+        // izin TIDAK dikonsumsi: masih berlaku sampai 7 hari ke depan
         $sub->refresh();
-        $this->assertNull($sub->edit_approved_at);
-        $this->assertNull($sub->edit_requested_at);
+        $this->assertNotNull($sub->edit_approved_at);
+        $this->assertTrue($sub->isEditApproved());
+        $this->assertTrue($sub->isUpdatableByStudent());
+        // Masa berlaku izin = 7 hari (keputusan produk, sengaja literal).
+        $this->assertSame(7, SeminarSubmission::EDIT_APPROVAL_DAYS);
+        $this->assertSame(
+            now()->addDays(7)->toDateString(),
+            $sub->editApprovalExpiresAt()->toDateString()
+        );
+
+        // edit kedua tanpa minta izin ulang
+        $this->actingAs($this->mhs)
+            ->put(route('seminar-submission.update', $sub->fresh()), $this->payload($sub, 'perbaikan-2.pdf'))
+            ->assertRedirect();
+    }
+
+    public function test_izin_kedaluwarsa_setelah_7_hari_dan_bisa_diajukan_lagi(): void
+    {
+        $sub = $this->submission();
+        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub));
+
+        // izin disetujui 8 hari lalu → sudah kedaluwarsa
+        $sub->forceFill([
+            'edit_requested_at' => now()->subDays(8),
+            'edit_approved_at' => now()->subDays(8),
+            'edit_approved_by' => $this->pembimbing->id,
+        ])->save();
+        $sub->refresh();
+
+        $this->assertFalse($sub->isEditApproved());
         $this->assertFalse($sub->isUpdatableByStudent());
-        $this->assertTrue($sub->isSelesai());
+        $this->assertTrue($sub->bisaMintaEdit(), 'Mahasiswa harus bisa mengajukan izin baru setelah kedaluwarsa.');
+
+        $this->actingAs($this->mhs)->get(route('seminar-submission.edit', $sub))->assertForbidden();
+
+        // mengajukan lagi menghapus izin lama
+        $this->actingAs($this->mhs)
+            ->post(route('seminar-submission.minta-edit', $sub))
+            ->assertRedirect();
+
+        $sub->refresh();
+        $this->assertTrue($sub->isMenungguPersetujuanEdit());
+        $this->assertNull($sub->edit_approved_at);
     }
 
     public function test_dosen_menolak_permintaan_edit(): void

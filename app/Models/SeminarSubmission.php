@@ -27,6 +27,9 @@ class SeminarSubmission extends Model
     public const STATUS_SUBMITTED = 'submitted';
     public const STATUSES = [self::STATUS_DRAFT, self::STATUS_SUBMITTED];
 
+    /** Masa berlaku izin edit setelah disetujui dosen (dalam hari). */
+    public const EDIT_APPROVAL_DAYS = 7;
+
     protected $fillable = [
         'mahasiswa_ta_id',
         'jenis',
@@ -298,17 +301,31 @@ class SeminarSubmission extends Model
      */
     public function isEditApproved(): bool
     {
-        return $this->edit_approved_at !== null;
+        return $this->edit_approved_at !== null
+            && $this->editApprovalExpiresAt()?->isFuture() === true;
+    }
+
+    /**
+     * Kapan izin edit berakhir (disetujui + EDIT_APPROVAL_DAYS).
+     */
+    public function editApprovalExpiresAt(): ?\Illuminate\Support\Carbon
+    {
+        return $this->edit_approved_at?->copy()->addDays(self::EDIT_APPROVAL_DAYS);
     }
 
     /**
      * Permintaan edit sudah dikirim mahasiswa dan menunggu keputusan dosen.
+     * (Bila izin sudah pernah disetujui — termasuk yang sudah kedaluwarsa —
+     * statusnya bukan lagi "menunggu", tapi "disetujui"/"perlu izin baru".)
      */
     public function isMenungguPersetujuanEdit(): bool
     {
+        // Menunggu = ada permintaan yang BELUM pernah diputuskan. Izin yang sudah
+        // disetujui (walau kini kedaluwarsa) tidak dihitung menunggu, supaya
+        // mahasiswa bisa mengajukan permintaan baru.
         return $this->isSelesai()
             && $this->edit_requested_at !== null
-            && ! $this->isEditApproved();
+            && $this->edit_approved_at === null;
     }
 
     /**
