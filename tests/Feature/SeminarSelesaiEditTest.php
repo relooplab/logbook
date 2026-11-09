@@ -399,4 +399,23 @@ class SeminarSelesaiEditTest extends TestCase
         $this->assertFalse($sub->fresh()->isUpdatableByStudent());
         $this->assertTrue($sub->fresh()->bisaMintaEdit());
     }
+
+    public function test_tombol_mahasiswa_berlabel_edit_walau_sistem_minta_persetujuan(): void
+    {
+        $sub = $this->buatSelesai($this->submission());
+
+        // Label tombol = "Edit" (bukan "Minta Izin Edit"), tapi aksinya tetap
+        // mengirim permintaan persetujuan ke dosen.
+        $html = $this->actingAs($this->mhs)->get(route('seminar-submission.index'))->assertOk()->getContent();
+        $this->assertStringContainsString(route('seminar-submission.minta-edit', $sub), $html);
+        $this->assertMatchesRegularExpression('/minta-edit.*?>\s*Edit\s*</s', $html, 'Tombol harus berlabel Edit.');
+        $this->assertStringNotContainsString('Minta Izin Edit', $html);
+
+        // Sistem tetap menolak edit langsung & mencatat permintaan persetujuan.
+        $this->actingAs($this->mhs)->get(route('seminar-submission.edit', $sub))->assertForbidden();
+
+        $this->actingAs($this->mhs)->post(route('seminar-submission.minta-edit', $sub))->assertRedirect();
+        $this->assertTrue($sub->fresh()->isMenungguPersetujuanEdit());
+        $this->assertFalse($sub->fresh()->isUpdatableByStudent());
+    }
 }

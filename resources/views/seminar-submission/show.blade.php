@@ -32,10 +32,11 @@
                 </span>
             @elseif ($isMember && $submission->bisaMintaEdit())
                 <form method="POST" action="{{ route('seminar-submission.minta-edit', $submission) }}"
-                      onsubmit="return confirm('Kirim permintaan izin edit ke dosen?')">
+                      onsubmit="return confirm('Edit bahan ini? Karena seminar/sidang sudah selesai, perubahan perlu persetujuan dosen lebih dulu.')">
                     @csrf
-                    <button class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">
-                        Minta Izin Edit
+                    <button class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border"
+                            title="Perubahan setelah selesai perlu persetujuan dosen">
+                        Edit
                     </button>
                 </form>
             @elseif ($isMember)
