@@ -66,12 +66,25 @@
                                         @if (!$isRead)
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-danger/15 text-status-danger">Baru</span>
                                         @endif
-                                        @if ($hasSidang)
+                                        @if ($sub->isSelesai())
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">Selesai</span>
+                                        @elseif ($sub->selesai_dikecualikan)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-bg-hover text-text-secondary">Belum selesai (ditahan)</span>
+                                        @elseif ($hasSidang)
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">Sudah Dinilai</span>
-                                        @elseif ($isPast)
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-bg-hover text-text-secondary">Selesai</span>
+                                        @elseif ($sub->selesaiOtomatisPada())
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-pending/15 text-status-pending">
+                                                Otomatis selesai {{ $sub->selesaiOtomatisPada()->format('d M') }}
+                                            </span>
                                         @else
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-pending/15 text-status-pending">Menunggu</span>
+                                        @endif
+                                        @if ($sub->isMenungguPersetujuanEdit())
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-pending/15 text-status-pending">Minta izin edit</span>
+                                        @elseif ($sub->isEditApproved())
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">
+                                                Edit disetujui s/d {{ $sub->editApprovalExpiresAt()?->format('d M Y') }}
+                                            </span>
                                         @endif
                                     </div>
                                     <p class="text-sm text-text-secondary mt-0.5">{{ $sub->mahasiswaTa?->mahasiswa?->name ?? 'Mahasiswa' }}</p>
@@ -80,14 +93,53 @@
                                     </p>
                                 </div>
                             </div>
-                            <a href="{{ route('seminar-submission.show', $sub) }}"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand text-[#0b1420] text-xs font-semibold hover:opacity-90">
-                                @if ($sub->materi_path || $sub->materi_workspace_file_id)
-                                    <span class="material-symbols-outlined icon-sm">folder_open</span> Lihat Bahan
-                                @else
-                                    <span class="material-symbols-outlined icon-sm">visibility</span> Detail
+                            <div class="flex flex-wrap items-center gap-2">
+                                @if ($sub->isMenungguPersetujuanEdit())
+                                    <form method="POST" action="{{ route('seminar-submission.setujui-edit', $sub) }}">
+                                        @csrf
+                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-status-success/15 text-status-success text-xs font-semibold hover:bg-status-success/25"
+                                                title="Setujui permintaan izin edit mahasiswa">
+                                            <span class="material-symbols-outlined icon-sm">check</span> Setujui Edit
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ route('seminar-submission.tolak-edit', $sub) }}">
+                                        @csrf
+                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover"
+                                                title="Tolak permintaan izin edit">
+                                            Tolak
+                                        </button>
+                                    </form>
                                 @endif
-                            </a>
+
+                                @if ($sub->selesai_dikecualikan)
+                                    <form method="POST" action="{{ route('seminar-submission.ikuti-otomatis', $sub) }}"
+                                          onsubmit="return confirm('Tandai seminar/sidang ini selesai? Setelah selesai, mahasiswa perlu izin dosen untuk mengedit.')">
+                                        @csrf
+                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-status-success/15 text-status-success text-xs font-semibold hover:bg-status-success/25"
+                                                title="Tandai selesai (status otomatis aktif kembali)">
+                                            <span class="material-symbols-outlined icon-sm">task_alt</span> Selesai
+                                        </button>
+                                    </form>
+                                @else
+                                    <form method="POST" action="{{ route('seminar-submission.batal-selesai', $sub) }}"
+                                          onsubmit="return confirm('Tandai BELUM selesai? Status otomatis (selesai 1 hari setelah kegiatan) akan ditahan sampai Anda melepasnya.')">
+                                        @csrf
+                                        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover"
+                                                title="Tahan status otomatis supaya mahasiswa masih bisa memperbaiki berkas">
+                                            <span class="material-symbols-outlined icon-sm">pause_circle</span> Belum Selesai
+                                        </button>
+                                    </form>
+                                @endif
+
+                                <a href="{{ route('seminar-submission.show', $sub) }}"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand text-[#0b1420] text-xs font-semibold hover:opacity-90">
+                                    @if ($sub->materi_path || $sub->materi_workspace_file_id)
+                                        <span class="material-symbols-outlined icon-sm">folder_open</span> Lihat Bahan
+                                    @else
+                                        <span class="material-symbols-outlined icon-sm">visibility</span> Detail
+                                    @endif
+                                </a>
+                            </div>
                         </div>
                     </div>
                 @endforeach

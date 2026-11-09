@@ -135,9 +135,11 @@ class SeminarSubmissionPhaseTest extends TestCase
 
     public function test_edit_tetap_diizinkan_saat_jadwal_sudah_lewat_selama_fase_belum_maju(): void
     {
-        // Perilaku baru: yang mengunci adalah FASE, bukan tanggal. Jadwal yang
-        // sudah lewat tetap boleh diperbaiki (mis. berkas salah unggah).
+        // Yang mengunci adalah FASE. Jadwal lewat tetap boleh diperbaiki selama
+        // dosen menahan status selesai otomatis (default: selesai H+1).
         $sub = $this->makeSubmission(SeminarSubmission::JENIS_PROPOSAL, now()->subDays(1)->toDateString());
+        $sub->forceFill(['selesai_dikecualikan' => true])->save();
+        $sub = $sub->fresh();
 
         $this->assertTrue($sub->isUpdatableByStudent());
 

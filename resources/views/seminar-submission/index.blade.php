@@ -46,8 +46,8 @@
         <div class="px-4 py-3 bg-bg-panel/50 border-b border-border">
             <h2 id="riwayat-title" class="font-semibold text-sm text-text-primary">Daftar bahan yang diajukan</h2>
             <p class="mt-0.5 text-xs text-text-secondary">
-                Bahan fase yang sudah lewat hanya dapat dilihat. Berkas yang diganti setelah tanggal kegiatan tersimpan di grup
-                “Arsip” pada Workspace.
+                Bahan fase yang sudah lewat hanya dapat dilihat. Setelah dosen menandai seminar/sidang <strong>selesai</strong>,
+                perubahan perlu persetujuan dosen dan berkas lama tersimpan di grup “Arsip” pada Workspace.
             </p>
         </div>
 
@@ -72,8 +72,19 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-semibold text-text-primary">{{ $submission->jenisLabel() }}</span>
                                 <span class="badge {{ $submission->status === \App\Models\SeminarSubmission::STATUS_SUBMITTED ? 'badge-info' : 'badge-warning' }}">{{ $submission->statusLabel() }}</span>
-                                @if ($sudahLewat)
+                                @if ($submission->isSelesai())
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">
+                                        Selesai
+                                    </span>
+                                @elseif ($sudahLewat)
                                     <span class="text-[11px] text-text-secondary">· kegiatan sudah lewat</span>
+                                @endif
+                                @if ($submission->isMenungguPersetujuanEdit())
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-pending/15 text-status-pending">Menunggu izin dosen</span>
+                                @elseif ($submission->isEditApproved())
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-info/15 text-status-info">
+                                        Izin edit s/d {{ $submission->editApprovalExpiresAt()?->format('d M Y') }}
+                                    </span>
                                 @endif
                             </div>
                             <p class="mt-0.5 text-xs text-text-secondary">
@@ -92,6 +103,14 @@
                             @if ($bisaEdit)
                                 <a href="{{ route('seminar-submission.edit', $submission) }}"
                                    class="px-3 py-1.5 rounded-xl bg-bg-hover text-text-primary text-xs font-medium hover:bg-border">Edit</a>
+                            @elseif ($isMember && $submission->bisaMintaEdit())
+                                <form method="POST" action="{{ route('seminar-submission.minta-edit', $submission) }}"
+                                      onsubmit="return confirm('Kirim permintaan izin edit ke dosen? Setelah seminar/sidang selesai, perubahan perlu persetujuan dosen.')">
+                                    @csrf
+                                    <button class="px-3 py-1.5 rounded-xl bg-bg-hover text-text-primary text-xs font-medium hover:bg-border">
+                                        Minta Izin Edit
+                                    </button>
+                                </form>
                             @endif
                             <a href="{{ route('seminar-submission.show', $submission) }}"
                                class="{{ $bisaEdit ? 'px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-bg-hover text-text-primary' : 'btn-primary px-3 py-1.5 text-xs font-semibold' }}">

@@ -252,6 +252,12 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     Route::put('/seminar-submission/{submission}', [SeminarSubmissionController::class, 'update'])->name('seminar-submission.update');
     Route::put('/seminar-submission/{submission}/hardcopy-note', [SeminarSubmissionController::class, 'updateHardcopyNote'])->name('seminar-submission.hardcopy-note');
     Route::put('/seminar-submission/{submission}/koreksi-jenis', [SeminarSubmissionController::class, 'koreksiJenis'])->name('seminar-submission.koreksi-jenis');
+    // Status selesai (dosen) + permintaan izin edit (mahasiswa) setelah selesai.
+    Route::post('/seminar-submission/{submission}/batal-selesai', [SeminarSubmissionController::class, 'batalSelesai'])->name('seminar-submission.batal-selesai');
+    Route::post('/seminar-submission/{submission}/ikuti-otomatis', [SeminarSubmissionController::class, 'ikutiOtomatis'])->name('seminar-submission.ikuti-otomatis');
+    Route::post('/seminar-submission/{submission}/minta-edit', [SeminarSubmissionController::class, 'mintaEdit'])->name('seminar-submission.minta-edit');
+    Route::post('/seminar-submission/{submission}/setujui-edit', [SeminarSubmissionController::class, 'setujuiEdit'])->name('seminar-submission.setujui-edit');
+    Route::post('/seminar-submission/{submission}/tolak-edit', [SeminarSubmissionController::class, 'tolakEdit'])->name('seminar-submission.tolak-edit');
     Route::get('/seminar-submission/{submission}/undangan/download', [SeminarSubmissionController::class, 'downloadUndangan'])->name('seminar-submission.undangan-download');
     Route::get('/seminar-submission/{submission}/materi/download', [SeminarSubmissionController::class, 'downloadMateri'])->name('seminar-submission.materi-download');
     Route::get('/seminar-submission/{submission}/dokumen/{document}/download', [SeminarSubmissionController::class, 'downloadDokumen'])->name('seminar-submission.dokumen-download');

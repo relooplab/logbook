@@ -408,10 +408,9 @@ class SeminarSubmissionController extends Controller
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $submission->mahasiswaTa->storageChargeTarget();
 
-        // Arsip hanya berlaku setelah tanggal kegiatan LEWAT. Sebelum tanggal
-        // kegiatan, berkas lama langsung diganti tanpa menyimpan riwayat.
-        $arsipkan = $submission->tanggal !== null
-            && $submission->tanggal->startOfDay()->lt(now()->startOfDay());
+        // Arsip hanya berlaku setelah dosen menandai seminar/sidang SELESAI.
+        // Sebelum itu mahasiswa bebas mengganti berkas tanpa meninggalkan arsip.
+        $arsipkan = $submission->arsipkanSaatDiganti();
 
         $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList, $arsipkan) {
             // Ganti undangan bila ada file baru.
@@ -474,6 +473,126 @@ class SeminarSubmissionController extends Controller
 
         return redirect()->route('seminar-submission.show', $submission)
             ->with('success', 'Bahan seminar/sidang berhasil diperbarui.');
+    }
+
+    /**
+     * Dosen menahan status otomatis: seminar/sidang dianggap BELUM selesai
+     * sampai penahanan dilepas (mahasiswa bisa mengedit bebas lagi).
+     */
+    public function batalSelesai(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+
+        // Satu-satunya aksi dosen: menahan status otomatis (selesai 1 hari
+        // setelah kegiatan) sampai dilepas kembali.
+        $submission->forceFill([
+            'selesai_dikecualikan' => true,
+            'selesai_dikecualikan_at' => now(),
+            'selesai_dikecualikan_by' => $request->user()->id,
+            'edit_requested_at' => null,
+            'edit_request_note' => null,
+            'edit_approved_at' => null,
+            'edit_approved_by' => null,
+        ])->save();
+
+        return back()->with('success', 'Status dikembalikan ke belum selesai (otomatis ditahan).');
+    }
+
+    /**
+     * Dosen melepas penahanan: status mengikuti aturan otomatis (selesai 1 hari
+     * setelah kegiatan).
+     */
+    public function ikutiOtomatis(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+
+        $submission->forceFill([
+            'selesai_dikecualikan' => false,
+            'selesai_dikecualikan_at' => null,
+            'selesai_dikecualikan_by' => null,
+        ])->save();
+
+        return back()->with('success', 'Status mengikuti aturan otomatis (selesai 1 hari setelah kegiatan).');
+    }
+
+    /**
+     * Mahasiswa meminta izin mengedit bahan yang sudah dinyatakan selesai.
+     */
+    public function mintaEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        abort_unless($submission->mahasiswaTa?->isMember($request->user()), 403);
+        abort_unless($submission->bisaMintaEdit(), 403, 'Permintaan edit tidak dapat dikirim sekarang.');
+
+        $data = $request->validate([
+            'edit_request_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        // Permintaan baru membatalkan izin lama (mis. izin yang sudah kedaluwarsa)
+        // agar tidak otomatis memberi akses sebelum dosen memutuskan.
+        $submission->forceFill([
+            'edit_requested_at' => now(),
+            'edit_request_note' => $data['edit_request_note'] ?? null,
+            'edit_approved_at' => null,
+            'edit_approved_by' => null,
+        ])->save();
+
+        $this->bestEffort(fn () => $this->notifyDosen($submission->mahasiswaTa, $submission, true, ['permintaan izin edit']));
+
+        return back()->with('success', 'Permintaan izin edit dikirim ke dosen.');
+    }
+
+    /**
+     * Salah satu dosen menyetujui permintaan edit (cukup satu). Izin berlaku
+     * EDIT_APPROVAL_DAYS hari; setelah itu mahasiswa perlu mengajukan lagi.
+     */
+    public function setujuiEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+        abort_unless($submission->isMenungguPersetujuanEdit(), 403, 'Tidak ada permintaan edit yang menunggu.');
+
+        $submission->forceFill([
+            'edit_approved_at' => now(),
+            'edit_approved_by' => $request->user()->id,
+        ])->save();
+
+        if ($mahasiswa = $submission->mahasiswaTa?->mahasiswa) {
+            $this->bestEffort(fn () => $mahasiswa->notify(
+                new SeminarSubmissionNotification($submission, 'mahasiswa', true, ['izin edit disetujui'])
+            ));
+        }
+
+        return back()->with('success', 'Permintaan edit disetujui.');
+    }
+
+    /**
+     * Dosen menolak permintaan edit; mahasiswa dapat mengajukan lagi.
+     */
+    public function tolakEdit(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+        abort_unless($submission->isMenungguPersetujuanEdit(), 403, 'Tidak ada permintaan edit yang menunggu.');
+
+        $submission->forceFill([
+            'edit_requested_at' => null,
+            'edit_request_note' => null,
+        ])->save();
+
+        return back()->with('success', 'Permintaan edit ditolak.');
+    }
+
+    /**
+     * Hanya dosen pembimbing/penguji program tersebut (atau admin).
+     */
+    private function authorizeDosenPengampu($user, SeminarSubmission $submission): void
+    {
+        $ta = $submission->mahasiswaTa;
+
+        abort_unless($user && $user->isDosen(), 403);
+        abort_unless(
+            $user->isAdmin() || ($ta && ($ta->isPembimbing($user) || $ta->isPenguji($user))),
+            403,
+            'Anda bukan pembimbing/penguji program ini.'
+        );
     }
 
     /**

@@ -22,6 +22,22 @@
         <div class="flex flex-wrap gap-2">
             @if ($isMember && $submission->isUpdatableByStudent())
                 <a href="{{ route('seminar-submission.edit', $submission) }}" class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">Edit</a>
+            @elseif ($isMember && $submission->isEditApproved())
+                <span class="self-center text-xs text-status-info">
+                    Izin edit berlaku sampai {{ $submission->editApprovalExpiresAt()?->format('d M Y') }}.
+                </span>
+            @elseif ($isMember && $submission->isMenungguPersetujuanEdit())
+                <span class="self-center text-xs text-status-pending">
+                    Permintaan izin edit sedang menunggu persetujuan dosen.
+                </span>
+            @elseif ($isMember && $submission->bisaMintaEdit())
+                <form method="POST" action="{{ route('seminar-submission.minta-edit', $submission) }}"
+                      onsubmit="return confirm('Kirim permintaan izin edit ke dosen?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-xl bg-bg-hover text-text-primary text-sm font-medium hover:bg-border">
+                        Minta Izin Edit
+                    </button>
+                </form>
             @elseif ($isMember)
                 <span class="self-center text-xs text-text-secondary">
                     Bahan {{ $submission->jenisLabel() }} sudah melewati fase program saat ini — hanya dapat dilihat.

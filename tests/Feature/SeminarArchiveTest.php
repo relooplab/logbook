@@ -83,6 +83,29 @@ class SeminarArchiveTest extends TestCase
         ], $override));
     }
 
+    /** Submission dianggap selesai otomatis (kegiatan > 1 hari lalu). */
+    private function selesaikan(SeminarSubmission $sub): SeminarSubmission
+    {
+        $sub->forceFill([
+            'tanggal' => now()->subDays(SeminarSubmission::AUTO_SELESAI_HARI + 1)->toDateString(),
+            'selesai_dikecualikan' => false,
+        ])->save();
+
+        return $sub->fresh();
+    }
+
+    /** Setelah selesai, edit butuh izin; bantu setujui langsung (sekali pakai). */
+    private function izinkanEdit(SeminarSubmission $sub): SeminarSubmission
+    {
+        $sub->forceFill([
+            'edit_requested_at' => now(),
+            'edit_approved_at' => now(),
+            'edit_approved_by' => $this->dosen->id,
+        ])->save();
+
+        return $sub->fresh();
+    }
+
     // ------------------------------------------------ aturan fase
 
     public function test_bahan_fase_lampau_terkunci(): void
@@ -101,6 +124,8 @@ class SeminarArchiveTest extends TestCase
     {
         $lampau = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
             'tanggal' => now()->subMonth()->toDateString(),
+            // Dosen menahan status otomatis agar tetap "belum selesai".
+            'selesai_dikecualikan' => true,
         ]);
 
         $this->assertTrue(
@@ -130,7 +155,7 @@ class SeminarArchiveTest extends TestCase
         $oldPath = 'seminar-materials/'.$this->ta->id.'/undangan-lama.pdf';
         Storage::disk('local')->put($oldPath, 'isi-pdf-lama');
 
-        // Tanggal kegiatan sudah lewat → berkas lama masuk arsip.
+        // Sudah ditandai SELESAI + izin edit → berkas lama masuk arsip.
         $tanggalLewat = now()->subDays(3)->toDateString();
 
         $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
@@ -138,10 +163,11 @@ class SeminarArchiveTest extends TestCase
             'undangan_path' => $oldPath,
             'undangan_original_name' => 'undangan-lama.pdf',
         ]);
+        $s = $this->izinkanEdit($this->selesaikan($s));
 
         // Tanggal yang sudah lewat boleh dipertahankan saat memperbaiki berkas.
-        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
-            'tanggal' => $tanggalLewat,
+        $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
+            'tanggal' => $s->fresh()->tanggal->toDateString(),
             'waktu' => '10:00',
             'undangan_kepada' => ['pembimbing_1'],
             'undangan' => UploadedFile::fake()->create('undangan-baru.pdf', 120, 'application/pdf'),
@@ -275,13 +301,15 @@ class SeminarArchiveTest extends TestCase
             'undangan_path' => $awal,
             'undangan_original_name' => 'undangan-0.pdf',
         ]);
+        $this->selesaikan($s);
 
         $pathLama = [$awal];
 
         // Ganti undangan 6 kali → total 6 berkas historis, batas 4.
         for ($i = 1; $i <= 6; $i++) {
-            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
-                'tanggal' => $tanggalLewat,
+            // Izin edit bersifat sekali pakai → setujui ulang tiap iterasi.
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'undangan' => UploadedFile::fake()->create("undangan-{$i}.pdf", 20, 'application/pdf'),
@@ -335,11 +363,12 @@ class SeminarArchiveTest extends TestCase
             'materi_path' => $materiAwal,
             'materi_original_name' => 'materi-awal.pdf',
         ]);
+        $this->selesaikan($s);
 
         // 3x ganti undangan + 2x ganti materi — dua-duanya masih di bawah batas.
         for ($i = 1; $i <= 3; $i++) {
-            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
-                'tanggal' => $tanggalLewat,
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'undangan' => UploadedFile::fake()->create("u-{$i}.pdf", 10, 'application/pdf'),
@@ -347,8 +376,8 @@ class SeminarArchiveTest extends TestCase
         }
 
         for ($i = 1; $i <= 2; $i++) {
-            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s->fresh()), [
-                'tanggal' => $tanggalLewat,
+            $this->actingAs($this->mhs)->put(route('seminar-submission.update', $this->izinkanEdit($s->fresh())), [
+                'tanggal' => $s->fresh()->tanggal->toDateString(),
                 'waktu' => '10:00',
                 'undangan_kepada' => ['pembimbing_1'],
                 'materi_upload' => UploadedFile::fake()->create("m-{$i}.pdf", 10, 'application/pdf'),
@@ -384,20 +413,22 @@ class SeminarArchiveTest extends TestCase
 
     // ------------------------------------------------ sebelum tanggal kegiatan: tanpa arsip
 
-    public function test_edit_sebelum_tanggal_kegiatan_tidak_membuat_arsip(): void
+    public function test_selama_belum_selesai_berkas_diganti_tanpa_arsip(): void
     {
-        $lama = 'seminar-materials/'.$this->ta->id.'/undangan-belum-acara.pdf';
+        // Belum ditandai selesai oleh dosen — meski jadwalnya sudah lewat,
+        // mahasiswa bebas mengganti berkas tanpa meninggalkan arsip.
+        $lama = 'seminar-materials/'.$this->ta->id.'/undangan-belum-selesai.pdf';
         Storage::disk('local')->put($lama, 'lama');
 
-        // Tanggal kegiatan masih di depan.
         $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
-            'tanggal' => now()->addDays(5)->toDateString(),
+            'tanggal' => now()->subDays(5)->toDateString(),
+            'selesai_dikecualikan' => true,
             'undangan_path' => $lama,
-            'undangan_original_name' => 'undangan-belum-acara.pdf',
+            'undangan_original_name' => 'undangan-belum-selesai.pdf',
         ]);
 
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
-            'tanggal' => now()->addDays(5)->toDateString(),
+            'tanggal' => $s->tanggal->toDateString(),
             'waktu' => '10:00',
             'undangan_kepada' => ['pembimbing_1'],
             'undangan' => UploadedFile::fake()->create('undangan-revisi.pdf', 30, 'application/pdf'),
@@ -412,7 +443,10 @@ class SeminarArchiveTest extends TestCase
     public function test_tanggal_kegiatan_lampau_boleh_dipertahankan_saat_edit(): void
     {
         $tanggalLewat = now()->subDays(2)->toDateString();
-        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => $tanggalLewat]);
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => $tanggalLewat,
+            'selesai_dikecualikan' => true,
+        ]);
 
         // Tanpa menggeser jadwal: tidak boleh gagal validasi.
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
@@ -427,7 +461,10 @@ class SeminarArchiveTest extends TestCase
 
     public function test_tanggal_lampau_yang_berbeda_tetap_ditolak(): void
     {
-        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => now()->subDays(2)->toDateString()]);
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => now()->subDays(2)->toDateString(),
+            'selesai_dikecualikan' => true,
+        ]);
 
         // Menggeser ke tanggal lampau LAIN (bukan mempertahankan) harus ditolak.
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [

@@ -27,6 +27,12 @@ class SeminarSubmission extends Model
     public const STATUS_SUBMITTED = 'submitted';
     public const STATUSES = [self::STATUS_DRAFT, self::STATUS_SUBMITTED];
 
+    /** Jumlah hari setelah kegiatan sampai status otomatis menjadi selesai. */
+    public const AUTO_SELESAI_HARI = 1;
+
+    /** Masa berlaku izin edit setelah disetujui dosen (dalam hari). */
+    public const EDIT_APPROVAL_DAYS = 7;
+
     protected $fillable = [
         'mahasiswa_ta_id',
         'jenis',
@@ -44,6 +50,13 @@ class SeminarSubmission extends Model
         'catatan_keterangan',
         'status',
         'sidang_id',
+        'selesai_dikecualikan',
+        'selesai_dikecualikan_at',
+        'selesai_dikecualikan_by',
+        'edit_requested_at',
+        'edit_request_note',
+        'edit_approved_at',
+        'edit_approved_by',
     ];
 
     protected function casts(): array
@@ -52,6 +65,10 @@ class SeminarSubmission extends Model
             'tanggal' => 'date',
             'waktu' => 'datetime:H:i',
             'undangan_kepada' => 'array',
+            'selesai_dikecualikan' => 'boolean',
+            'selesai_dikecualikan_at' => 'datetime',
+            'edit_requested_at' => 'datetime',
+            'edit_approved_at' => 'datetime',
         ];
     }
 
@@ -236,13 +253,14 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Mahasiswa boleh mengedit bahan selama submission belum dikonversi menjadi
-     * riwayat sidang DAN jenisnya bukan fase program yang sudah lewat.
+     * Mahasiswa boleh mengedit bahan selama:
+     *  - belum dikonversi menjadi riwayat sidang,
+     *  - jenisnya bukan fase program yang sudah lewat (patokan FASE, bukan
+     *    tanggal — jadwal lewat pun tetap boleh diperbaiki), dan
+     *  - belum ditandai SELESAI oleh dosen; setelah selesai, edit hanya boleh
+     *    bila salah satu dosen menyetujui permintaan edit mahasiswa.
      *
-     * Patokannya FASE, bukan tanggal: jadwal yang sudah lewat tetap boleh
-     * diperbaiki selama fase program belum maju. Begitu fase maju (mis. dari
-     * Seminar Hasil ke Sidang), bahan fase sebelumnya menjadi read-only dan
-     * berkas lama tersimpan di grup "Arsip" workspace mahasiswa.
+     * Berkas lama baru diarsipkan setelah submission dinyatakan selesai.
      */
     public function isUpdatableByStudent(): bool
     {
@@ -260,11 +278,99 @@ class SeminarSubmission extends Model
         $jenisIndex = self::faseIndexOf($ta, self::faseFromJenis($this->jenis));
 
         // Fase tak dikenal → jangan kunci, supaya bukan read-only permanen.
-        if ($nowIndex < 0 || $jenisIndex < 0) {
-            return true;
+        $lolosFase = $nowIndex < 0 || $jenisIndex < 0 || $jenisIndex >= $nowIndex;
+
+        if (! $lolosFase) {
+            return false;
         }
 
-        return $jenisIndex >= $nowIndex;
+        // Sudah ditandai SELESAI oleh dosen → hanya boleh diedit bila salah satu
+        // dosen sudah menyetujui permintaan edit mahasiswa.
+        if ($this->isSelesai()) {
+            return $this->isEditApproved();
+        }
+
+        return true;
+    }
+
+    /**
+     * Seminar/sidang dianggap selesai bila sudah lewat AUTO_SELESAI_HARI hari
+     * (1 hari: begitu hari H berakhir) — KECUALI dosen menahannya
+     * (selesai_dikecualikan).
+     *
+     * Tidak ada penandaan selesai manual; satu-satunya aksi dosen adalah
+     * menahan atau melepas penahanan.
+     */
+    public function isSelesai(): bool
+    {
+        if ($this->selesai_dikecualikan) {
+            return false;
+        }
+
+        $batas = $this->selesaiOtomatisPada();
+
+        // Tepat pada detik batas (H+2 pukul 00:00) status sudah dianggap selesai.
+        return $batas !== null && ! $batas->isFuture();
+    }
+
+    /**
+     * Kapan status otomatis menjadi selesai (tanggal kegiatan + 1 hari).
+     */
+    public function selesaiOtomatisPada(): ?\Illuminate\Support\Carbon
+    {
+        return $this->tanggal?->copy()->startOfDay()->addDays(self::AUTO_SELESAI_HARI);
+    }
+
+    /**
+     * Salah satu dosen sudah menyetujui permintaan edit mahasiswa.
+     */
+    public function isEditApproved(): bool
+    {
+        return $this->edit_approved_at !== null
+            && $this->editApprovalExpiresAt()?->isFuture() === true;
+    }
+
+    /**
+     * Kapan izin edit berakhir (disetujui + EDIT_APPROVAL_DAYS).
+     */
+    public function editApprovalExpiresAt(): ?\Illuminate\Support\Carbon
+    {
+        return $this->edit_approved_at?->copy()->addDays(self::EDIT_APPROVAL_DAYS);
+    }
+
+    /**
+     * Permintaan edit sudah dikirim mahasiswa dan menunggu keputusan dosen.
+     * (Bila izin sudah pernah disetujui — termasuk yang sudah kedaluwarsa —
+     * statusnya bukan lagi "menunggu", tapi "disetujui"/"perlu izin baru".)
+     */
+    public function isMenungguPersetujuanEdit(): bool
+    {
+        // Menunggu = ada permintaan yang BELUM pernah diputuskan. Izin yang sudah
+        // disetujui (walau kini kedaluwarsa) tidak dihitung menunggu, supaya
+        // mahasiswa bisa mengajukan permintaan baru.
+        return $this->isSelesai()
+            && $this->edit_requested_at !== null
+            && $this->edit_approved_at === null;
+    }
+
+    /**
+     * Mahasiswa boleh mengirim permintaan edit (belum disetujui & belum ada
+     * permintaan yang menggantung).
+     */
+    public function bisaMintaEdit(): bool
+    {
+        return $this->isSelesai()
+            && ! $this->isEditApproved()
+            && ! $this->isMenungguPersetujuanEdit();
+    }
+
+    /**
+     * Berkas lama diarsipkan hanya ketika submission sudah dinyatakan SELESAI.
+     * Sebelum itu mahasiswa bebas mengganti berkas tanpa meninggalkan arsip.
+     */
+    public function arsipkanSaatDiganti(): bool
+    {
+        return $this->isSelesai();
     }
 
     /**
