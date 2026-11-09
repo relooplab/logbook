@@ -51,7 +51,9 @@ class WorkspaceController extends Controller
         $files = $query->orderByDesc('created_at')->get();
 
         // Group by bab (null -> "Lainnya").
-        $grouped = $files->groupBy(fn ($f) => $f->bab ?: 'Lainnya');
+        $grouped = $files->groupBy(fn ($f) => $f->isArchived()
+            ? WorkspaceFile::BAB_ARSIP
+            : ($f->bab ?: 'Lainnya'));
 
         // Statistik penyimpanan (kuota dibebankan sesuai status program:
         // dosen pembimbing jika sudah disetujui, mahasiswa 100 MB saat pending).
@@ -109,7 +111,9 @@ class WorkspaceController extends Controller
 
             $personalFiles = WorkspaceFile::where('user_id', $user->id)->with('uploader')
                 ->orderByDesc('created_at')->get();
-            $personalGrouped = $personalFiles->groupBy(fn ($f) => $f->bab ?: 'Lainnya');
+            $personalGrouped = $personalFiles->groupBy(fn ($f) => $f->isArchived()
+                ? WorkspaceFile::BAB_ARSIP
+                : ($f->bab ?: 'Lainnya'));
             $personalTotalBytes = $personalFiles->sum('size');
             $personalQuotaBytes = Feature::storageLimitMb($user) * 1048576;
             $personalPct = $personalQuotaBytes > 0 ? min(100, round($personalTotalBytes / $personalQuotaBytes * 100)) : 0;
@@ -228,7 +232,9 @@ class WorkspaceController extends Controller
         $files = $query->orderByDesc('created_at')->get();
 
         // Group by bab (null -> "Lainnya").
-        $grouped = $files->groupBy(fn ($f) => $f->bab ?: 'Lainnya');
+        $grouped = $files->groupBy(fn ($f) => $f->isArchived()
+            ? WorkspaceFile::BAB_ARSIP
+            : ($f->bab ?: 'Lainnya'));
 
         $totalBytes = $files->sum('size');
         $quotaBytes = Feature::storageLimitMb($user) * 1048576;
@@ -313,7 +319,7 @@ class WorkspaceController extends Controller
     public function update(Request $request, WorkspaceFile $file): RedirectResponse
     {
         $this->authorizeFileAccess($request->user(), $file);
-        abort_unless($this->canModify($request->user(), $file), 403, 'Anda tidak berhak mengedit file ini.');
+        abort_unless($file->canBeEditedBy($request->user()), 403, 'Anda tidak berhak mengedit file ini.');
 
         $validated = $request->validate([
             'bab' => ['nullable', 'string', 'max:50'],
@@ -331,7 +337,18 @@ class WorkspaceController extends Controller
     public function destroy(Request $request, WorkspaceFile $file): RedirectResponse
     {
         $this->authorizeFileAccess($request->user(), $file);
-        abort_unless($this->canModify($request->user(), $file), 403, 'Anda tidak berhak menghapus file ini.');
+
+        // Berkas arsip (berkas lama yang diganti saat edit bahan seminar/sidang)
+        // hanya boleh dimusnahkan oleh dosen pembimbing/penguji atau admin.
+        if ($file->isArchived()) {
+            abort_unless(
+                $file->canBePurgedBy($request->user()),
+                403,
+                'File arsip hanya dapat dihapus oleh dosen pembimbing/penguji.'
+            );
+        } else {
+            abort_unless($this->canModify($request->user(), $file), 403, 'Anda tidak berhak menghapus file ini.');
+        }
 
         Storage::disk('local')->delete($file->path);
         $file->delete();

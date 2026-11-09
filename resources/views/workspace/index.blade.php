@@ -84,11 +84,18 @@
     @else
         @foreach ($grouped as $bab => $files)
             <div class="card p-0 overflow-hidden">
-                <div class="px-4 py-3 bg-bg-panel/50 border-b border-border font-semibold text-sm text-text-primary">
-                    {{ $bab }}</div>
+                <div class="px-4 py-3 bg-bg-panel/50 border-b border-border">
+                    <span class="font-semibold text-sm text-text-primary">{{ $bab }}</span>
+                    @if ($bab === \App\Models\WorkspaceFile::BAB_ARSIP)
+                        <p class="mt-0.5 text-xs text-text-secondary">
+                            Menyimpan maksimal {{ \App\Models\WorkspaceFile::MAX_ARSIP_PER_FIELD }} berkas historis per jenis berkas —
+                            berkas paling lama otomatis tertimpa. Hanya dosen yang dapat menghapus.
+                        </p>
+                    @endif
+                </div>
                 <div class="divide-y divide-border">
                         @foreach ($files as $file)
-                            @php $canModify = $mahasiswaTa->isMember($user); @endphp <div class="px-4 py-3 flex items-start gap-3"> <span
+                            @php $canEdit = $file->canBeEditedBy($user); $canDelete = $file->canBeDeletedBy($user); $isArsip = $file->isArchived(); @endphp <div class="px-4 py-3 flex items-start gap-3"> <span
                                     class="text-2xl">{{ $file->icon() }}</span>
                                 <div class="min-w-0 flex-1">
                                     <div class="flex flex-wrap items-center gap-2"> <a
@@ -102,6 +109,12 @@
                                     @if ($file->description)
                                         <p class="text-xs text-text-secondary mt-0.5">"{{ $file->description }}"</p>
                                     @endif
+                                    @if ($isArsip)
+                                        <p class="text-xs text-accent-orange mt-0.5">
+                                            <span class="material-symbols-outlined" style="font-size:13px;vertical-align:-2px">archive</span>
+                                            Arsip{{ $file->archive_note ? ' — '.$file->archive_note : '' }}
+                                        </p>
+                                    @endif
                                     <p class="text-xs text-text-secondary mt-0.5">Diupload
                                         @include("partials.user-link", ["user" => $file->uploader])</p>
                                 </div>
@@ -112,16 +125,18 @@
                                             class="p-1.5 rounded hover:bg-bg-hover hover:bg-bg-hover"><span class="material-symbols-outlined icon-sm text-status-info">visibility</span></a>
                                     @endif <a href="{{ route("workspace.download", $file) }}"
                                         title="Download" class="p-1.5 rounded hover:bg-bg-hover hover:bg-bg-hover"><span class="material-symbols-outlined icon-sm text-accent-orange">download</span></a>
-                                    @if ($canModify)
+                                    @if ($canEdit)
                                         <button type="button" data-edit="{{ $file->id }}"
                                             data-bab="{{ $file->bab }}" data-desc="{{ $file->description }}"
                                             class="edit-btn p-1.5 rounded hover:bg-bg-hover hover:bg-bg-hover"
                                             title="Edit"><span class="material-symbols-outlined icon-sm text-accent-blue">edit</span></button>
+                                    @endif
+                                    @if ($canDelete)
                                         <form method="POST" action="{{ route("workspace.destroy", $file) }}"
-                                            onsubmit="return confirm('Hapus file ini?')"> @csrf @method("DELETE")
+                                            onsubmit="return confirm({{ $isArsip ? "'Hapus permanen berkas arsip ini? Tindakan ini tidak bisa dibatalkan.'" : "'Hapus file ini?'" }})"> @csrf @method("DELETE")
                                             <button
                                                 class="p-1.5 rounded hover:bg-status-danger/10 hover:bg-status-danger/15 text-status-danger"
-                                                title="Hapus"><span class="material-symbols-outlined icon-sm text-status-danger">delete</span></button>
+                                                title="{{ $isArsip ? 'Hapus permanen (arsip)' : 'Hapus' }}"><span class="material-symbols-outlined icon-sm text-status-danger">delete</span></button>
                                         </form>
                                     @endif
                                 </div>

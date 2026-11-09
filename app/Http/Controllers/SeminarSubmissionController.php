@@ -10,6 +10,7 @@ use App\Models\Sidang;
 use App\Models\WorkspaceFile;
 use App\Notifications\SeminarSubmissionNotification;
 use App\Services\StorageUsageService;
+use App\Support\ProgramContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,50 @@ class SeminarSubmissionController extends Controller
     /**
      * Form isi pemberian bahan seminar/sidang.
      */
+    /**
+     * Riwayat/rekap bahan seminar/sidang mahasiswa untuk program aktif:
+     * daftar pengajuan + status, jalan ke detail/edit, dan tombol tambah bahan.
+     */
+    public function index(Request $request): View|RedirectResponse
+    {
+        $user = $request->user();
+
+        // Halaman ini khusus mahasiswa. Dosen punya menu sendiri
+        // "Agenda Seminar/Sidang" (dosen.seminar-jadwal).
+        if (! $user->isMahasiswa()) {
+            return $user->isDosen()
+                ? redirect()->route('dosen.seminar-jadwal')
+                : redirect()->route('dashboard');
+        }
+
+        $program = ProgramContext::resolve($user, $request);
+
+        if (! $program) {
+            return redirect()->route('dashboard')
+                ->with('warning', 'Anda belum memiliki program TA/KP, jadi belum ada riwayat seminar/sidang.');
+        }
+
+        $isMember = $program->isMember($user);
+
+        abort_unless($isMember, 403);
+
+        $submissions = $program->seminarSubmissions()
+            ->withCount('documents')
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
+            ->get();
+
+        // Rekap ringkas untuk kartu di atas daftar.
+        $rekap = [
+            'total' => $submissions->count(),
+            'dikirim' => $submissions->where('status', SeminarSubmission::STATUS_SUBMITTED)->count(),
+            'terjadwal' => $submissions->filter(fn ($s) => $s->tanggal && $s->tanggal->isFuture())->count(),
+            'arsip' => WorkspaceFile::where('mahasiswa_ta_id', $program->id)->archived()->count(),
+        ];
+
+        return view('seminar-submission.index', compact('program', 'submissions', 'rekap', 'isMember'));
+    }
+
     public function create(Request $request, MahasiswaTa $mahasiswaTa): View
     {
         abort_unless($mahasiswaTa->isMember($request->user()), 403);
@@ -287,17 +332,30 @@ class SeminarSubmissionController extends Controller
     public function update(Request $request, SeminarSubmission $submission): RedirectResponse
     {
         abort_unless($submission->mahasiswaTa->isMember($request->user()), 403);
-        // Submission hanya bisa diubah selama belum dikonversi ke riwayat sidang
-        // DAN jadwal seminar/sidang belum lewat.
-        abort_unless($submission->isUpdatableByStudent(), 403, 'Submisi sudah lewat jadwal/dikonversi ke sidang dan tidak dapat diubah.');
+        // Editable selama fase program belum maju dan belum jadi riwayat sidang
+        // (jadwal lewat TIDAK mengunci; lihat isUpdatableByStudent()).
+        abort_unless($submission->isUpdatableByStudent(), 403, 'Bahan ini sudah melewati fase program dan tidak dapat diubah.');
 
         $institution = Institution::current();
         $maxMb = $institution->maxUploadSizeMb();
         $allowedTypes = $institution->allowedFileTypes();
         $mimes = implode(',', array_map(fn ($t) => $t === 'pdf' ? 'pdf' : $t, $allowedTypes));
 
+        $tanggalTersimpan = $submission->tanggal?->toDateString();
+
         $data = $request->validate([
-            'tanggal' => ['required', 'date', 'after_or_equal:today'],
+            // Tanggal kegiatan yang sudah tersimpan boleh dipertahankan apa adanya
+            // (mis. memperbaiki berkas setelah acara berlangsung). Tanggal BARU
+            // tetap tidak boleh di masa lalu.
+            'tanggal' => ['required', 'date', function ($attribute, $value, $fail) use ($tanggalTersimpan) {
+                $tanggal = \Illuminate\Support\Carbon::parse($value);
+                $samaDenganTersimpan = $tanggalTersimpan !== null
+                    && $tanggal->toDateString() === $tanggalTersimpan;
+
+                if (! $samaDenganTersimpan && $tanggal->lt(now()->startOfDay())) {
+                    $fail('Tanggal kegiatan tidak boleh di masa lalu.');
+                }
+            }],
             'waktu' => ['required', 'date_format:H:i'],
             'lokasi' => ['nullable', 'string', 'max:255'],
             'meeting_link' => ['nullable', 'url', 'max:2048'],
@@ -350,10 +408,15 @@ class SeminarSubmissionController extends Controller
         // Cek kuota target pembebanan (dosen pembimbing saat aktif, mahasiswa 100 MB saat pending).
         $dosen = $submission->mahasiswaTa->storageChargeTarget();
 
-        $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList) {
+        // Arsip hanya berlaku setelah tanggal kegiatan LEWAT. Sebelum tanggal
+        // kegiatan, berkas lama langsung diganti tanpa menyimpan riwayat.
+        $arsipkan = $submission->tanggal !== null
+            && $submission->tanggal->startOfDay()->lt(now()->startOfDay());
+
+        $applyUpdate = function () use ($request, $submission, $payload, $newFiles, $hapusIds, $tautanList, $arsipkan) {
             // Ganti undangan bila ada file baru.
             if ($request->file('undangan')) {
-                Storage::disk('local')->delete($submission->undangan_path);
+                $arsipkan ? $this->archiveUndangan($submission) : $this->purgeUndangan($submission);
                 $payload['undangan_path'] = $request->file('undangan')->store('seminar-materials/'.$submission->mahasiswa_ta_id, 'local');
                 $payload['undangan_original_name'] = $request->file('undangan')->getClientOriginalName();
             }
@@ -362,13 +425,13 @@ class SeminarSubmissionController extends Controller
             if ($request->filled('materi_workspace_id') && $request->file('materi_upload') === null) {
                 $file = WorkspaceFile::find($request->input('materi_workspace_id'));
                 if ($file && $file->mahasiswa_ta_id === $submission->mahasiswa_ta_id) {
-                    $this->deleteMateriFile($submission);
+                    $arsipkan ? $this->archiveMateri($submission) : $this->purgeMateri($submission);
                     $payload['materi_path'] = $file->path;
                     $payload['materi_original_name'] = $file->original_name;
                     $payload['materi_workspace_file_id'] = $file->id;
                 }
             } elseif ($request->file('materi_upload')) {
-                $this->deleteMateriFile($submission);
+                $arsipkan ? $this->archiveMateri($submission) : $this->purgeMateri($submission);
                 $payload['materi_path'] = $request->file('materi_upload')->store('seminar-materials/'.$submission->mahasiswa_ta_id, 'local');
                 $payload['materi_original_name'] = $request->file('materi_upload')->getClientOriginalName();
                 $payload['materi_workspace_file_id'] = null;
@@ -376,10 +439,12 @@ class SeminarSubmissionController extends Controller
 
             $submission->update($payload);
 
-            // Dokumen tambahan: hapus yang dicentang, tambah file baru,
-            // tautan diganti seluruhnya dengan daftar yang dikirim.
+            // Dokumen tambahan: yang dicentang diarsipkan (tidak dimusnahkan),
+            // file baru ditambahkan, tautan diganti seluruhnya.
             foreach ($submission->documents()->whereIn('id', $hapusIds)->get() as $doc) {
-                $this->deleteTambahanDocument($doc);
+                $arsipkan
+                    ? $this->archiveTambahanDocument($submission, $doc)
+                    : $this->purgeTambahanDocument($doc);
             }
             if (! empty($newFiles)) {
                 $this->storeTambahanDocuments($submission, $newFiles, []);
@@ -687,13 +752,169 @@ class SeminarSubmissionController extends Controller
     }
 
     /**
-     * Hapus file materi (jika bukan dari workspace).
+     * Arsipkan berkas yang diganti: TIDAK dihapus, tapi dicatat sebagai berkas
+     * workspace di grup "Arsip" milik mahasiswa. Berkas fisik yang sama
+     * diadopsi (tidak digandakan), sehingga riwayat tetap utuh dan hanya dosen
+     * pembimbing/penguji (atau admin) yang boleh memusnahkannya.
      */
-    private function deleteMateriFile(SeminarSubmission $submission): void
+    private function archiveFile(
+        SeminarSubmission $submission,
+        ?string $path,
+        ?string $originalName,
+        string $label,
+        string $field = WorkspaceFile::FIELD_DOKUMEN_TAMBAHAN
+    ): ?WorkspaceFile {
+        if (! $path) {
+            return null;
+        }
+
+        $note = sprintf(
+            '%s %s #%d — diganti %s',
+            $label,
+            $submission->jenisLabel(),
+            $submission->id,
+            now()->format('d M Y H:i')
+        );
+
+        // Berkas yang sudah tercatat di workspace (materi dari workspace) cukup
+        // ditandai arsip, tidak dibuatkan baris baru.
+        $existing = WorkspaceFile::where('path', $path)->first();
+
+        if ($existing) {
+            $existing->update([
+                'is_archived' => true,
+                'archived_at' => now(),
+                'archive_note' => $note,
+                'archive_field' => $field,
+                'bab' => WorkspaceFile::BAB_ARSIP,
+            ]);
+
+            $this->pruneArchive($submission->mahasiswa_ta_id, $field);
+
+            return $existing;
+        }
+
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        $archived = WorkspaceFile::create([
+            'mahasiswa_ta_id' => $submission->mahasiswa_ta_id,
+            'uploaded_by' => $submission->mahasiswaTa?->user_id ?? $submission->mahasiswaTa?->mahasiswa?->id,
+            'bab' => WorkspaceFile::BAB_ARSIP,
+            'original_name' => $originalName ?: basename($path),
+            'path' => $path,
+            'mime_type' => $disk->mimeType($path) ?: 'application/octet-stream',
+            'size' => (int) $disk->size($path),
+            'is_archived' => true,
+            'archived_at' => now(),
+            'archive_note' => $note,
+            'archive_field' => $field,
+        ]);
+
+        $this->pruneArchive($submission->mahasiswa_ta_id, $field);
+
+        return $archived;
+    }
+
+    /**
+     * Batasi riwayat arsip per field: sisakan maksimal MAX_ARSIP_PER_FIELD
+     * berkas terbaru, berkas paling lama ditimpa (dihapus) saat terlampaui.
+     *
+     * Berkas yang masih dipakai (submission aktif, dokumen tambahan aktif, atau
+     * berkas workspace non-arsip) tidak pernah dihapus.
+     */
+    private function pruneArchive(int $mahasiswaTaId, string $field): void
     {
-        if (!$submission->materiFromWorkspace() && $submission->materi_path) {
+        $archives = WorkspaceFile::where('mahasiswa_ta_id', $mahasiswaTaId)
+            ->archivedOfField($field)
+            ->orderByDesc('archived_at')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($archives->slice(WorkspaceFile::MAX_ARSIP_PER_FIELD) as $old) {
+            if ($this->isPathStillUsed($old->path)) {
+                continue;
+            }
+
+            Storage::disk('local')->delete($old->path);
+            $old->delete();
+        }
+    }
+
+    /**
+     * Apakah sebuah path masih dirujuk oleh data aktif.
+     */
+    private function isPathStillUsed(string $path): bool
+    {
+        return SeminarSubmission::where('undangan_path', $path)
+            ->orWhere('materi_path', $path)
+            ->exists()
+            || SeminarSubmissionDocument::where('path', $path)->exists()
+            || WorkspaceFile::where('path', $path)->where('is_archived', false)->exists();
+    }
+
+    /**
+     * Hapus undangan lama saat berkas diganti SEBELUM tanggal kegiatan
+     * (tidak perlu riwayat arsip).
+     */
+    private function purgeUndangan(SeminarSubmission $submission): void
+    {
+        if ($submission->undangan_path) {
+            Storage::disk('local')->delete($submission->undangan_path);
+        }
+    }
+
+    /**
+     * Hapus materi lama saat diganti sebelum tanggal kegiatan. Materi yang
+     * berasal dari workspace tidak dihapus (milik mahasiswa).
+     */
+    private function purgeMateri(SeminarSubmission $submission): void
+    {
+        if (! $submission->materiFromWorkspace() && $submission->materi_path) {
             Storage::disk('local')->delete($submission->materi_path);
         }
+    }
+
+    /**
+     * Hapus dokumen tambahan permanen (dipakai saat belum lewat tanggal kegiatan).
+     */
+    private function purgeTambahanDocument(SeminarSubmissionDocument $document): void
+    {
+        if ($document->isFile() && $document->path) {
+            Storage::disk('local')->delete($document->path);
+        }
+        $document->delete();
+    }
+
+    /**
+     * Arsipkan undangan lama sebelum diganti.
+     */
+    private function archiveUndangan(SeminarSubmission $submission): void
+    {
+        $this->archiveFile(
+            $submission,
+            $submission->undangan_path,
+            $submission->undangan_original_name,
+            'Undangan',
+            WorkspaceFile::FIELD_UNDANGAN
+        );
+    }
+
+    /**
+     * Arsipkan materi lama sebelum diganti.
+     */
+    private function archiveMateri(SeminarSubmission $submission): void
+    {
+        $this->archiveFile(
+            $submission,
+            $submission->materi_path,
+            $submission->materi_original_name,
+            'Materi',
+            WorkspaceFile::FIELD_MATERI
+        );
     }
 
     /**
@@ -724,10 +945,12 @@ class SeminarSubmissionController extends Controller
     /**
      * Hapus satu dokumen tambahan file (record + berkas fisik).
      */
-    private function deleteTambahanDocument(SeminarSubmissionDocument $document): void
+    private function archiveTambahanDocument(SeminarSubmission $submission, SeminarSubmissionDocument $document): void
     {
+        // Berkasnya diarsipkan (tidak dimusnahkan); tautan tidak punya berkas
+        // sehingga cukup catatannya yang dihapus.
         if ($document->isFile() && $document->path) {
-            Storage::disk('local')->delete($document->path);
+            $this->archiveFile($submission, $document->path, $document->original_name, 'Dokumen tambahan', WorkspaceFile::FIELD_DOKUMEN_TAMBAHAN);
         }
         $document->delete();
     }

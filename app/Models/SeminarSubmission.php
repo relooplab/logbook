@@ -236,14 +236,35 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Apakah mahasiswa masih boleh memperbarui dokumen submission ini.
-     * Boleh selama belum dikonversi ke riwayat sidang DAN jadwal belum lewat.
+     * Mahasiswa boleh mengedit bahan selama submission belum dikonversi menjadi
+     * riwayat sidang DAN jenisnya bukan fase program yang sudah lewat.
+     *
+     * Patokannya FASE, bukan tanggal: jadwal yang sudah lewat tetap boleh
+     * diperbaiki selama fase program belum maju. Begitu fase maju (mis. dari
+     * Seminar Hasil ke Sidang), bahan fase sebelumnya menjadi read-only dan
+     * berkas lama tersimpan di grup "Arsip" workspace mahasiswa.
      */
     public function isUpdatableByStudent(): bool
     {
-        return $this->sidang_id === null
-            && $this->tanggal !== null
-            && $this->tanggal->startOfDay()->gte(now()->startOfDay());
+        if ($this->sidang_id !== null) {
+            return false;
+        }
+
+        $ta = $this->mahasiswaTa;
+
+        if (! $ta) {
+            return false;
+        }
+
+        $nowIndex = self::faseIndexOf($ta, $ta->fase);
+        $jenisIndex = self::faseIndexOf($ta, self::faseFromJenis($this->jenis));
+
+        // Fase tak dikenal → jangan kunci, supaya bukan read-only permanen.
+        if ($nowIndex < 0 || $jenisIndex < 0) {
+            return true;
+        }
+
+        return $jenisIndex >= $nowIndex;
     }
 
     /**

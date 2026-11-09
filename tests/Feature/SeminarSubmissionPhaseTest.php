@@ -13,8 +13,9 @@ use Tests\TestCase;
  * Fitur alur bahan seminar/sidang:
  *  - Dashboard: mahasiswa bisa kirim bahan untuk milestone seminar berikutnya
  *    (proposal → seminar_hasil), terkait filter `$seminarSubmission` per jenis.
- *  - Edit dokumen diperbolehkan selama jadwal seminar/sidang belum lewat,
- *    dan ditolak setelah lewat (atau sudah dikonversi ke riwayat sidang).
+ *  - Edit dokumen diperbolehkan selama FASE program belum maju (jadwal yang
+ *    sudah lewat pun tetap boleh diperbaiki) dan belum dikonversi ke riwayat
+ *    sidang. Setelah fase maju, bahan fase sebelumnya menjadi read-only.
  */
 class SeminarSubmissionPhaseTest extends TestCase
 {
@@ -27,6 +28,9 @@ class SeminarSubmissionPhaseTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Clone lokal tidak selalu punya aset ter-build (@vite manifest).
+        $this->withoutVite();
 
         foreach (['mahasiswa', 'dosen'] as $role) {
             Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
@@ -90,11 +94,15 @@ class SeminarSubmissionPhaseTest extends TestCase
     {
         $this->makeSubmission(SeminarSubmission::JENIS_PROPOSAL);
 
+        // Setelah kirim: tombol utama jadi "Lihat Detail". Mahasiswa TA tetap
+        // punya jalan mengajukan jenis lain lewat "Kirim Bahan Seminar/Sidang".
         $this->actingAs($this->mhs)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertDontSee('Kirim Bahan')
-            ->assertSee('Lihat Detail');
+            ->assertSee('Lihat Detail')
+            ->assertSee('Kirim Bahan Seminar/Sidang')
+            // tombol CTA tunggal "Kirim Bahan" tidak lagi ditampilkan
+            ->assertDontSee('>Kirim Bahan<', false);
     }
 
     public function test_pindah_fase_munculkan_tombol_kirim_lagi(): void
@@ -125,11 +133,28 @@ class SeminarSubmissionPhaseTest extends TestCase
             ->assertOk();
     }
 
-    public function test_edit_ditolak_saat_jadwal_sudah_lewat(): void
+    public function test_edit_tetap_diizinkan_saat_jadwal_sudah_lewat_selama_fase_belum_maju(): void
     {
+        // Perilaku baru: yang mengunci adalah FASE, bukan tanggal. Jadwal yang
+        // sudah lewat tetap boleh diperbaiki (mis. berkas salah unggah).
         $sub = $this->makeSubmission(SeminarSubmission::JENIS_PROPOSAL, now()->subDays(1)->toDateString());
 
-        $this->assertFalse($sub->isUpdatableByStudent());
+        $this->assertTrue($sub->isUpdatableByStudent());
+
+        $this->actingAs($this->mhs)
+            ->get(route('seminar-submission.edit', $sub))
+            ->assertOk();
+    }
+
+    public function test_edit_ditolak_saat_fase_program_sudah_maju(): void
+    {
+        // Fase sekarang: proposal. Setelah maju ke seminar hasil, bahan proposal
+        // tidak boleh diedit lagi (berkas lama tetap ada di arsip workspace).
+        $sub = $this->makeSubmission(SeminarSubmission::JENIS_PROPOSAL, now()->addDays(3)->toDateString());
+
+        $this->ta->update(['fase' => 'seminar_hasil']);
+
+        $this->assertFalse($sub->fresh()->isUpdatableByStudent());
 
         $this->actingAs($this->mhs)
             ->get(route('seminar-submission.edit', $sub))
@@ -148,7 +173,13 @@ class SeminarSubmissionPhaseTest extends TestCase
     public function test_edit_ditolak_saat_submission_dikonversi_ke_sidang(): void
     {
         $sub = $this->makeSubmission(SeminarSubmission::JENIS_SIDANG, now()->addDays(7)->toDateString());
-        $sub->forceFill(['sidang_id' => 1])->save();
+        $sidang = \App\Models\Sidang::create([
+            'mahasiswa_ta_id' => $this->ta->id,
+            'penguji_id' => $this->dosen->id,
+            'jenis' => SeminarSubmission::JENIS_SIDANG,
+            'tanggal' => now()->subWeek()->toDateString(),
+        ]);
+        $sub->forceFill(['sidang_id' => $sidang->id])->save();
 
         $this->assertFalse($sub->fresh()->isUpdatableByStudent());
 

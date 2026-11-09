@@ -243,6 +243,8 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     });
 
     // -------------------------------------------------- pemberian bahan seminar/sidang
+    // Riwayat/rekap pengajuan bahan seminar/sidang (halaman mahasiswa).
+    Route::get('/seminar-submission', [SeminarSubmissionController::class, 'index'])->name('seminar-submission.index');
     Route::get('/seminar-submission/{mahasiswaTa}/create', [SeminarSubmissionController::class, 'create'])->name('seminar-submission.create');
     Route::post('/seminar-submission/{mahasiswaTa}', [SeminarSubmissionController::class, 'store'])->name('seminar-submission.store');
     Route::get('/seminar-submission/{submission}', [SeminarSubmissionController::class, 'show'])->name('seminar-submission.show');
