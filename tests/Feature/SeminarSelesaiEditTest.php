@@ -81,7 +81,8 @@ class SeminarSelesaiEditTest extends TestCase
         return SeminarSubmission::create([
             'mahasiswa_ta_id' => $this->ta->id,
             'jenis' => SeminarSubmission::JENIS_SEMINAR_HASIL,
-            'tanggal' => now()->subDays(2)->toDateString(),
+            // Hari ini: aturan otomatis (2 hari setelah kegiatan) belum berlaku.
+            'tanggal' => now()->toDateString(),
             'waktu' => '09:00',
             'undangan_path' => $path,
             'undangan_original_name' => basename($path),
@@ -319,5 +320,90 @@ class SeminarSelesaiEditTest extends TestCase
         $this->actingAs($orangLain)
             ->post(route('seminar-submission.minta-edit', $sub))
             ->assertForbidden();
+    }
+
+    // ------------------------------------------------ selesai otomatis 2 hari
+
+    public function test_otomatis_selesai_dua_hari_setelah_kegiatan(): void
+    {
+        $sub = $this->submission();
+        $sub->forceFill(['tanggal' => now()->subDays(3)->toDateString()])->save();
+        $sub->refresh();
+
+        $this->assertTrue($sub->isSelesai(), 'Lewat 2 hari dari kegiatan → otomatis selesai.');
+        $this->assertTrue($sub->isSelesaiOtomatis());
+        $this->assertFalse($sub->isUpdatableByStudent(), 'Setelah selesai, edit perlu izin dosen.');
+    }
+
+    public function test_belum_otomatis_sebelum_dua_hari(): void
+    {
+        $sub = $this->submission();
+        $sub->forceFill(['tanggal' => now()->subDay()->toDateString()])->save();
+        $sub->refresh();
+
+        $this->assertFalse($sub->isSelesai());
+        $this->assertTrue($sub->isUpdatableByStudent());
+    }
+
+    public function test_dosen_dapat_menahan_status_otomatis(): void
+    {
+        $sub = $this->submission();
+        $sub->forceFill(['tanggal' => now()->subDays(5)->toDateString()])->save();
+        $sub->refresh();
+        $this->assertTrue($sub->isSelesai());
+
+        // Tandai "belum selesai" secara manual → otomatis ditahan.
+        $this->actingAs($this->pembimbing)
+            ->post(route('seminar-submission.batal-selesai', $sub))
+            ->assertRedirect();
+
+        $sub->refresh();
+        $this->assertFalse($sub->isSelesai());
+        $this->assertTrue($sub->selesai_dikecualikan);
+        $this->assertSame($this->pembimbing->id, $sub->selesai_dikecualikan_by);
+        $this->assertTrue($sub->isUpdatableByStudent());
+
+        // Bebas ganti berkas tanpa arsip.
+        $this->actingAs($this->mhs)
+            ->put(route('seminar-submission.update', $sub), $this->payload($sub, 'bebas-lagi.pdf'))
+            ->assertRedirect();
+
+        $this->assertSame(0, WorkspaceFile::where('is_archived', true)->count());
+    }
+
+    public function test_ikuti_otomatis_melepas_penahanan(): void
+    {
+        $sub = $this->submission();
+        $sub->forceFill([
+            'tanggal' => now()->subDays(5)->toDateString(),
+            'selesai_dikecualikan' => true,
+            'selesai_dikecualikan_at' => now(),
+            'selesai_dikecualikan_by' => $this->pembimbing->id,
+        ])->save();
+        $this->assertFalse($sub->fresh()->isSelesai());
+
+        $this->actingAs($this->pembimbing)
+            ->post(route('seminar-submission.ikuti-otomatis', $sub))
+            ->assertRedirect();
+
+        $sub->refresh();
+        $this->assertFalse($sub->selesai_dikecualikan);
+        $this->assertTrue($sub->isSelesai());
+        $this->assertTrue($sub->isSelesaiOtomatis());
+    }
+
+    public function test_dosen_dapat_menandai_selesai_lebih_awal(): void
+    {
+        $sub = $this->submission();
+        $sub->forceFill(['tanggal' => now()->addDays(3)->toDateString()])->save();
+        $sub->refresh();
+        $this->assertFalse($sub->isSelesai());
+
+        $this->actingAs($this->pembimbing)->post(route('seminar-submission.selesai', $sub))->assertRedirect();
+
+        $sub->refresh();
+        $this->assertTrue($sub->isSelesai());
+        $this->assertFalse($sub->isSelesaiOtomatis(), 'Ini selesai manual, bukan otomatis.');
+        $this->assertNotNull($sub->selesai_at);
     }
 }

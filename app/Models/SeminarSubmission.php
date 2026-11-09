@@ -27,6 +27,9 @@ class SeminarSubmission extends Model
     public const STATUS_SUBMITTED = 'submitted';
     public const STATUSES = [self::STATUS_DRAFT, self::STATUS_SUBMITTED];
 
+    /** Jumlah hari setelah kegiatan sampai status otomatis menjadi selesai. */
+    public const AUTO_SELESAI_HARI = 2;
+
     /** Masa berlaku izin edit setelah disetujui dosen (dalam hari). */
     public const EDIT_APPROVAL_DAYS = 7;
 
@@ -49,6 +52,9 @@ class SeminarSubmission extends Model
         'sidang_id',
         'selesai_at',
         'selesai_by',
+        'selesai_dikecualikan',
+        'selesai_dikecualikan_at',
+        'selesai_dikecualikan_by',
         'edit_requested_at',
         'edit_request_note',
         'edit_approved_at',
@@ -62,6 +68,8 @@ class SeminarSubmission extends Model
             'waktu' => 'datetime:H:i',
             'undangan_kepada' => 'array',
             'selesai_at' => 'datetime',
+            'selesai_dikecualikan' => 'boolean',
+            'selesai_dikecualikan_at' => 'datetime',
             'edit_requested_at' => 'datetime',
             'edit_approved_at' => 'datetime',
         ];
@@ -289,11 +297,40 @@ class SeminarSubmission extends Model
     }
 
     /**
-     * Seminar/sidang sudah ditandai selesai oleh dosen.
+     * Seminar/sidang dianggap selesai bila:
+     *  1. dosen menandainya selesai secara manual, ATAU
+     *  2. sudah lewat AUTO_SELESAI_HARI hari dari tanggal kegiatan —
+     *     kecuali dosen menahannya (selesai_dikecualikan).
      */
     public function isSelesai(): bool
     {
-        return $this->selesai_at !== null;
+        if ($this->selesai_at !== null) {
+            return true;
+        }
+
+        if ($this->selesai_dikecualikan) {
+            return false;
+        }
+
+        return $this->selesaiOtomatisPada()?->isPast() === true;
+    }
+
+    /**
+     * Kapan status otomatis menjadi selesai (tanggal kegiatan + 2 hari).
+     */
+    public function selesaiOtomatisPada(): ?\Illuminate\Support\Carbon
+    {
+        return $this->tanggal?->copy()->startOfDay()->addDays(self::AUTO_SELESAI_HARI);
+    }
+
+    /**
+     * Selesai karena aturan otomatis (bukan ditandai manual oleh dosen).
+     */
+    public function isSelesaiOtomatis(): bool
+    {
+        return $this->selesai_at === null
+            && ! $this->selesai_dikecualikan
+            && $this->isSelesai();
     }
 
     /**

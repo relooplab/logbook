@@ -68,8 +68,10 @@
                                         @endif
                                         @if ($sub->isSelesai())
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">
-                                                Selesai{{ $sub->selesai_at ? ' · '.$sub->selesai_at->format('d M') : '' }}
+                                                Selesai {{ $sub->isSelesaiOtomatis() ? '· otomatis' : '· manual' }}{{ $sub->selesai_at ? ' '.$sub->selesai_at->format('d M') : '' }}
                                             </span>
+                                        @elseif ($sub->selesai_dikecualikan)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-bg-hover text-text-secondary">Ditahan (belum selesai)</span>
                                         @elseif ($hasSidang)
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success">Sudah Dinilai</span>
                                         @elseif ($isPast)
@@ -111,20 +113,30 @@
 
                                 @if ($sub->isSelesai())
                                     <form method="POST" action="{{ route('seminar-submission.batal-selesai', $sub) }}"
-                                          onsubmit="return confirm('Batalkan status selesai? Mahasiswa bisa mengedit bebas lagi.')">
+                                          onsubmit="return confirm('Tandai BELUM selesai? Status otomatis (2 hari setelah kegiatan) akan ditahan sampai Anda mengaktifkannya lagi.')">
                                         @csrf
                                         <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover">
-                                            <span class="material-symbols-outlined icon-sm">undo</span> Batalkan
+                                            <span class="material-symbols-outlined icon-sm">undo</span> Belum Selesai
                                         </button>
                                     </form>
                                 @else
                                     <form method="POST" action="{{ route('seminar-submission.selesai', $sub) }}"
-                                          onsubmit="return confirm('Tandai seminar/sidang ini selesai? Setelah selesai, mahasiswa perlu izin dosen untuk mengedit.')">
+                                          onsubmit="return confirm('Tandai seminar/sidang ini selesai sekarang? Setelah selesai, mahasiswa perlu izin dosen untuk mengedit.')">
                                         @csrf
                                         <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-status-success/15 text-status-success text-xs font-semibold hover:bg-status-success/25">
                                             <span class="material-symbols-outlined icon-sm">task_alt</span> Selesai
                                         </button>
                                     </form>
+                                    @if ($sub->selesai_dikecualikan)
+                                        <form method="POST" action="{{ route('seminar-submission.ikuti-otomatis', $sub) }}"
+                                              onsubmit="return confirm('Aktifkan lagi status otomatis (selesai 2 hari setelah kegiatan)?')">
+                                            @csrf
+                                            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-text-secondary text-xs font-medium hover:bg-bg-hover"
+                                                    title="Hapus penahanan; status mengikuti aturan otomatis">
+                                                <span class="material-symbols-outlined icon-sm">autorenew</span> Ikuti Otomatis
+                                            </button>
+                                        </form>
+                                    @endif
                                 @endif
 
                                 <a href="{{ route('seminar-submission.show', $sub) }}"

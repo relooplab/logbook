@@ -121,6 +121,8 @@ class SeminarArchiveTest extends TestCase
     {
         $lampau = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
             'tanggal' => now()->subMonth()->toDateString(),
+            // Dosen menahan status otomatis agar tetap "belum selesai".
+            'selesai_dikecualikan' => true,
         ]);
 
         $this->assertTrue(
@@ -417,6 +419,7 @@ class SeminarArchiveTest extends TestCase
 
         $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
             'tanggal' => now()->subDays(5)->toDateString(),
+            'selesai_dikecualikan' => true,
             'undangan_path' => $lama,
             'undangan_original_name' => 'undangan-belum-selesai.pdf',
         ]);
@@ -437,7 +440,10 @@ class SeminarArchiveTest extends TestCase
     public function test_tanggal_kegiatan_lampau_boleh_dipertahankan_saat_edit(): void
     {
         $tanggalLewat = now()->subDays(2)->toDateString();
-        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => $tanggalLewat]);
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => $tanggalLewat,
+            'selesai_dikecualikan' => true,
+        ]);
 
         // Tanpa menggeser jadwal: tidak boleh gagal validasi.
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [
@@ -452,7 +458,10 @@ class SeminarArchiveTest extends TestCase
 
     public function test_tanggal_lampau_yang_berbeda_tetap_ditolak(): void
     {
-        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, ['tanggal' => now()->subDays(2)->toDateString()]);
+        $s = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL, [
+            'tanggal' => now()->subDays(2)->toDateString(),
+            'selesai_dikecualikan' => true,
+        ]);
 
         // Menggeser ke tanggal lampau LAIN (bukan mempertahankan) harus ditolak.
         $this->actingAs($this->mhs)->put(route('seminar-submission.update', $s), [

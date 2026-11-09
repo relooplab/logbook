@@ -255,6 +255,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
     // Status selesai (dosen) + permintaan izin edit (mahasiswa) setelah selesai.
     Route::post('/seminar-submission/{submission}/selesai', [SeminarSubmissionController::class, 'selesaikan'])->name('seminar-submission.selesai');
     Route::post('/seminar-submission/{submission}/batal-selesai', [SeminarSubmissionController::class, 'batalSelesai'])->name('seminar-submission.batal-selesai');
+    Route::post('/seminar-submission/{submission}/ikuti-otomatis', [SeminarSubmissionController::class, 'ikutiOtomatis'])->name('seminar-submission.ikuti-otomatis');
     Route::post('/seminar-submission/{submission}/minta-edit', [SeminarSubmissionController::class, 'mintaEdit'])->name('seminar-submission.minta-edit');
     Route::post('/seminar-submission/{submission}/setujui-edit', [SeminarSubmissionController::class, 'setujuiEdit'])->name('seminar-submission.setujui-edit');
     Route::post('/seminar-submission/{submission}/tolak-edit', [SeminarSubmissionController::class, 'tolakEdit'])->name('seminar-submission.tolak-edit');

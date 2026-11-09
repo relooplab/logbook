@@ -486,6 +486,9 @@ class SeminarSubmissionController extends Controller
         $submission->forceFill([
             'selesai_at' => now(),
             'selesai_by' => $request->user()->id,
+            'selesai_dikecualikan' => false,
+            'selesai_dikecualikan_at' => null,
+            'selesai_dikecualikan_by' => null,
         ])->save();
 
         return back()->with('success', 'Seminar/sidang ditandai selesai.');
@@ -498,16 +501,40 @@ class SeminarSubmissionController extends Controller
     {
         $this->authorizeDosenPengampu($request->user(), $submission);
 
+        // Menahan status otomatis: tanpa pengecualian, submission yang sudah
+        // lewat 2 hari akan langsung dianggap selesai lagi.
         $submission->forceFill([
             'selesai_at' => null,
             'selesai_by' => null,
+            'selesai_dikecualikan' => true,
+            'selesai_dikecualikan_at' => now(),
+            'selesai_dikecualikan_by' => $request->user()->id,
             'edit_requested_at' => null,
             'edit_request_note' => null,
             'edit_approved_at' => null,
             'edit_approved_by' => null,
         ])->save();
 
-        return back()->with('success', 'Status selesai dibatalkan.');
+        return back()->with('success', 'Status dikembalikan ke belum selesai (otomatis ditahan).');
+    }
+
+    /**
+     * Dosen melepas penahanan: status mengikuti aturan otomatis (selesai 2 hari
+     * setelah kegiatan).
+     */
+    public function ikutiOtomatis(Request $request, SeminarSubmission $submission): RedirectResponse
+    {
+        $this->authorizeDosenPengampu($request->user(), $submission);
+
+        $submission->forceFill([
+            'selesai_at' => null,
+            'selesai_by' => null,
+            'selesai_dikecualikan' => false,
+            'selesai_dikecualikan_at' => null,
+            'selesai_dikecualikan_by' => null,
+        ])->save();
+
+        return back()->with('success', 'Status mengikuti aturan otomatis (selesai 2 hari setelah kegiatan).');
     }
 
     /**
