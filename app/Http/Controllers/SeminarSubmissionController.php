@@ -48,31 +48,24 @@ class SeminarSubmissionController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isMahasiswa()) {
-            $program = ProgramContext::resolve($user, $request);
+        // Halaman ini khusus mahasiswa. Dosen punya menu sendiri
+        // "Agenda Seminar/Sidang" (dosen.seminar-jadwal).
+        if (! $user->isMahasiswa()) {
+            return $user->isDosen()
+                ? redirect()->route('dosen.seminar-jadwal')
+                : redirect()->route('dashboard');
+        }
 
-            if (! $program) {
-                return redirect()->route('dashboard')
-                    ->with('warning', 'Anda belum memiliki program TA/KP, jadi belum ada riwayat seminar/sidang.');
-            }
-        } else {
-            // Dosen: riwayat dibuka per mahasiswa (mis. dari workspace bimbingan).
-            $program = $request->filled('mahasiswa_ta')
-                ? MahasiswaTa::find($request->integer('mahasiswa_ta'))
-                : null;
+        $program = ProgramContext::resolve($user, $request);
 
-            if (! $program) {
-                return redirect()->route('workspace.role')
-                    ->with('warning', 'Pilih mahasiswa terlebih dahulu untuk melihat riwayat seminar/sidangnya.');
-            }
+        if (! $program) {
+            return redirect()->route('dashboard')
+                ->with('warning', 'Anda belum memiliki program TA/KP, jadi belum ada riwayat seminar/sidang.');
         }
 
         $isMember = $program->isMember($user);
-        $isDosen = $program->isPembimbing($user)
-            || $program->isPenguji($user)
-            || $user->isAdmin();
 
-        abort_unless($isMember || $isDosen, 403);
+        abort_unless($isMember, 403);
 
         $submissions = $program->seminarSubmissions()
             ->withCount('documents')
@@ -88,7 +81,7 @@ class SeminarSubmissionController extends Controller
             'arsip' => WorkspaceFile::where('mahasiswa_ta_id', $program->id)->archived()->count(),
         ];
 
-        return view('seminar-submission.index', compact('program', 'submissions', 'rekap', 'isMember', 'isDosen'));
+        return view('seminar-submission.index', compact('program', 'submissions', 'rekap', 'isMember'));
     }
 
     public function create(Request $request, MahasiswaTa $mahasiswaTa): View

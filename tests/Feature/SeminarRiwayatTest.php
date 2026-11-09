@@ -127,26 +127,27 @@ class SeminarRiwayatTest extends TestCase
         $this->assertStringContainsString(route('seminar-submission.show', $proposal), $html);
     }
 
-    public function test_dosen_melihat_riwayat_tanpa_tombol_tambah_atau_edit(): void
+    public function test_dosen_diarahkan_ke_agenda_seminar_sidang_miliknya(): void
     {
-        $sub = $this->submission(SeminarSubmission::JENIS_SEMINAR_HASIL);
-
-        $html = $this->actingAs($this->dosen)
+        // Halaman riwayat khusus mahasiswa; dosen punya menu sendiri.
+        $this->actingAs($this->dosen)
             ->get(route('seminar-submission.index', ['mahasiswa_ta' => $this->ta->id]))
-            ->assertOk()
-            ->getContent();
+            ->assertRedirect(route('dosen.seminar-jadwal'));
 
-        $this->assertStringContainsString('Riwayat Seminar/Sidang', $html);
-        $this->assertStringContainsString(route('seminar-submission.show', $sub), $html);
-        $this->assertStringNotContainsString('Kirim Bahan Seminar/Sidang', $html);
-        $this->assertStringNotContainsString(route('seminar-submission.edit', $sub), $html);
-    }
-
-    public function test_dosen_tanpa_parameter_mahasiswa_diarahkan_ke_workspace(): void
-    {
         $this->actingAs($this->dosen)
             ->get(route('seminar-submission.index'))
-            ->assertRedirect(route('workspace.role'));
+            ->assertRedirect(route('dosen.seminar-jadwal'));
+    }
+
+    public function test_sidebar_dosen_pakai_label_agenda_sedangkan_mahasiswa_seminar_sidang(): void
+    {
+        // Dua menu berbeda peran dengan label berbeda.
+        $dosenHtml = $this->actingAs($this->dosen)->get(route('dosen.seminar-jadwal'))->assertOk()->getContent();
+        $this->assertStringContainsString('Agenda Seminar/Sidang', $dosenHtml);
+        $this->assertStringNotContainsString('>Seminar/sidang<', $dosenHtml);
+
+        $mhsHtml = $this->actingAs($this->mhs)->get(route('seminar-submission.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('>Seminar/sidang<', $mhsHtml);
     }
 
     public function test_mahasiswa_tanpa_program_diarahkan_ke_dashboard(): void
