@@ -70,7 +70,7 @@
                                     <span class="material-symbols-outlined" style="font-size:12px;vertical-align:-2px">schedule</span>
                                     Dikirim {{ $dikirim?->format('d M Y H:i') ?? '—' }}
                                     @if ($dikirim)
-                                        <span class="text-text-secondary/70">({{ $dikirim->diffForHumans() }})</span>
+                                        <span class="text-text-secondary/70">({{ $dikirim->locale('id')->diffForHumans() }})</span>
                                     @endif
                                 </p>
                             </div>
@@ -145,7 +145,7 @@
                                 <span class="material-symbols-outlined" style="font-size:12px;vertical-align:-2px">schedule</span>
                                 Dikirim {{ $sub->created_at?->format('d M Y H:i') ?? '—' }}
                                 @if ($sub->created_at)
-                                    <span class="text-text-secondary/70">({{ $sub->created_at->diffForHumans() }})</span>
+                                    <span class="text-text-secondary/70">({{ $sub->created_at->locale('id')->diffForHumans() }})</span>
                                 @endif
                             </p>
                         </div>
