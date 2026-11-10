@@ -189,6 +189,7 @@ Route::middleware(['auth', 'ensure.dosen.decision', 'ensure.dosen.affiliation', 
 
     // ------------------------------------------------- antrean review bahan (gate dosen)
     Route::get('/review-bahan', [MaterialsReviewController::class, 'index'])->name('materials-review.index');
+    Route::post('/review-bahan/bulk', [MaterialsReviewController::class, 'bulk'])->name('materials-review.bulk');
     Route::post('/feedback-templates', [QuickReviewController::class, 'storeTemplate'])->name('feedback-templates.store');
     Route::delete('/feedback-templates/{template}', [QuickReviewController::class, 'destroyTemplate'])->name('feedback-templates.destroy');
 
